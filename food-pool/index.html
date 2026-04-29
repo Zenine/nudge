@@ -1,0 +1,1353 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>肝脏减脂 Food Pool 选餐器</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f3ec;
+      --paper: #fffdf7;
+      --paper-strong: #ffffff;
+      --ink: #20251f;
+      --muted: #647067;
+      --soft: #edf2e8;
+      --line: #d9dfd2;
+      --line-strong: #b8c5b4;
+      --green: #2f6f4f;
+      --green-strong: #204b39;
+      --blue: #285d70;
+      --yellow: #f4d36c;
+      --orange: #bd6a2f;
+      --danger: #9c5148;
+      --shadow: 0 14px 36px rgba(35, 50, 40, 0.12);
+      --radius: 8px;
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background:
+        linear-gradient(180deg, rgba(245, 243, 236, 0.96), rgba(245, 243, 236, 1)),
+        radial-gradient(circle at 20% 0%, rgba(244, 211, 108, 0.22), transparent 30%),
+        radial-gradient(circle at 85% 10%, rgba(47, 111, 79, 0.18), transparent 34%);
+      color: var(--ink);
+    }
+
+    button,
+    select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    img {
+      display: block;
+      max-width: 100%;
+    }
+
+    .app {
+      width: 100%;
+      min-height: 100vh;
+      padding: 14px;
+    }
+
+    .shell {
+      width: min(100%, 1180px);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+
+    .hero,
+    .workspace,
+    .result-panel {
+      background: rgba(255, 253, 247, 0.96);
+      border: 1px solid rgba(217, 223, 210, 0.92);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .hero {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .eyebrow {
+      color: var(--green-strong);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      margin-top: 6px;
+      font-size: clamp(30px, 8vw, 56px);
+      line-height: 1.04;
+    }
+
+    .lead {
+      color: #3b443d;
+      font-size: 16px;
+      line-height: 1.65;
+    }
+
+    .hero-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .season-control {
+      display: grid;
+      gap: 6px;
+    }
+
+    .season-control label {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .season-control select {
+      width: 100%;
+      min-height: 44px;
+      padding: 8px 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius);
+      background: var(--paper-strong);
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .text-button,
+    .primary-button {
+      min-height: 44px;
+      border-radius: var(--radius);
+      padding: 9px 12px;
+      font-weight: 800;
+    }
+
+    .primary-button {
+      border: 1px solid var(--green);
+      background: var(--green);
+      color: #fff;
+    }
+
+    .text-button {
+      border: 1px solid var(--line-strong);
+      background: var(--paper-strong);
+      color: var(--ink);
+    }
+
+    .workspace {
+      padding: 10px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .choice-step {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper-strong);
+      overflow: clip;
+    }
+
+    .step-toggle {
+      width: 100%;
+      min-height: 64px;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      padding: 12px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px;
+      align-items: center;
+      text-align: left;
+    }
+
+    .step-number {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--soft);
+      color: var(--green-strong);
+      font-weight: 800;
+    }
+
+    .step-title {
+      display: grid;
+      gap: 4px;
+    }
+
+    .step-title strong {
+      font-size: 17px;
+      line-height: 1.25;
+    }
+
+    .step-summary {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .step-state {
+      color: var(--green-strong);
+      font-size: 13px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .step-content {
+      display: none;
+      border-top: 1px solid var(--line);
+      padding: 10px;
+      background: #fbfcf8;
+    }
+
+    .choice-step.is-open .step-content {
+      display: grid;
+      gap: 10px;
+    }
+
+    .choice-step.is-complete .step-number {
+      background: var(--green);
+      color: #fff;
+    }
+
+    .food-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    .food-card {
+      min-height: 154px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper-strong);
+      padding: 0;
+      overflow: clip;
+      text-align: left;
+      display: grid;
+      grid-template-rows: 118px 1fr;
+      transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+    }
+
+    .food-card:hover {
+      border-color: var(--green);
+    }
+
+    .food-card[aria-pressed="true"] {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(47, 111, 79, 0.18);
+      transform: translateY(-1px);
+    }
+
+    .food-card img {
+      width: 100%;
+      height: 118px;
+      object-fit: cover;
+      padding: 0;
+      background: linear-gradient(180deg, #f8fbf4, #edf2e8);
+    }
+
+    .food-card-body {
+      padding: 9px;
+      display: grid;
+      gap: 6px;
+      align-content: start;
+    }
+
+    .food-title {
+      display: grid;
+      gap: 5px;
+    }
+
+    .food-title strong {
+      font-size: 15px;
+      line-height: 1.25;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 21px;
+      border-radius: 999px;
+      padding: 2px 7px;
+      background: var(--soft);
+      color: var(--green-strong);
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .chip.priority-medium {
+      background: #f2dfc8;
+      color: #684019;
+    }
+
+    .chip.priority-low {
+      background: #efd8d3;
+      color: #6b342e;
+    }
+
+    .chip.seasonal {
+      background: #fff1b7;
+      color: #60490e;
+    }
+
+    .food-note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .step-footer {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .result-panel {
+      padding: 14px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .result-head {
+      display: grid;
+      gap: 6px;
+    }
+
+    .result-head h2 {
+      font-size: 22px;
+      line-height: 1.25;
+    }
+
+    .result-head p {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .plate {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .plate-box {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #f7faf3;
+      padding: 10px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .plate-box strong {
+      color: var(--green-strong);
+      font-size: 13px;
+    }
+
+    .plate-box span {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .analysis-list {
+      display: grid;
+      gap: 7px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+
+    .analysis-list li {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper-strong);
+      color: #39433b;
+      padding: 9px 10px;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .recipe-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .recipe-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper-strong);
+      overflow: clip;
+      display: grid;
+      grid-template-columns: 112px 1fr;
+      min-height: 174px;
+    }
+
+    .recipe-card img {
+      width: 112px;
+      height: 100%;
+      object-fit: cover;
+      padding: 0;
+      background: linear-gradient(180deg, #f8fbf4, #edf2e8);
+    }
+
+    .recipe-finished-image {
+      border-right: 1px solid var(--line);
+    }
+
+    .recipe-body {
+      padding: 11px;
+      display: grid;
+      gap: 9px;
+    }
+
+    .recipe-title-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .recipe-title-row h3 {
+      font-size: 16px;
+      line-height: 1.35;
+    }
+
+    .score {
+      min-width: 46px;
+      border-radius: 999px;
+      padding: 3px 7px;
+      background: #e7f0f3;
+      color: var(--blue);
+      font-size: 11px;
+      font-weight: 800;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .recipe-card p,
+    .recipe-card ol {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .recipe-card ol {
+      padding-left: 18px;
+    }
+
+    .recipe-block {
+      display: grid;
+      gap: 3px;
+    }
+
+    .recipe-label {
+      color: var(--green-strong);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .recipe-ingredients {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .empty {
+      border: 1px dashed var(--line-strong);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: #f7faf3;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .source-note {
+      color: rgba(32, 37, 31, 0.66);
+      font-size: 12px;
+      line-height: 1.55;
+      padding: 0 2px 8px;
+    }
+
+    @media (min-width: 720px) {
+      .app {
+        padding: 24px;
+      }
+
+      .hero {
+        grid-template-columns: minmax(0, 1fr) 300px;
+        align-items: end;
+        padding: 24px;
+      }
+
+      .hero-actions {
+        align-self: stretch;
+        align-content: end;
+      }
+
+      .workspace,
+      .result-panel {
+        padding: 18px;
+      }
+
+      .food-grid {
+        grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+      }
+
+      .food-card {
+        grid-template-rows: 132px 1fr;
+      }
+
+      .food-card img {
+        height: 132px;
+      }
+
+      .plate {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .plate-box:first-child {
+        grid-column: 1 / -1;
+      }
+
+      .recipe-card {
+        grid-template-columns: 144px 1fr;
+      }
+
+      .recipe-card img {
+        width: 144px;
+      }
+    }
+
+    @media (min-width: 1040px) {
+      .shell {
+        grid-template-columns: minmax(0, 1fr) 390px;
+        align-items: start;
+      }
+
+      .hero {
+        grid-column: 1 / -1;
+      }
+
+      .result-panel {
+        position: sticky;
+        top: 18px;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .hero,
+      .workspace,
+      .result-panel {
+        box-shadow: 0 8px 20px rgba(35, 50, 40, 0.09);
+      }
+
+      .button-row {
+        grid-template-columns: 1fr;
+      }
+
+      .step-toggle {
+        grid-template-columns: auto minmax(0, 1fr);
+      }
+
+      .step-state {
+        grid-column: 2;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="shell">
+      <section class="hero" aria-labelledby="page-title">
+        <div>
+          <div class="eyebrow">Food Pool / Mobile First</div>
+          <h1 id="page-title">今天这餐怎么配</h1>
+          <p class="lead">主食 1 个 + 蛋白 1 个 + 蔬菜 / 高纤维 1-2 个。本人主食减量，其他家人可加主食；同一锅菜，不必拆成两套饭。</p>
+        </div>
+
+        <div class="hero-actions">
+          <div class="season-control">
+            <label for="seasonFilter">时令偏好</label>
+            <select id="seasonFilter" data-role="seasonFilter">
+              <option value="auto">自动按当前季节</option>
+              <option value="all">不限制时令</option>
+              <option value="spring">春季</option>
+              <option value="summer">夏季</option>
+              <option value="autumn">秋季</option>
+              <option value="winter">冬季</option>
+            </select>
+          </div>
+          <div class="button-row">
+            <button type="button" class="primary-button" data-action="random">随机稳妥餐</button>
+            <button type="button" class="text-button" data-action="clear">清空重选</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace" aria-label="三步食材选择">
+        <article class="choice-step is-open" data-role="step-carb" data-step="carb">
+          <button type="button" class="step-toggle" data-action="toggle-step" data-target="carb">
+            <span class="step-number">1</span>
+            <span class="step-title">
+              <strong>选主食</strong>
+              <span class="step-summary" data-role="summary-carb">本人默认 0.5 个拳头</span>
+            </span>
+            <span class="step-state" data-role="state-carb">未选</span>
+          </button>
+          <div class="step-content">
+            <div class="food-grid" data-role="carb-grid"></div>
+          </div>
+        </article>
+
+        <article class="choice-step" data-role="step-protein" data-step="protein">
+          <button type="button" class="step-toggle" data-action="toggle-step" data-target="protein">
+            <span class="step-number">2</span>
+            <span class="step-title">
+              <strong>选蛋白</strong>
+              <span class="step-summary" data-role="summary-protein">鱼虾鸡豆制品优先</span>
+            </span>
+            <span class="step-state" data-role="state-protein">未选</span>
+          </button>
+          <div class="step-content">
+            <div class="food-grid" data-role="protein-grid"></div>
+          </div>
+        </article>
+
+        <article class="choice-step" data-role="step-fiber" data-step="fiber">
+          <button type="button" class="step-toggle" data-action="toggle-step" data-target="fiber">
+            <span class="step-number">3</span>
+            <span class="step-title">
+              <strong>选蔬菜 / 高纤维</strong>
+              <span class="step-summary" data-role="summary-fiber">选 1-2 个，最好有绿叶菜或菌菇</span>
+            </span>
+            <span class="step-state" data-role="state-fiber">未选</span>
+          </button>
+          <div class="step-content">
+            <div class="food-grid" data-role="fiber-grid"></div>
+            <div class="step-footer">
+              <button type="button" class="text-button" data-action="finish-fiber">完成蔬菜选择</button>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <aside class="result-panel" aria-label="组合分析与菜谱推荐">
+        <div class="result-head">
+          <h2>今天可做 1-2 道菜</h2>
+          <p data-role="season-note">时令会参与排序，但不强制排除家里已有食材。</p>
+        </div>
+
+        <div class="plate" aria-label="本人减脂盘">
+          <div class="plate-box">
+            <strong>半盘</strong>
+            <span data-role="plate-fiber">先选蔬菜 / 菌菇 / 海带类</span>
+          </div>
+          <div class="plate-box">
+            <strong>四分之一盘蛋白</strong>
+            <span data-role="plate-protein">选择蛋白</span>
+          </div>
+          <div class="plate-box">
+            <strong>四分之一盘主食</strong>
+            <span data-role="plate-carb">选择主食</span>
+          </div>
+        </div>
+
+        <ul class="analysis-list" data-role="analysis"></ul>
+        <div class="recipe-list" data-role="recipes"></div>
+      </aside>
+
+      <p class="source-note">食材图优先使用 Wikimedia Commons / Wikipedia 的原食材照片；少数中式食材采用最接近的裸食材照片。本文只做日常执行参考，不替代医生或营养师建议。</p>
+    </div>
+  </main>
+
+  <script>
+    const MAX_RECOMMENDATIONS = 2;
+    const SEASON_LABELS = {
+      spring: "春季",
+      summer: "夏季",
+      autumn: "秋季",
+      winter: "冬季"
+    };
+
+    const fallbackImage = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="360" height="260" viewBox="0 0 360 260">
+        <rect width="360" height="260" rx="16" fill="#edf2e8"/>
+        <circle cx="126" cy="104" r="42" fill="#90b69d"/>
+        <circle cx="204" cy="124" r="54" fill="#f4d36c"/>
+        <circle cx="250" cy="96" r="34" fill="#9fc0c9"/>
+        <text x="180" y="206" fill="#204b39" font-family="Arial, sans-serif" font-size="22" font-weight="700" text-anchor="middle">Food Pool</text>
+      </svg>
+    `);
+
+    function makeRecipeImage(title, subtitle, bg, accent, garnish) {
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420">
+          <defs>
+            <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="${bg}"/>
+              <stop offset="100%" stop-color="#fffdf7"/>
+            </linearGradient>
+            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#243228" flood-opacity="0.18"/>
+            </filter>
+          </defs>
+          <rect width="640" height="420" rx="28" fill="url(#bg)"/>
+          <ellipse cx="320" cy="238" rx="210" ry="102" fill="#ffffff" filter="url(#shadow)"/>
+          <ellipse cx="320" cy="228" rx="168" ry="74" fill="#f7faf3"/>
+          <circle cx="244" cy="222" r="34" fill="${accent}" opacity="0.92"/>
+          <circle cx="314" cy="194" r="28" fill="${garnish}" opacity="0.9"/>
+          <circle cx="382" cy="226" r="38" fill="${accent}" opacity="0.72"/>
+          <path d="M216 267 C280 292 365 292 426 264" fill="none" stroke="#2f6f4f" stroke-width="12" stroke-linecap="round" opacity="0.5"/>
+          <text x="320" y="72" fill="#204b39" font-family="Arial, 'Noto Sans SC', sans-serif" font-size="34" font-weight="800" text-anchor="middle">${title}</text>
+          <text x="320" y="114" fill="#647067" font-family="Arial, 'Noto Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">${subtitle}</text>
+          <text x="320" y="358" fill="#204b39" font-family="Arial, 'Noto Sans SC', sans-serif" font-size="18" font-weight="700" text-anchor="middle">成品菜谱示意图 · 少油家庭共餐</text>
+        </svg>
+      `;
+      return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
+    }
+
+    const RECIPE_IMAGE_URLS = {
+      "chicken-mushroom-sweet-potato": makeRecipeImage("鸡肉菌菇红薯盘", "一盘菜 + 一份主食", "#edf2e8", "#c98c52", "#8ebf7b"),
+      "shrimp-broccoli-quinoa": makeRecipeImage("虾仁西兰花藜麦碗", "高蛋白训练日午餐", "#e9f3f6", "#e58d7a", "#5ba66a"),
+      "tomato-fish-brown-rice": makeRecipeImage("番茄鱼片杂粮半饭", "汤菜配半份杂粮饭", "#f7eee6", "#d95c4b", "#f0c66a"),
+      "tofu-egg-seaweed-soba": makeRecipeImage("豆腐鸡蛋海带荞麦汤面", "清淡恢复汤面", "#eef4e8", "#f2d15d", "#5d8c6f"),
+      "lean-beef-pepper-yam": makeRecipeImage("瘦牛彩椒杏鲍菇配山药", "每周一次变化项", "#f5efe7", "#a85d42", "#f2bd4a"),
+      "shellfish-winter-melon-corn": makeRecipeImage("贝类冬瓜汤配玉米", "低油汤菜不叠饭", "#eaf5f3", "#73a9b8", "#f4d36c"),
+      "lean-pork-tomato-purple-potato": makeRecipeImage("瘦猪肉番茄绿叶菜配紫薯", "家常肉菜少糖版", "#f6eceb", "#d56754", "#7f5aa2"),
+      "edamame-tofu-purple-cabbage": makeRecipeImage("毛豆豆腐紫甘蓝杂粮碗", "植物蛋白高纤维", "#f0eef8", "#7b62a3", "#69a96d")
+    };
+
+    const FOOD_IMAGE_URLS = {
+      "sweet-potato": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/Ipomoea_batatas_006.JPG/960px-Ipomoea_batatas_006.JPG",
+      "purple-sweet-potato": "https://commons.wikimedia.org/wiki/Special:FilePath/Purple%20sweet%20potato%20bought%20in%20Yoshiwara.jpg?width=640",
+      quinoa: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/Quinoa_closeup.jpg/960px-Quinoa_closeup.jpg",
+      oats: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/df/Rolled_Oats.jpg/960px-Rolled_Oats.jpg",
+      "brown-rice": "https://upload.wikimedia.org/wikipedia/commons/d/d1/Reis_-_Sorte_C_voll.jpg",
+      soba: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Dried_soba_noodles_by_FotoosVanRobin.jpg/960px-Dried_soba_noodles_by_FotoosVanRobin.jpg",
+      corn: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Corn_on_the_cob_-_Massachusetts.jpg/960px-Corn_on_the_cob_-_Massachusetts.jpg",
+      potato: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Patates.jpg/960px-Patates.jpg",
+      yam: "https://upload.wikimedia.org/wikipedia/commons/3/3b/Dioscorea_polystachya_%28batatas%29.jpg",
+      pumpkin: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/FrenchMarketPumpkinsB.jpg/960px-FrenchMarketPumpkinsB.jpg",
+      "black-rice": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Black_Rice.jpg/960px-Black_Rice.jpg",
+      "whole-wheat-pasta": "https://commons.wikimedia.org/wiki/Special:FilePath/Whole%20wheat%20penne%2C%20cooked%20and%20uncooked.jpg?width=640",
+      beans: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Rajmah_beans_in_Kullu_district%2C_Himachal_Pradesh%2C1.jpg/960px-Rajmah_beans_in_Kullu_district%2C_Himachal_Pradesh%2C1.jpg",
+      shrimp: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Raw_shrimp.jpg/960px-Raw_shrimp.jpg",
+      fish: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/100_gram_fish_fillet_%28115_grams_raw_weight%29.JPG/960px-100_gram_fish_fillet_%28115_grams_raw_weight%29.JPG",
+      chicken: "https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20chicken%20slices.jpg?width=640",
+      egg: "https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20egg.jpg?width=640",
+      tofu: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/03/Japanese_SilkyTofu_%28Kinugoshi_Tofu%29.JPG/960px-Japanese_SilkyTofu_%28Kinugoshi_Tofu%29.JPG",
+      "dried-tofu": "https://commons.wikimedia.org/wiki/Special:FilePath/1%20bowl%20of%20100g%20Kaiyang-flavor%20dried%20tofu.jpg?width=640",
+      edamame: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Edamame_by_Zesmerelda_in_Chicago.jpg/960px-Edamame_by_Zesmerelda_in_Chicago.jpg",
+      "lean-pork": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Poledwiczka_wieprzowa.JPG/960px-Poledwiczka_wieprzowa.JPG",
+      "lean-beef": "https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20beef.jpg?width=640",
+      shellfish: "https://commons.wikimedia.org/wiki/Special:FilePath/Spisula%20solida.jpg?width=640",
+      "greek-yogurt": "https://upload.wikimedia.org/wikipedia/commons/2/2c/Labneh01.jpg",
+      whey: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Whey_powder.jpg/960px-Whey_powder.jpg",
+      salmon: "https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20salmon%20fillets.jpg?width=640",
+      tuna: "https://upload.wikimedia.org/wikipedia/commons/2/21/Tuna_assortment.png",
+      turkey: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Thanksgiving_Turkey.jpg/960px-Thanksgiving_Turkey.jpg",
+      spinach: "https://commons.wikimedia.org/wiki/Special:FilePath/Spinach%20leaves.jpg?width=640",
+      lettuce: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/Iceberg_lettuce_in_SB.jpg/960px-Iceberg_lettuce_in_SB.jpg",
+      youmaicai: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/Iceberg_lettuce_in_SB.jpg/960px-Iceberg_lettuce_in_SB.jpg",
+      "bok-choy": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/99/Bok_Choy_%2849553125456%29.jpg/960px-Bok_Choy_%2849553125456%29.jpg",
+      "chinese-broccoli": "https://upload.wikimedia.org/wikipedia/commons/9/90/Gailan.jpg",
+      broccoli: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/03/Broccoli_and_cross_section_edit.jpg/960px-Broccoli_and_cross_section_edit.jpg",
+      cauliflower: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Chou-fleur_02.jpg/960px-Chou-fleur_02.jpg",
+      cabbage: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Cabbage_and_cross_section_on_white.jpg/960px-Cabbage_and_cross_section_on_white.jpg",
+      "purple-cabbage": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/Brassica_oleracea_var_capitata_Rubyball.jpg/960px-Brassica_oleracea_var_capitata_Rubyball.jpg",
+      napa: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Napa_cabbages.png/960px-Napa_cabbages.png",
+      shiitake: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/64/Shiitakegrowing.jpg/960px-Shiitakegrowing.jpg",
+      mushroom: "https://upload.wikimedia.org/wikipedia/commons/0/01/ChampignonMushroom.jpg",
+      enoki: "https://commons.wikimedia.org/wiki/Special:FilePath/Enoki%20mushroom.jpg?width=640",
+      "king-oyster": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f6/Seta_de_cardo_%28Pleurotus_eryngii%29%2C_2012-10-03%2C_DD_01.JPG/960px-Seta_de_cardo_%28Pleurotus_eryngii%29%2C_2012-10-03%2C_DD_01.JPG",
+      shimeji: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Hypsizygus_marmoreus.jpg/960px-Hypsizygus_marmoreus.jpg",
+      cucumber: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/96/ARS_cucumber.jpg/960px-ARS_cucumber.jpg",
+      tomato: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Tomato_je.jpg/960px-Tomato_je.jpg",
+      "winter-melon": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/Benincasa_hispida_compose.jpg/960px-Benincasa_hispida_compose.jpg",
+      zucchini: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/CSA-Striped-Zucchini.jpg/960px-CSA-Striped-Zucchini.jpg",
+      eggplant: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Solanum_melongena_24_08_2012_%281%29.JPG/960px-Solanum_melongena_24_08_2012_%281%29.JPG",
+      pepper: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/Green-Yellow-Red-Pepper-2009.jpg/960px-Green-Yellow-Red-Pepper-2009.jpg",
+      kelp: "https://upload.wikimedia.org/wikipedia/commons/1/10/Kombu.jpg",
+      wakame: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/CSIRO_ScienceImage_952_Undaria_pinnatifida_Japanese_kelp.jpg/960px-CSIRO_ScienceImage_952_Undaria_pinnatifida_Japanese_kelp.jpg",
+      nori: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/Nori.jpg/960px-Nori.jpg"
+    };
+
+    const FOODS = {
+      carbs: [
+        { id: "sweet-potato", name: "红薯", priority: "高", imageKey: "Sweet Potatoes", alt: "红薯", seasonal: ["autumn", "winter"], note: "日常主力，适合蒸烤后分装。" },
+        { id: "purple-sweet-potato", name: "紫薯", priority: "高", imageKey: "Sweet Potatoes", alt: "紫薯", seasonal: ["autumn", "winter"], note: "饱腹感强，适合和清淡蛋白搭配。" },
+        { id: "quinoa", name: "藜麦", priority: "高", imageKey: "Quinoa", alt: "藜麦", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合训练日午餐，口感轻。" },
+        { id: "oats", name: "燕麦", priority: "高", imageKey: "Oats", alt: "燕麦", seasonal: ["spring", "summer", "autumn", "winter"], note: "无糖版本，适合早餐或加餐。" },
+        { id: "brown-rice", name: "糙米", priority: "高", imageKey: "Brown Rice", alt: "糙米", seasonal: ["spring", "summer", "autumn", "winter"], note: "本人半份，家人可加量。" },
+        { id: "soba", name: "荞麦面", priority: "高", imageKey: "Brown Rice Noodle", alt: "荞麦面", seasonal: ["spring", "summer"], note: "适合凉拌或汤面，少油少甜酱。" },
+        { id: "corn", name: "玉米", priority: "中", imageKey: "Sweetcorn", alt: "玉米", seasonal: ["summer", "autumn"], note: "吃玉米就不再默认加米饭。" },
+        { id: "potato", name: "土豆", priority: "中", imageKey: "Potatoes", alt: "土豆", seasonal: ["spring", "autumn", "winter"], note: "优先蒸煮烤，避免油炸。" },
+        { id: "yam", name: "山药", priority: "中", imageKey: "Potatoes", alt: "山药", seasonal: ["autumn", "winter"], note: "适合清蒸或汤菜。" },
+        { id: "pumpkin", name: "南瓜", priority: "中", imageKey: "Pumpkin", alt: "南瓜", seasonal: ["autumn", "winter"], note: "不和大量米饭叠加。" },
+        { id: "black-rice", name: "黑米 / 紫米", priority: "中", imageKey: "Rice", alt: "黑米和紫米", seasonal: ["spring", "summer", "autumn", "winter"], note: "杂粮饭轮换项，本人半份。" },
+        { id: "whole-wheat-pasta", name: "全麦意面", priority: "低频", imageKey: "Whole Wheat", alt: "全麦意面", seasonal: ["spring", "summer", "autumn", "winter"], note: "控制酱料和总量。" },
+        { id: "beans", name: "豆类主食", priority: "低频", imageKey: "Cannellini Beans", alt: "豆类主食", seasonal: ["spring", "summer", "autumn", "winter"], note: "作为变化项，注意总碳水。" }
+      ],
+      proteins: [
+        { id: "shrimp", name: "虾", priority: "高", imageKey: "Prawns", alt: "虾", seasonal: ["spring", "summer"], note: "白灼、番茄汤、少油煎都稳。" },
+        { id: "fish", name: "鱼", priority: "高", imageKey: "White Fish", alt: "鱼", seasonal: ["spring", "summer", "autumn", "winter"], note: "清蒸、煎烤少油、菌菇汤。" },
+        { id: "chicken", name: "去皮鸡肉", priority: "高", imageKey: "Chicken Breast", alt: "去皮鸡肉", seasonal: ["spring", "summer", "autumn", "winter"], note: "鸡胸或去皮鸡腿，少油。" },
+        { id: "egg", name: "鸡蛋", priority: "高", imageKey: "Eggs", alt: "鸡蛋", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合和豆腐、绿叶菜组合。" },
+        { id: "tofu", name: "豆腐", priority: "高", imageKey: "Tofu", alt: "豆腐", seasonal: ["spring", "summer", "autumn", "winter"], note: "番茄豆腐、海带豆腐汤很好用。" },
+        { id: "dried-tofu", name: "豆干", priority: "高", imageKey: "Tofu", alt: "豆干", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合凉拌或少油炒蔬菜。" },
+        { id: "edamame", name: "毛豆", priority: "高", imageKey: "Green Beans", alt: "毛豆", seasonal: ["summer", "autumn"], note: "可做蛋白补充和配菜。" },
+        { id: "lean-pork", name: "瘦猪肉", priority: "中", imageKey: "Pork", alt: "瘦猪肉", seasonal: ["spring", "summer", "autumn", "winter"], note: "里脊或瘦肉，不红烧加糖。" },
+        { id: "lean-beef", name: "瘦牛肉", priority: "中", imageKey: "Beef", alt: "瘦牛肉", seasonal: ["autumn", "winter"], note: "频率控制在每周 1 次左右。" },
+        { id: "shellfish", name: "贝类", priority: "中", imageKey: "Clams", alt: "贝类", seasonal: ["spring", "summer"], note: "适合冬瓜汤、番茄汤、菌菇汤。" },
+        { id: "greek-yogurt", name: "无糖希腊酸奶", priority: "中", imageKey: "Greek Yogurt", alt: "无糖希腊酸奶", seasonal: ["spring", "summer", "autumn", "winter"], note: "只当蛋白补丁，不替代正餐。" },
+        { id: "whey", name: "乳清蛋白", priority: "中", imageKey: "Milk", alt: "乳清蛋白", seasonal: ["spring", "summer", "autumn", "winter"], note: "只作为补丁，不当主餐。" },
+        { id: "salmon", name: "三文鱼", priority: "低频", imageKey: "Salmon", alt: "三文鱼", seasonal: ["spring", "summer", "autumn", "winter"], note: "控制份量，少油煎烤。" },
+        { id: "tuna", name: "金枪鱼", priority: "低频", imageKey: "Tuna", alt: "金枪鱼", seasonal: ["spring", "summer", "autumn", "winter"], note: "罐头优先水浸、低钠。" },
+        { id: "turkey", name: "火鸡肉", priority: "低频", imageKey: "Turkey", alt: "火鸡肉", seasonal: ["autumn", "winter"], note: "作为变化项，避免加工肉。" }
+      ],
+      fibers: [
+        { id: "spinach", name: "菠菜", priority: "绿叶菜", imageKey: "Spinach", alt: "菠菜", seasonal: ["spring", "winter"], note: "焯水或清炒少油。" },
+        { id: "lettuce", name: "生菜", priority: "绿叶菜", imageKey: "Lettuce", alt: "生菜", seasonal: ["spring", "summer"], note: "适合配白灼虾或鸡肉。" },
+        { id: "youmaicai", name: "油麦菜", priority: "绿叶菜", imageKey: "Lettuce", alt: "油麦菜", seasonal: ["spring", "summer", "autumn"], note: "少油蒜蓉即可。" },
+        { id: "bok-choy", name: "小白菜 / 上海青", priority: "绿叶菜", imageKey: "Chinese Cabbage", alt: "小白菜和上海青", seasonal: ["spring", "autumn", "winter"], note: "适合汤菜和清炒。" },
+        { id: "chinese-broccoli", name: "芥蓝", priority: "绿叶菜", imageKey: "Chinese Broccoli", alt: "芥蓝", seasonal: ["autumn", "winter"], note: "白灼少酱。" },
+        { id: "broccoli", name: "西兰花", priority: "十字花科", imageKey: "Broccoli", alt: "西兰花", seasonal: ["spring", "autumn", "winter"], note: "和虾、鸡肉都很稳。" },
+        { id: "cauliflower", name: "菜花", priority: "十字花科", imageKey: "Broccoli", alt: "菜花", seasonal: ["autumn", "winter"], note: "少油清炒或烤。" },
+        { id: "cabbage", name: "卷心菜", priority: "十字花科", imageKey: "Cabbage", alt: "卷心菜", seasonal: ["spring", "autumn", "winter"], note: "适合快炒，油要少。" },
+        { id: "purple-cabbage", name: "紫甘蓝", priority: "十字花科", imageKey: "Red Cabbage", alt: "紫甘蓝", seasonal: ["spring", "summer", "autumn"], note: "适合凉拌，少沙拉酱。" },
+        { id: "napa", name: "娃娃菜", priority: "十字花科", imageKey: "Chinese Cabbage", alt: "娃娃菜", seasonal: ["autumn", "winter"], note: "适合鱼汤、豆腐汤。" },
+        { id: "shiitake", name: "香菇", priority: "菌菇", imageKey: "Shiitake Mushrooms", alt: "香菇", seasonal: ["autumn", "winter"], note: "可给清淡菜增味。" },
+        { id: "mushroom", name: "口蘑", priority: "菌菇", imageKey: "Mushrooms", alt: "口蘑", seasonal: ["spring", "autumn", "winter"], note: "适合少油煎烤或汤。" },
+        { id: "enoki", name: "金针菇", priority: "菌菇", imageKey: "Mushrooms", alt: "金针菇", seasonal: ["autumn", "winter"], note: "汤里加量很方便。" },
+        { id: "king-oyster", name: "杏鲍菇", priority: "菌菇", imageKey: "Oyster Mushrooms", alt: "杏鲍菇", seasonal: ["autumn", "winter"], note: "口感扎实，少油煎。" },
+        { id: "shimeji", name: "海鲜菇", priority: "菌菇", imageKey: "Mushrooms", alt: "海鲜菇", seasonal: ["autumn", "winter"], note: "适合和鱼虾贝类搭配。" },
+        { id: "cucumber", name: "黄瓜", priority: "低热量配菜", imageKey: "Cucumber", alt: "黄瓜", seasonal: ["summer"], note: "适合补一份清爽配菜。" },
+        { id: "tomato", name: "番茄", priority: "低热量配菜", imageKey: "Tomatoes", alt: "番茄", seasonal: ["summer", "autumn"], note: "番茄汤底友好，少糖。" },
+        { id: "winter-melon", name: "冬瓜", priority: "低热量配菜", imageKey: "Squash", alt: "冬瓜", seasonal: ["summer", "autumn"], note: "适合虾仁、贝类汤。" },
+        { id: "zucchini", name: "西葫芦", priority: "低热量配菜", imageKey: "Zucchini", alt: "西葫芦", seasonal: ["summer"], note: "少油快炒。" },
+        { id: "eggplant", name: "茄子少油", priority: "低热量配菜", imageKey: "Egg Plants", alt: "茄子", seasonal: ["summer", "autumn"], note: "容易吸油，优先蒸后拌。" },
+        { id: "pepper", name: "青椒 / 彩椒", priority: "低热量配菜", imageKey: "Pepper", alt: "彩椒", seasonal: ["summer", "autumn"], note: "适合牛肉、鸡肉、菌菇。" },
+        { id: "kelp", name: "海带", priority: "海藻类", imageKey: "Cabbage", alt: "海带", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合豆腐汤、鸡蛋汤。" },
+        { id: "wakame", name: "裙带菜", priority: "海藻类", imageKey: "Cabbage", alt: "裙带菜", seasonal: ["spring", "summer", "autumn", "winter"], note: "快手汤菜很好用。" },
+        { id: "nori", name: "紫菜", priority: "海藻类", imageKey: "Cabbage", alt: "紫菜", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合紫菜蛋花汤。" }
+      ]
+    };
+
+    const RECIPES = [
+      {
+        id: "chicken-mushroom-sweet-potato",
+        title: "去皮鸡肉菌菇红薯盘",
+        imageAlt: "去皮鸡肉菌菇红薯盘成品菜",
+        carbs: ["sweet-potato", "purple-sweet-potato"],
+        proteins: ["chicken"],
+        fibers: ["shiitake", "mushroom", "enoki", "king-oyster", "shimeji", "spinach", "bok-choy"],
+        seasonal: ["autumn", "winter"],
+        tags: ["默认稳妥", "少油", "家庭共餐"],
+        ingredients: ["红薯或紫薯", "去皮鸡肉", "菌菇", "绿叶菜", "姜", "黑胡椒"],
+        portionNote: "本人红薯 0.5 个拳头，鸡肉 1 个掌心，菌菇和绿叶菜补到半盘；家人可额外加主食。",
+        why: "蛋白、主食、菌菇和绿叶菜都好落地，适合晚餐默认方案。",
+        lowOilAdaptation: "鸡肉用不粘锅少油煎或空气炸，菌菇先干煸出水再加绿叶菜，不做浓汁勾芡。",
+        steps: ["红薯蒸熟或烤熟，先分出本人半份。", "鸡肉用姜、黑胡椒、少量低钠酱油腌 10 分钟后少油煎熟。", "菌菇和绿叶菜做汤或快炒，最后把鸡肉装盘。"]
+      },
+      {
+        id: "shrimp-broccoli-quinoa",
+        title: "虾仁西兰花藜麦碗",
+        imageAlt: "虾仁西兰花藜麦碗成品菜",
+        carbs: ["quinoa", "brown-rice"],
+        proteins: ["shrimp"],
+        fibers: ["broccoli", "lettuce", "cucumber", "purple-cabbage", "tomato"],
+        seasonal: ["spring", "summer"],
+        tags: ["训练日午餐", "快手", "高蛋白"],
+        ingredients: ["藜麦", "虾仁", "西兰花", "生菜或黄瓜", "柠檬汁", "黑胡椒"],
+        portionNote: "本人藜麦半碗起步，虾仁 1 个掌心，蔬菜至少 2 个拳头。",
+        why: "藜麦和虾适合活动量较高的日子，西兰花或生菜补体积。",
+        lowOilAdaptation: "虾仁白灼或喷油快煎，调味用柠檬汁、醋和黑胡椒，不用沙拉酱。",
+        steps: ["藜麦提前煮好，放凉后更适合做碗饭。", "虾仁白灼或少油煎至变色。", "西兰花焯水，和生菜、黄瓜一起装碗调味。"]
+      },
+      {
+        id: "tomato-fish-brown-rice",
+        title: "番茄鱼片杂粮半饭",
+        imageAlt: "番茄鱼片杂粮半饭成品菜",
+        carbs: ["brown-rice", "black-rice", "quinoa"],
+        proteins: ["fish", "tuna", "salmon"],
+        fibers: ["tomato", "napa", "enoki", "shimeji", "spinach", "bok-choy"],
+        seasonal: ["summer", "autumn", "winter"],
+        tags: ["汤菜", "少油", "家庭共餐"],
+        ingredients: ["白身鱼片", "番茄", "娃娃菜", "菌菇", "杂粮饭", "姜"],
+        portionNote: "本人杂粮饭半份，鱼片 1 个掌心，番茄汤菜多盛一碗。",
+        why: "番茄汤底让鱼和蔬菜更好入口，本人米饭半份，家人可加主食。",
+        lowOilAdaptation: "番茄只用少量油炒出汁，不加糖；鱼片用汤烫熟，避免油煎和重酱。",
+        steps: ["番茄少油炒出汁后加水煮开。", "放入娃娃菜、菌菇和姜丝煮软。", "下鱼片烫熟，本人配半份杂粮饭。"]
+      },
+      {
+        id: "tofu-egg-seaweed-soba",
+        title: "豆腐鸡蛋海带荞麦汤面",
+        imageAlt: "豆腐鸡蛋海带荞麦汤面成品菜",
+        carbs: ["soba"],
+        proteins: ["tofu", "egg", "dried-tofu"],
+        fibers: ["kelp", "wakame", "nori", "spinach", "napa", "bok-choy"],
+        seasonal: ["spring", "summer", "autumn", "winter"],
+        tags: ["清淡恢复", "快手", "汤面"],
+        ingredients: ["荞麦面", "豆腐", "鸡蛋", "海带或裙带菜", "绿叶菜", "低钠酱油"],
+        portionNote: "本人荞麦面半份，豆腐和鸡蛋补蛋白，海藻与绿叶菜加量。",
+        why: "豆腐和鸡蛋补蛋白，海藻和绿叶菜补体积，适合清淡恢复日。",
+        lowOilAdaptation: "全程汤煮，不用葱油和辣油；只用少量低钠酱油、醋或胡椒提味。",
+        steps: ["荞麦面按本人半份煮好，捞出备用。", "清汤加入海带或裙带菜、豆腐煮开。", "淋入蛋液成蛋花，最后放绿叶菜和荞麦面。"]
+      },
+      {
+        id: "lean-beef-pepper-yam",
+        title: "瘦牛彩椒杏鲍菇配山药",
+        imageAlt: "瘦牛彩椒杏鲍菇配山药成品菜",
+        carbs: ["yam", "pumpkin", "potato"],
+        proteins: ["lean-beef"],
+        fibers: ["pepper", "king-oyster", "mushroom", "cucumber", "lettuce"],
+        seasonal: ["autumn", "winter"],
+        tags: ["每周一次", "控油", "家常"],
+        ingredients: ["瘦牛肉", "彩椒", "杏鲍菇", "山药或南瓜", "黑胡椒", "蒜"],
+        portionNote: "本人山药半拳头，牛肉 1 个掌心，彩椒和杏鲍菇至少半盘。",
+        why: "牛肉作为低频变化项，彩椒和菌菇能减少重酱需求。",
+        lowOilAdaptation: "牛肉快炒后先盛出，彩椒和杏鲍菇用锅内余油炒；不用照烧、黑椒糖汁或黄油。",
+        steps: ["山药或南瓜蒸熟，作为主食分量。", "瘦牛肉切薄片，用黑胡椒和少量低钠酱油抓匀。", "牛肉快炒变色后盛出，再炒彩椒杏鲍菇并回锅。"]
+      },
+      {
+        id: "shellfish-winter-melon-corn",
+        title: "贝类冬瓜汤配玉米",
+        imageAlt: "贝类冬瓜汤配玉米成品菜",
+        carbs: ["corn"],
+        proteins: ["shellfish", "shrimp"],
+        fibers: ["winter-melon", "wakame", "kelp", "bok-choy", "spinach"],
+        seasonal: ["summer", "autumn"],
+        tags: ["汤菜", "低油", "不叠米饭"],
+        ingredients: ["玉米", "贝类或虾", "冬瓜", "裙带菜", "绿叶菜", "姜丝"],
+        portionNote: "本人玉米半根到一根内，不再叠加米饭；冬瓜汤菜可多盛。",
+        why: "玉米已算主食，不再叠加米饭；汤菜体积大，适合家庭晚餐。",
+        lowOilAdaptation: "直接清汤煮，姜丝去腥；不做蒜蓉粉丝贝类，也不加浓汤底。",
+        steps: ["玉米蒸或煮熟，先确认这餐不再加米饭。", "冬瓜切片煮软，加入贝类或虾。", "加裙带菜和绿叶菜，少盐调味。"]
+      },
+      {
+        id: "lean-pork-tomato-purple-potato",
+        title: "瘦猪肉番茄绿叶菜配紫薯",
+        imageAlt: "瘦猪肉番茄绿叶菜配紫薯成品菜",
+        carbs: ["purple-sweet-potato", "sweet-potato"],
+        proteins: ["lean-pork"],
+        fibers: ["tomato", "spinach", "lettuce", "bok-choy", "cucumber"],
+        seasonal: ["summer", "autumn", "winter"],
+        tags: ["家常", "不红烧", "少油"],
+        ingredients: ["紫薯", "猪里脊或瘦肉", "番茄", "绿叶菜", "姜蒜", "醋"],
+        portionNote: "本人紫薯半拳头，瘦肉 1 个掌心，番茄和绿叶菜补到半盘。",
+        why: "保留家常肉菜口感，但避开红烧糖汁和大油。",
+        lowOilAdaptation: "瘦肉切薄片快炒或做汤，不红烧不勾甜汁；番茄负责酸甜味。",
+        steps: ["紫薯蒸熟，按本人半份装盘。", "瘦肉切薄片，用姜蒜去腥后快炒。", "加入番茄和绿叶菜同炒或加水做汤。"]
+      },
+      {
+        id: "edamame-tofu-purple-cabbage",
+        title: "毛豆豆腐紫甘蓝杂粮碗",
+        imageAlt: "毛豆豆腐紫甘蓝杂粮碗成品菜",
+        carbs: ["brown-rice", "black-rice", "beans"],
+        proteins: ["edamame", "tofu", "dried-tofu"],
+        fibers: ["purple-cabbage", "cucumber", "lettuce", "tomato", "broccoli"],
+        seasonal: ["summer", "autumn"],
+        tags: ["植物蛋白", "凉拌", "高纤维"],
+        ingredients: ["杂粮饭", "毛豆", "豆腐或豆干", "紫甘蓝", "黄瓜", "醋"],
+        portionNote: "本人杂粮饭半份，豆腐和毛豆补足蛋白，紫甘蓝黄瓜加量增加咀嚼感。",
+        why: "豆制品和毛豆补蛋白，紫甘蓝和黄瓜增加咀嚼感。",
+        lowOilAdaptation: "豆腐可焯水或少油煎表面，凉拌汁用醋、柠檬汁和少量芝麻，不用沙拉酱。",
+        steps: ["杂粮饭提前煮好，本人只盛半份。", "毛豆煮熟，豆腐焯水或少油煎。", "紫甘蓝、黄瓜、生菜切好，用清爽调味汁拌匀。"]
+      }
+    ];
+
+    const state = {
+      carb: null,
+      protein: null,
+      fibers: [],
+      openStep: "carb",
+      seasonFilter: "auto"
+    };
+
+    const allFoods = [...FOODS.carbs, ...FOODS.proteins, ...FOODS.fibers];
+    const byId = Object.fromEntries(allFoods.map((food) => [food.id, food]));
+
+    function getCurrentSeason() {
+      const month = new Date().getMonth() + 1;
+      if (month >= 3 && month <= 5) return "spring";
+      if (month >= 6 && month <= 8) return "summer";
+      if (month >= 9 && month <= 11) return "autumn";
+      return "winter";
+    }
+
+    function activeSeason() {
+      return state.seasonFilter === "auto" ? getCurrentSeason() : state.seasonFilter;
+    }
+
+    function isSeasonal(item) {
+      const season = activeSeason();
+      return season === "all" || item.seasonal.includes(season);
+    }
+
+    function foodImage(food) {
+      return FOOD_IMAGE_URLS[food.id] || fallbackImage;
+    }
+
+    function priorityClass(priority) {
+      if (priority === "中" || priority === "低热量配菜") return "priority-medium";
+      if (priority === "低频") return "priority-low";
+      return "";
+    }
+
+    function seasonText(item) {
+      return item.seasonal.map((season) => SEASON_LABELS[season]).join(" / ");
+    }
+
+    function chipHtml(food) {
+      const seasonal = isSeasonal(food) ? `<span class="chip seasonal">时令</span>` : "";
+      return `
+        <span class="chip ${priorityClass(food.priority)}">${food.priority}</span>
+        ${seasonal}
+      `;
+    }
+
+    function renderFoodCard(food, group) {
+      const pressed = group === "fiber" ? state.fibers.includes(food.id) : state[group] === food.id;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "food-card";
+      button.dataset.foodId = food.id;
+      button.dataset.group = group;
+      button.setAttribute("aria-pressed", String(pressed));
+      button.innerHTML = `
+        <img src="${foodImage(food)}" alt="${food.alt}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=fallbackImage;">
+        <span class="food-card-body">
+          <span class="food-title">
+            <strong>${food.name}</strong>
+            <span class="chip-row">${chipHtml(food)}</span>
+          </span>
+          <span class="food-note">${food.note} ${seasonText(food)}</span>
+        </span>
+      `;
+      button.addEventListener("click", () => selectFood(food.id, group));
+      return button;
+    }
+
+    function seasonSort(a, b) {
+      return Number(isSeasonal(b)) - Number(isSeasonal(a));
+    }
+
+    function renderFoodGrids() {
+      document.querySelector('[data-role="carb-grid"]').replaceChildren(
+        ...[...FOODS.carbs].sort(seasonSort).map((food) => renderFoodCard(food, "carb"))
+      );
+      document.querySelector('[data-role="protein-grid"]').replaceChildren(
+        ...[...FOODS.proteins].sort(seasonSort).map((food) => renderFoodCard(food, "protein"))
+      );
+      document.querySelector('[data-role="fiber-grid"]').replaceChildren(
+        ...[...FOODS.fibers].sort(seasonSort).map((food) => renderFoodCard(food, "fiber"))
+      );
+    }
+
+    function collapseStep(step) {
+      const element = document.querySelector(`[data-step="${step}"]`);
+      if (element) element.classList.remove("is-open");
+    }
+
+    function openNextStep(step) {
+      const order = ["carb", "protein", "fiber"];
+      const index = order.indexOf(step);
+      const next = order[index + 1];
+      state.openStep = next || step;
+    }
+
+    function toggleStep(step) {
+      state.openStep = state.openStep === step ? "" : step;
+      render();
+    }
+
+    function selectFood(id, group) {
+      if (group === "fiber") {
+        if (state.fibers.includes(id)) {
+          state.fibers = state.fibers.filter((item) => item !== id);
+        } else {
+          state.fibers = [...state.fibers, id].slice(-2);
+          if (state.fibers.length === 2) {
+            collapseStep("fiber");
+            state.openStep = "";
+          }
+        }
+      } else {
+        state[group] = state[group] === id ? null : id;
+        if (state[group]) {
+          collapseStep(group);
+          openNextStep(group);
+        }
+      }
+      render();
+    }
+
+    function completeFiberStep() {
+      collapseStep("fiber");
+      state.openStep = "";
+      render();
+    }
+
+    function selectedNames(ids) {
+      return ids.map((id) => byId[id]?.name).filter(Boolean).join(" + ");
+    }
+
+    function updateStepStates() {
+      const completed = {
+        carb: Boolean(state.carb),
+        protein: Boolean(state.protein),
+        fiber: state.fibers.length > 0
+      };
+      for (const step of ["carb", "protein", "fiber"]) {
+        const element = document.querySelector(`[data-step="${step}"]`);
+        element.classList.toggle("is-open", state.openStep === step);
+        element.classList.toggle("is-complete", completed[step]);
+      }
+
+      document.querySelector('[data-role="state-carb"]').textContent = state.carb ? "已选" : "未选";
+      document.querySelector('[data-role="state-protein"]').textContent = state.protein ? "已选" : "未选";
+      document.querySelector('[data-role="state-fiber"]').textContent = state.fibers.length ? `已选 ${state.fibers.length}` : "未选";
+      document.querySelector('[data-role="summary-carb"]').textContent = state.carb ? byId[state.carb].name : "本人默认 0.5 个拳头";
+      document.querySelector('[data-role="summary-protein"]').textContent = state.protein ? byId[state.protein].name : "鱼虾鸡豆制品优先";
+      document.querySelector('[data-role="summary-fiber"]').textContent = state.fibers.length ? selectedNames(state.fibers) : "选 1-2 个，最好有绿叶菜或菌菇";
+    }
+
+    function buildAnalysis() {
+      const messages = [];
+      const carb = byId[state.carb];
+      const protein = byId[state.protein];
+      const fibers = state.fibers.map((id) => byId[id]).filter(Boolean);
+      const season = activeSeason();
+      const seasonLabel = season === "all" ? "不限时令" : SEASON_LABELS[season];
+
+      if (!carb && !protein && fibers.length === 0) {
+        return [`当前按${seasonLabel}排序。先选主食、蛋白和 1-2 个蔬菜，右侧会收敛到今天可做的菜。`];
+      }
+
+      if (carb) {
+        const carbMessage = ["corn", "potato", "pumpkin"].includes(carb.id)
+          ? `${carb.name}已经算主食，这餐不要再默认叠加米饭。`
+          : `${carb.name}可按本人 0.5 个拳头起步，训练日或活动多再提高。`;
+        messages.push(carbMessage);
+      } else {
+        messages.push("还缺一份低加工主食；本人不需要多，但完全不放容易晚些时候饿。");
+      }
+
+      if (protein) {
+        if (protein.id === "lean-beef") {
+          messages.push("瘦牛肉建议作为每周 1 次左右的变化项，这餐调味保持少油少糖。");
+        } else {
+          messages.push(`${protein.name}适合作为这餐蛋白主轴，优先清蒸、白灼、少油煎烤或汤菜。`);
+        }
+      } else {
+        messages.push("还缺一份优质蛋白；优先鱼、虾、去皮鸡肉、豆腐或鸡蛋。");
+      }
+
+      if (fibers.length === 0) {
+        messages.push("还缺蔬菜 / 高纤维配菜；本人这餐至少补到 2 个拳头。");
+      } else if (fibers.length === 1) {
+        messages.push(`${fibers[0].name}可以作为半盘基础；若方便，再加一份菌菇、绿叶菜或海藻类。`);
+      } else {
+        messages.push(`${selectedNames(state.fibers)}覆盖了蔬菜体积，适合把本人餐盘的半盘做足。`);
+      }
+
+      messages.push(`时令偏好：${seasonLabel}。时令食材会加分，但家里已有的非时令食材也可以用。`);
+      return messages;
+    }
+
+    function scoreRecipe(recipe) {
+      let score = 0;
+      const selected = [state.carb, state.protein, ...state.fibers].filter(Boolean);
+      const recipeIds = [...recipe.carbs, ...recipe.proteins, ...recipe.fibers];
+
+      if (state.carb && recipe.carbs.includes(state.carb)) score += 5;
+      if (state.protein && recipe.proteins.includes(state.protein)) score += 6;
+      for (const fiber of state.fibers) {
+        if (recipe.fibers.includes(fiber)) score += 4;
+      }
+      if (selected.length > 0 && selected.every((id) => recipeIds.includes(id))) score += 6;
+      if (isSeasonal(recipe)) score += 3;
+      if (selected.length === 0 && recipe.tags.includes("默认稳妥")) score += 3;
+      return score;
+    }
+
+    function recommendRecipes() {
+      return [...RECIPES]
+        .map((recipe) => ({ ...recipe, score: scoreRecipe(recipe) }))
+        .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title, "zh-Hans-CN"))
+        .slice(0, MAX_RECOMMENDATIONS);
+    }
+
+    function renderAnalysis() {
+      const list = document.querySelector('[data-role="analysis"]');
+      list.replaceChildren(...buildAnalysis().map((message) => {
+        const item = document.createElement("li");
+        item.textContent = message;
+        return item;
+      }));
+
+      document.querySelector('[data-role="plate-carb"]').textContent = state.carb ? byId[state.carb].name : "选择主食";
+      document.querySelector('[data-role="plate-protein"]').textContent = state.protein ? byId[state.protein].name : "选择蛋白";
+      document.querySelector('[data-role="plate-fiber"]').textContent = state.fibers.length ? selectedNames(state.fibers) : "先选蔬菜 / 菌菇 / 海带类";
+
+      const season = activeSeason();
+      const label = season === "all" ? "不限时令" : SEASON_LABELS[season];
+      document.querySelector('[data-role="season-note"]').textContent = `当前：${label}。右侧只保留最可做的 1-2 道菜。`;
+    }
+
+    function recipeImage(recipe) {
+      return RECIPE_IMAGE_URLS[recipe.id] || fallbackImage;
+    }
+
+    function renderRecipeCard(recipe) {
+      const seasonChip = isSeasonal(recipe) ? `<span class="chip seasonal">时令</span>` : "";
+      const card = document.createElement("article");
+      card.className = "recipe-card";
+      card.innerHTML = `
+        <img class="recipe-finished-image" src="${recipeImage(recipe)}" alt="${recipe.imageAlt}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=fallbackImage;" aria-label="成品菜图片">
+        <div class="recipe-body">
+          <div class="recipe-title-row">
+            <h3>${recipe.title}</h3>
+            <span class="score">${recipe.score} 分</span>
+          </div>
+          <div class="chip-row">${seasonChip}${recipe.tags.map((tag) => `<span class="chip">${tag}</span>`).join("")}</div>
+          <div class="recipe-block">
+            <span class="recipe-label">所需食材</span>
+            <span class="recipe-ingredients">${recipe.ingredients.join("、")}</span>
+          </div>
+          <div class="recipe-block">
+            <span class="recipe-label">适配原因</span>
+            <p>${recipe.why}</p>
+          </div>
+          <div class="recipe-block">
+            <span class="recipe-label">本人份量</span>
+            <p>${recipe.portionNote}</p>
+          </div>
+          <div class="recipe-block">
+            <span class="recipe-label">少油改法</span>
+            <p>${recipe.lowOilAdaptation}</p>
+          </div>
+          <div class="recipe-block">
+            <span class="recipe-label">2-4 步做法</span>
+            <ol>${recipe.steps.slice(0, 4).map((step) => `<li>${step}</li>`).join("")}</ol>
+          </div>
+        </div>
+      `;
+      return card;
+    }
+
+    function renderRecipes() {
+      const container = document.querySelector('[data-role="recipes"]');
+      const recipes = recommendRecipes();
+
+      if (!recipes.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "当前组合暂时没有匹配菜谱。换一个蛋白或蔬菜试试。";
+        container.replaceChildren(empty);
+        return;
+      }
+
+      container.replaceChildren(...recipes.map(renderRecipeCard));
+    }
+
+    function randomSteadyMeal() {
+      const steady = [
+        ["sweet-potato", "chicken", ["shiitake", "bok-choy"]],
+        ["quinoa", "shrimp", ["broccoli", "lettuce"]],
+        ["brown-rice", "fish", ["tomato", "shimeji"]],
+        ["soba", "tofu", ["wakame", "spinach"]],
+        ["corn", "shellfish", ["winter-melon", "bok-choy"]]
+      ].filter((meal) => meal.some((id) => isSeasonal(byId[id] || { seasonal: [] })));
+      const pool = steady.length ? steady : [["sweet-potato", "chicken", ["shiitake", "bok-choy"]]];
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      state.carb = pick[0];
+      state.protein = pick[1];
+      state.fibers = pick[2];
+      state.openStep = "";
+      render();
+    }
+
+    function clearSelection() {
+      state.carb = null;
+      state.protein = null;
+      state.fibers = [];
+      state.openStep = "carb";
+      render();
+    }
+
+    function render() {
+      renderFoodGrids();
+      updateStepStates();
+      renderAnalysis();
+      renderRecipes();
+    }
+
+    document.querySelector('[data-action="random"]').addEventListener("click", randomSteadyMeal);
+    document.querySelector('[data-action="clear"]').addEventListener("click", clearSelection);
+    document.querySelector('[data-action="finish-fiber"]').addEventListener("click", completeFiberStep);
+    document.querySelectorAll('[data-action="toggle-step"]').forEach((button) => {
+      button.addEventListener("click", () => toggleStep(button.dataset.target));
+    });
+    document.querySelector('[data-role="seasonFilter"]').addEventListener("change", (event) => {
+      state.seasonFilter = event.target.value;
+      render();
+    });
+
+    document.querySelector('[data-role="seasonFilter"]').value = state.seasonFilter;
+    render();
+  </script>
+</body>
+</html>
