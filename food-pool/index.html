@@ -74,7 +74,8 @@
 
     .hero,
     .workspace,
-    .result-panel {
+    .result-panel,
+    .recipe-catalog {
       background: rgba(255, 253, 247, 0.96);
       border: 1px solid rgba(217, 223, 210, 0.92);
       border-radius: var(--radius);
@@ -289,6 +290,7 @@
       display: grid;
       gap: 6px;
       align-content: start;
+      min-width: 0;
     }
 
     .food-title {
@@ -347,7 +349,8 @@
       justify-content: flex-end;
     }
 
-    .result-panel {
+    .result-panel,
+    .recipe-catalog {
       padding: 14px;
       display: grid;
       gap: 14px;
@@ -428,16 +431,24 @@
       min-height: 174px;
     }
 
-    .recipe-card img {
-      width: 112px;
-      height: 100%;
-      object-fit: cover;
-      padding: 0;
+    .recipe-combo-image {
+      border-right: 1px solid var(--line);
+      display: grid;
+      grid-template-rows: repeat(3, minmax(0, 1fr));
       background: linear-gradient(180deg, #f8fbf4, #edf2e8);
     }
 
-    .recipe-finished-image {
-      border-right: 1px solid var(--line);
+    .recipe-combo-image img {
+      width: 112px;
+      height: 100%;
+      min-height: 0;
+      object-fit: cover;
+      padding: 0;
+      border-bottom: 1px solid rgba(217, 223, 210, 0.72);
+    }
+
+    .recipe-combo-image img:last-child {
+      border-bottom: 0;
     }
 
     .recipe-body {
@@ -456,6 +467,7 @@
     .recipe-title-row h3 {
       font-size: 16px;
       line-height: 1.35;
+      min-width: 0;
     }
 
     .score {
@@ -533,7 +545,8 @@
       }
 
       .workspace,
-      .result-panel {
+      .result-panel,
+      .recipe-catalog {
         padding: 18px;
       }
 
@@ -561,7 +574,7 @@
         grid-template-columns: 144px 1fr;
       }
 
-      .recipe-card img {
+      .recipe-combo-image img {
         width: 144px;
       }
     }
@@ -573,6 +586,11 @@
       }
 
       .hero {
+        grid-column: 1 / -1;
+      }
+
+      .recipe-catalog,
+      .source-note {
         grid-column: 1 / -1;
       }
 
@@ -589,7 +607,8 @@
 
       .hero,
       .workspace,
-      .result-panel {
+      .result-panel,
+      .recipe-catalog {
         box-shadow: 0 8px 20px rgba(35, 50, 40, 0.09);
       }
 
@@ -603,6 +622,62 @@
 
       .step-state {
         grid-column: 2;
+      }
+
+      .recipe-card {
+        grid-template-columns: 1fr;
+        min-height: 0;
+      }
+
+      .recipe-combo-image {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-rows: 1fr;
+        min-height: 106px;
+      }
+
+      .recipe-combo-image img {
+        width: 100%;
+        height: 106px;
+        border-right: 1px solid rgba(217, 223, 210, 0.72);
+        border-bottom: 0;
+      }
+
+      .recipe-combo-image img:last-child {
+        border-right: 0;
+      }
+
+      .recipe-body {
+        padding: 10px;
+      }
+
+      .recipe-title-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .app {
+        padding: 8px;
+      }
+
+      .food-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .food-card {
+        min-height: 116px;
+        grid-template-columns: 104px minmax(0, 1fr);
+        grid-template-rows: auto;
+      }
+
+      .food-card img {
+        width: 104px;
+        height: 100%;
+        min-height: 116px;
       }
     }
   </style>
@@ -685,7 +760,7 @@
 
       <aside class="result-panel" aria-label="组合分析与菜谱推荐">
         <div class="result-head">
-          <h2>今天可做 1-2 道菜</h2>
+          <h2>组合分析</h2>
           <p data-role="season-note">时令会参与排序，但不强制排除家里已有食材。</p>
         </div>
 
@@ -705,10 +780,17 @@
         </div>
 
         <ul class="analysis-list" data-role="analysis"></ul>
-        <div class="recipe-list" data-role="recipes"></div>
       </aside>
 
-      <p class="source-note">食材图优先使用 Wikimedia Commons / Wikipedia 的原食材照片；少数中式食材采用最接近的裸食材照片。本文只做日常执行参考，不替代医生或营养师建议。</p>
+      <section class="recipe-catalog" aria-labelledby="final-recipes-title">
+        <div class="result-head">
+          <h2 id="final-recipes-title">最终菜谱</h2>
+          <p>按当前选择收敛出 1-2 个最适合今天执行的家常方案。</p>
+        </div>
+        <div class="recipe-list" data-role="recipes" id="final-recipes"></div>
+      </section>
+
+      <p class="source-note">食材图优先使用 Wikimedia Commons / Wikipedia 的原食材照片；推荐区展示食材组合图，避免用不准确的成品示意图。本文只做日常执行参考，不替代医生或营养师建议。</p>
     </div>
   </main>
 
@@ -731,64 +813,31 @@
       </svg>
     `);
 
-    function makeRecipeImage(title, subtitle, bg, accent, garnish) {
-      const svg = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420">
-          <defs>
-            <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="${bg}"/>
-              <stop offset="100%" stop-color="#fffdf7"/>
-            </linearGradient>
-            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#243228" flood-opacity="0.18"/>
-            </filter>
-          </defs>
-          <rect width="640" height="420" rx="28" fill="url(#bg)"/>
-          <ellipse cx="320" cy="238" rx="210" ry="102" fill="#ffffff" filter="url(#shadow)"/>
-          <ellipse cx="320" cy="228" rx="168" ry="74" fill="#f7faf3"/>
-          <circle cx="244" cy="222" r="34" fill="${accent}" opacity="0.92"/>
-          <circle cx="314" cy="194" r="28" fill="${garnish}" opacity="0.9"/>
-          <circle cx="382" cy="226" r="38" fill="${accent}" opacity="0.72"/>
-          <path d="M216 267 C280 292 365 292 426 264" fill="none" stroke="#2f6f4f" stroke-width="12" stroke-linecap="round" opacity="0.5"/>
-          <text x="320" y="72" fill="#204b39" font-family="Arial, 'Noto Sans SC', sans-serif" font-size="34" font-weight="800" text-anchor="middle">${title}</text>
-          <text x="320" y="114" fill="#647067" font-family="Arial, 'Noto Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">${subtitle}</text>
-          <text x="320" y="358" fill="#204b39" font-family="Arial, 'Noto Sans SC', sans-serif" font-size="18" font-weight="700" text-anchor="middle">成品菜谱示意图 · 少油家庭共餐</text>
-        </svg>
-      `;
-      return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
-    }
-
-    const RECIPE_IMAGE_URLS = {
-      "chicken-mushroom-sweet-potato": makeRecipeImage("鸡肉菌菇红薯盘", "一盘菜 + 一份主食", "#edf2e8", "#c98c52", "#8ebf7b"),
-      "shrimp-broccoli-quinoa": makeRecipeImage("虾仁西兰花藜麦碗", "高蛋白训练日午餐", "#e9f3f6", "#e58d7a", "#5ba66a"),
-      "tomato-fish-brown-rice": makeRecipeImage("番茄鱼片杂粮半饭", "汤菜配半份杂粮饭", "#f7eee6", "#d95c4b", "#f0c66a"),
-      "tofu-egg-seaweed-soba": makeRecipeImage("豆腐鸡蛋海带荞麦汤面", "清淡恢复汤面", "#eef4e8", "#f2d15d", "#5d8c6f"),
-      "lean-beef-pepper-yam": makeRecipeImage("瘦牛彩椒杏鲍菇配山药", "每周一次变化项", "#f5efe7", "#a85d42", "#f2bd4a"),
-      "shellfish-winter-melon-corn": makeRecipeImage("贝类冬瓜汤配玉米", "低油汤菜不叠饭", "#eaf5f3", "#73a9b8", "#f4d36c"),
-      "lean-pork-tomato-purple-potato": makeRecipeImage("瘦猪肉番茄绿叶菜配紫薯", "家常肉菜少糖版", "#f6eceb", "#d56754", "#7f5aa2"),
-      "edamame-tofu-purple-cabbage": makeRecipeImage("毛豆豆腐紫甘蓝杂粮碗", "植物蛋白高纤维", "#f0eef8", "#7b62a3", "#69a96d")
-    };
-
     const FOOD_IMAGE_URLS = {
       "sweet-potato": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/Ipomoea_batatas_006.JPG/960px-Ipomoea_batatas_006.JPG",
       "purple-sweet-potato": "https://commons.wikimedia.org/wiki/Special:FilePath/Purple%20sweet%20potato%20bought%20in%20Yoshiwara.jpg?width=640",
       quinoa: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/Quinoa_closeup.jpg/960px-Quinoa_closeup.jpg",
+      "tricolor-quinoa": "https://upload.wikimedia.org/wikipedia/commons/8/89/Tricolor_Quinoa.jpg",
       oats: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/df/Rolled_Oats.jpg/960px-Rolled_Oats.jpg",
       "brown-rice": "https://upload.wikimedia.org/wikipedia/commons/d/d1/Reis_-_Sorte_C_voll.jpg",
+      "millet-rice": "https://upload.wikimedia.org/wikipedia/commons/1/1e/%EC%A1%B0%EB%B0%A5_-_Foxtail_millet_rice.webp",
+      "mixed-grain-bun": "https://commons.wikimedia.org/wiki/Special:FilePath/Black%20rice%20and%20multigrain%20steamed%20buns.jpg?width=640",
       soba: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Dried_soba_noodles_by_FotoosVanRobin.jpg/960px-Dried_soba_noodles_by_FotoosVanRobin.jpg",
       corn: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Corn_on_the_cob_-_Massachusetts.jpg/960px-Corn_on_the_cob_-_Massachusetts.jpg",
-      potato: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Patates.jpg/960px-Patates.jpg",
+      potato: "https://commons.wikimedia.org/wiki/Special:FilePath/Russet%20Potatoes%20%2815460075017%29.jpg?width=640",
       yam: "https://upload.wikimedia.org/wikipedia/commons/3/3b/Dioscorea_polystachya_%28batatas%29.jpg",
       pumpkin: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/FrenchMarketPumpkinsB.jpg/960px-FrenchMarketPumpkinsB.jpg",
       "black-rice": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Black_Rice.jpg/960px-Black_Rice.jpg",
       "whole-wheat-pasta": "https://commons.wikimedia.org/wiki/Special:FilePath/Whole%20wheat%20penne%2C%20cooked%20and%20uncooked.jpg?width=640",
-      beans: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Rajmah_beans_in_Kullu_district%2C_Himachal_Pradesh%2C1.jpg/960px-Rajmah_beans_in_Kullu_district%2C_Himachal_Pradesh%2C1.jpg",
-      shrimp: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Raw_shrimp.jpg/960px-Raw_shrimp.jpg",
-      fish: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/100_gram_fish_fillet_%28115_grams_raw_weight%29.JPG/960px-100_gram_fish_fillet_%28115_grams_raw_weight%29.JPG",
+      beans: "https://commons.wikimedia.org/wiki/Special:FilePath/Various%20legumes.jpg?width=640",
+      shrimp: "https://commons.wikimedia.org/wiki/Special:FilePath/HK%20food%20%E6%80%A5%E5%87%8D%20frozen%20food%20%E8%9D%A6%E4%BB%81%20peeled%20prawn%20in%20June%202022%20Px3%2005.jpg?width=640",
+      fish: "https://upload.wikimedia.org/wikipedia/commons/5/51/Ctenopharyngodon_idella_2.jpg",
       chicken: "https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20chicken%20slices.jpg?width=640",
+      "chicken-leg": "https://upload.wikimedia.org/wikipedia/commons/7/7f/HK_food_raw_chicken_legs_February_2020_SS2_01.jpg",
       egg: "https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20egg.jpg?width=640",
       tofu: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/03/Japanese_SilkyTofu_%28Kinugoshi_Tofu%29.JPG/960px-Japanese_SilkyTofu_%28Kinugoshi_Tofu%29.JPG",
       "dried-tofu": "https://commons.wikimedia.org/wiki/Special:FilePath/1%20bowl%20of%20100g%20Kaiyang-flavor%20dried%20tofu.jpg?width=640",
+      "tofu-skin": "https://commons.wikimedia.org/wiki/Special:FilePath/Tofu%20Skin%20%28Tao%20Pao%29.jpg?width=640",
       edamame: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Edamame_by_Zesmerelda_in_Chicago.jpg/960px-Edamame_by_Zesmerelda_in_Chicago.jpg",
       "lean-pork": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Poledwiczka_wieprzowa.JPG/960px-Poledwiczka_wieprzowa.JPG",
       "lean-beef": "https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20beef.jpg?width=640",
@@ -798,10 +847,13 @@
       salmon: "https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20salmon%20fillets.jpg?width=640",
       tuna: "https://upload.wikimedia.org/wikipedia/commons/2/21/Tuna_assortment.png",
       turkey: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Thanksgiving_Turkey.jpg/960px-Thanksgiving_Turkey.jpg",
-      spinach: "https://commons.wikimedia.org/wiki/Special:FilePath/Spinach%20leaves.jpg?width=640",
-      lettuce: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/Iceberg_lettuce_in_SB.jpg/960px-Iceberg_lettuce_in_SB.jpg",
-      youmaicai: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/Iceberg_lettuce_in_SB.jpg/960px-Iceberg_lettuce_in_SB.jpg",
-      "bok-choy": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/99/Bok_Choy_%2849553125456%29.jpg/960px-Bok_Choy_%2849553125456%29.jpg",
+      spinach: "https://commons.wikimedia.org/wiki/Special:FilePath/Spinach.JPG?width=640",
+      lettuce: "https://upload.wikimedia.org/wikipedia/commons/e/ec/Hydroponic_lettuce_leaves_green.jpg",
+      "water-spinach": "https://commons.wikimedia.org/wiki/Special:FilePath/Ipomoea%20aquatica.jpg?width=640",
+      chrysanthemum: "https://commons.wikimedia.org/wiki/Special:FilePath/Edible%20chrysanthemum%20leaves.jpg?width=640",
+      celery: "https://commons.wikimedia.org/wiki/Special:FilePath/Celery%20%281%29.jpg?width=640",
+      youmaicai: "https://upload.wikimedia.org/wikipedia/commons/6/6b/Romaine_lettuce.jpg",
+      "bok-choy": "https://upload.wikimedia.org/wikipedia/commons/8/8c/Brassica_rapa_var._chinensis_%28leaf%29.jpg",
       "chinese-broccoli": "https://upload.wikimedia.org/wikipedia/commons/9/90/Gailan.jpg",
       broccoli: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/03/Broccoli_and_cross_section_edit.jpg/960px-Broccoli_and_cross_section_edit.jpg",
       cauliflower: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Chou-fleur_02.jpg/960px-Chou-fleur_02.jpg",
@@ -810,14 +862,21 @@
       napa: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Napa_cabbages.png/960px-Napa_cabbages.png",
       shiitake: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/64/Shiitakegrowing.jpg/960px-Shiitakegrowing.jpg",
       mushroom: "https://upload.wikimedia.org/wikipedia/commons/0/01/ChampignonMushroom.jpg",
+      "wood-ear": "https://commons.wikimedia.org/wiki/Special:FilePath/Dried%20Black%20Fungus.jpg?width=640",
+      "oyster-mushroom": "https://commons.wikimedia.org/wiki/Special:FilePath/Oyster%20Mushroom%20%284062847527%29.jpg?width=640",
       enoki: "https://commons.wikimedia.org/wiki/Special:FilePath/Enoki%20mushroom.jpg?width=640",
-      "king-oyster": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f6/Seta_de_cardo_%28Pleurotus_eryngii%29%2C_2012-10-03%2C_DD_01.JPG/960px-Seta_de_cardo_%28Pleurotus_eryngii%29%2C_2012-10-03%2C_DD_01.JPG",
-      shimeji: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Hypsizygus_marmoreus.jpg/960px-Hypsizygus_marmoreus.jpg",
+      "king-oyster": "https://upload.wikimedia.org/wikipedia/commons/f/f1/Kr%C3%A4uter-Seitling_Pleurotus_eryngii.jpg",
+      shimeji: "https://upload.wikimedia.org/wikipedia/commons/f/f2/Hon-shimeji_mushrooms_-_Cambridge%2C_MA.jpg",
       cucumber: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/96/ARS_cucumber.jpg/960px-ARS_cucumber.jpg",
       tomato: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Tomato_je.jpg/960px-Tomato_je.jpg",
-      "winter-melon": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/Benincasa_hispida_compose.jpg/960px-Benincasa_hispida_compose.jpg",
-      zucchini: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/CSA-Striped-Zucchini.jpg/960px-CSA-Striped-Zucchini.jpg",
-      eggplant: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Solanum_melongena_24_08_2012_%281%29.JPG/960px-Solanum_melongena_24_08_2012_%281%29.JPG",
+      "winter-melon": "https://commons.wikimedia.org/wiki/Special:FilePath/Winter%20melon%20soup%20in%20home.jpg?width=640",
+      zucchini: "https://upload.wikimedia.org/wikipedia/commons/a/ac/Zucchini_in_basket_2021_G1.jpg",
+      radish: "https://commons.wikimedia.org/wiki/Special:FilePath/Daikon.Japan.jpg?width=640",
+      carrot: "https://commons.wikimedia.org/wiki/Special:FilePath/Carrots%20of%20many%20colors.jpg?width=640",
+      "bitter-melon": "https://commons.wikimedia.org/wiki/Special:FilePath/Bitter%20gourd%20sliced%20partially%20dried%2001.jpg?width=640",
+      loofah: "https://commons.wikimedia.org/wiki/Special:FilePath/HK%20Sai%20Ying%20Pun%20%E4%BD%B3%E5%AF%B6%E9%A3%9F%E5%93%81%E8%B6%85%E7%B4%9A%E5%B8%82%E5%A0%B4%20Kai%20Bo%20Food%20Supermarket%20vegetable%20%E7%B5%B2%E7%93%9C%20%E5%8B%9D%E7%93%9C%20Luffa%20June-2012.jpg?width=640",
+      celtuce: "https://commons.wikimedia.org/wiki/Special:FilePath/Celtuce.jpg?width=640",
+      eggplant: "https://commons.wikimedia.org/wiki/Special:FilePath/Eggplant%203.jpg?width=640",
       pepper: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/Green-Yellow-Red-Pepper-2009.jpg/960px-Green-Yellow-Red-Pepper-2009.jpg",
       kelp: "https://upload.wikimedia.org/wikipedia/commons/1/10/Kombu.jpg",
       wakame: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/CSIRO_ScienceImage_952_Undaria_pinnatifida_Japanese_kelp.jpg/960px-CSIRO_ScienceImage_952_Undaria_pinnatifida_Japanese_kelp.jpg",
@@ -829,9 +888,12 @@
         { id: "sweet-potato", name: "红薯", priority: "高", imageKey: "Sweet Potatoes", alt: "红薯", seasonal: ["autumn", "winter"], note: "日常主力，适合蒸烤后分装。" },
         { id: "purple-sweet-potato", name: "紫薯", priority: "高", imageKey: "Sweet Potatoes", alt: "紫薯", seasonal: ["autumn", "winter"], note: "饱腹感强，适合和清淡蛋白搭配。" },
         { id: "quinoa", name: "藜麦", priority: "高", imageKey: "Quinoa", alt: "藜麦", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合训练日午餐，口感轻。" },
+        { id: "tricolor-quinoa", name: "三色藜麦", priority: "高", imageKey: "Tricolor Quinoa", alt: "三色藜麦", seasonal: ["spring", "summer", "autumn", "winter"], note: "和普通藜麦一样按半碗起步，适合拌饭碗。" },
         { id: "oats", name: "燕麦", priority: "高", imageKey: "Oats", alt: "燕麦", seasonal: ["spring", "summer", "autumn", "winter"], note: "无糖版本，适合早餐或加餐。" },
         { id: "brown-rice", name: "糙米", priority: "高", imageKey: "Brown Rice", alt: "糙米", seasonal: ["spring", "summer", "autumn", "winter"], note: "本人半份，家人可加量。" },
-        { id: "soba", name: "荞麦面", priority: "高", imageKey: "Brown Rice Noodle", alt: "荞麦面", seasonal: ["spring", "summer"], note: "适合凉拌或汤面，少油少甜酱。" },
+        { id: "millet-rice", name: "小米 / 二米饭", priority: "高", imageKey: "Millet Rice", alt: "小米和二米饭", seasonal: ["spring", "summer", "autumn", "winter"], note: "家常替换项，本人半碗起步。" },
+        { id: "mixed-grain-bun", name: "杂粮馒头", priority: "中", imageKey: "Steamed Bun", alt: "杂粮馒头", seasonal: ["spring", "summer", "autumn", "winter"], note: "本人半个到一个内，配汤菜更稳。" },
+        { id: "soba", name: "荞麦面", priority: "高", imageKey: "Brown Rice Noodle", alt: "荞麦面", seasonal: ["spring", "summer"], note: "荞麦面半份可以，不和米饭叠加；高活动量日再加。" },
         { id: "corn", name: "玉米", priority: "中", imageKey: "Sweetcorn", alt: "玉米", seasonal: ["summer", "autumn"], note: "吃玉米就不再默认加米饭。" },
         { id: "potato", name: "土豆", priority: "中", imageKey: "Potatoes", alt: "土豆", seasonal: ["spring", "autumn", "winter"], note: "优先蒸煮烤，避免油炸。" },
         { id: "yam", name: "山药", priority: "中", imageKey: "Potatoes", alt: "山药", seasonal: ["autumn", "winter"], note: "适合清蒸或汤菜。" },
@@ -842,24 +904,23 @@
       ],
       proteins: [
         { id: "shrimp", name: "虾", priority: "高", imageKey: "Prawns", alt: "虾", seasonal: ["spring", "summer"], note: "白灼、番茄汤、少油煎都稳。" },
-        { id: "fish", name: "鱼", priority: "高", imageKey: "White Fish", alt: "鱼", seasonal: ["spring", "summer", "autumn", "winter"], note: "清蒸、煎烤少油、菌菇汤。" },
+        { id: "fish", name: "鲈鱼 / 草鱼", priority: "高", imageKey: "White Fish", alt: "鲈鱼和草鱼", seasonal: ["spring", "summer", "autumn", "winter"], note: "清蒸、煎烤少油、菌菇汤。" },
         { id: "chicken", name: "去皮鸡肉", priority: "高", imageKey: "Chicken Breast", alt: "去皮鸡肉", seasonal: ["spring", "summer", "autumn", "winter"], note: "鸡胸或去皮鸡腿，少油。" },
+        { id: "chicken-leg", name: "去皮鸡腿", priority: "高", imageKey: "Chicken Leg", alt: "去皮鸡腿", seasonal: ["spring", "summer", "autumn", "winter"], note: "比鸡胸更好入口，去皮少油煎或炖。" },
         { id: "egg", name: "鸡蛋", priority: "高", imageKey: "Eggs", alt: "鸡蛋", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合和豆腐、绿叶菜组合。" },
         { id: "tofu", name: "豆腐", priority: "高", imageKey: "Tofu", alt: "豆腐", seasonal: ["spring", "summer", "autumn", "winter"], note: "番茄豆腐、海带豆腐汤很好用。" },
         { id: "dried-tofu", name: "豆干", priority: "高", imageKey: "Tofu", alt: "豆干", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合凉拌或少油炒蔬菜。" },
-        { id: "edamame", name: "毛豆", priority: "高", imageKey: "Green Beans", alt: "毛豆", seasonal: ["summer", "autumn"], note: "可做蛋白补充和配菜。" },
+        { id: "tofu-skin", name: "豆皮 / 千张", priority: "高", imageKey: "Tofu Skin", alt: "豆皮和千张", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合凉拌、汤菜或和绿叶菜同炒。" },
+        { id: "edamame", name: "毛豆", priority: "高", imageKey: "Green Beans", alt: "毛豆", seasonal: ["summer", "autumn"], note: "毛豆属于豆类蛋白，也有碳水；适合作为蛋白补充，不当纯瘦蛋白无限加。" },
         { id: "lean-pork", name: "瘦猪肉", priority: "中", imageKey: "Pork", alt: "瘦猪肉", seasonal: ["spring", "summer", "autumn", "winter"], note: "里脊或瘦肉，不红烧加糖。" },
         { id: "lean-beef", name: "瘦牛肉", priority: "中", imageKey: "Beef", alt: "瘦牛肉", seasonal: ["autumn", "winter"], note: "频率控制在每周 1 次左右。" },
-        { id: "shellfish", name: "贝类", priority: "中", imageKey: "Clams", alt: "贝类", seasonal: ["spring", "summer"], note: "适合冬瓜汤、番茄汤、菌菇汤。" },
-        { id: "greek-yogurt", name: "无糖希腊酸奶", priority: "中", imageKey: "Greek Yogurt", alt: "无糖希腊酸奶", seasonal: ["spring", "summer", "autumn", "winter"], note: "只当蛋白补丁，不替代正餐。" },
-        { id: "whey", name: "乳清蛋白", priority: "中", imageKey: "Milk", alt: "乳清蛋白", seasonal: ["spring", "summer", "autumn", "winter"], note: "只作为补丁，不当主餐。" },
-        { id: "salmon", name: "三文鱼", priority: "低频", imageKey: "Salmon", alt: "三文鱼", seasonal: ["spring", "summer", "autumn", "winter"], note: "控制份量，少油煎烤。" },
-        { id: "tuna", name: "金枪鱼", priority: "低频", imageKey: "Tuna", alt: "金枪鱼", seasonal: ["spring", "summer", "autumn", "winter"], note: "罐头优先水浸、低钠。" },
-        { id: "turkey", name: "火鸡肉", priority: "低频", imageKey: "Turkey", alt: "火鸡肉", seasonal: ["autumn", "winter"], note: "作为变化项，避免加工肉。" }
+        { id: "shellfish", name: "花甲 / 蛤蜊", priority: "中", imageKey: "Clams", alt: "花甲和蛤蜊", seasonal: ["spring", "summer"], note: "适合冬瓜汤、番茄汤、菌菇汤。" }
       ],
       fibers: [
         { id: "spinach", name: "菠菜", priority: "绿叶菜", imageKey: "Spinach", alt: "菠菜", seasonal: ["spring", "winter"], note: "焯水或清炒少油。" },
         { id: "lettuce", name: "生菜", priority: "绿叶菜", imageKey: "Lettuce", alt: "生菜", seasonal: ["spring", "summer"], note: "适合配白灼虾或鸡肉。" },
+        { id: "water-spinach", name: "空心菜", priority: "绿叶菜", imageKey: "Water Spinach", alt: "空心菜", seasonal: ["summer", "autumn"], note: "少油蒜蓉或白灼都好用。" },
+        { id: "chrysanthemum", name: "茼蒿", priority: "绿叶菜", imageKey: "Garland Chrysanthemum", alt: "茼蒿", seasonal: ["autumn", "winter"], note: "适合汤菜和火锅式清煮。" },
         { id: "youmaicai", name: "油麦菜", priority: "绿叶菜", imageKey: "Lettuce", alt: "油麦菜", seasonal: ["spring", "summer", "autumn"], note: "少油蒜蓉即可。" },
         { id: "bok-choy", name: "小白菜 / 上海青", priority: "绿叶菜", imageKey: "Chinese Cabbage", alt: "小白菜和上海青", seasonal: ["spring", "autumn", "winter"], note: "适合汤菜和清炒。" },
         { id: "chinese-broccoli", name: "芥蓝", priority: "绿叶菜", imageKey: "Chinese Broccoli", alt: "芥蓝", seasonal: ["autumn", "winter"], note: "白灼少酱。" },
@@ -870,13 +931,21 @@
         { id: "napa", name: "娃娃菜", priority: "十字花科", imageKey: "Chinese Cabbage", alt: "娃娃菜", seasonal: ["autumn", "winter"], note: "适合鱼汤、豆腐汤。" },
         { id: "shiitake", name: "香菇", priority: "菌菇", imageKey: "Shiitake Mushrooms", alt: "香菇", seasonal: ["autumn", "winter"], note: "可给清淡菜增味。" },
         { id: "mushroom", name: "口蘑", priority: "菌菇", imageKey: "Mushrooms", alt: "口蘑", seasonal: ["spring", "autumn", "winter"], note: "适合少油煎烤或汤。" },
+        { id: "wood-ear", name: "木耳", priority: "菌菇", imageKey: "Wood Ear", alt: "木耳", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合和芹菜、瘦肉、鸡蛋搭配。" },
+        { id: "oyster-mushroom", name: "平菇", priority: "菌菇", imageKey: "Oyster Mushroom", alt: "平菇", seasonal: ["spring", "autumn", "winter"], note: "汤菜、快炒都很家常。" },
         { id: "enoki", name: "金针菇", priority: "菌菇", imageKey: "Mushrooms", alt: "金针菇", seasonal: ["autumn", "winter"], note: "汤里加量很方便。" },
         { id: "king-oyster", name: "杏鲍菇", priority: "菌菇", imageKey: "Oyster Mushrooms", alt: "杏鲍菇", seasonal: ["autumn", "winter"], note: "口感扎实，少油煎。" },
         { id: "shimeji", name: "海鲜菇", priority: "菌菇", imageKey: "Mushrooms", alt: "海鲜菇", seasonal: ["autumn", "winter"], note: "适合和鱼虾贝类搭配。" },
         { id: "cucumber", name: "黄瓜", priority: "低热量配菜", imageKey: "Cucumber", alt: "黄瓜", seasonal: ["summer"], note: "适合补一份清爽配菜。" },
         { id: "tomato", name: "番茄", priority: "低热量配菜", imageKey: "Tomatoes", alt: "番茄", seasonal: ["summer", "autumn"], note: "番茄汤底友好，少糖。" },
+        { id: "celery", name: "芹菜", priority: "低热量配菜", imageKey: "Celery", alt: "芹菜", seasonal: ["spring", "autumn", "winter"], note: "适合瘦肉、豆干、木耳快炒。" },
         { id: "winter-melon", name: "冬瓜", priority: "低热量配菜", imageKey: "Squash", alt: "冬瓜", seasonal: ["summer", "autumn"], note: "适合虾仁、贝类汤。" },
         { id: "zucchini", name: "西葫芦", priority: "低热量配菜", imageKey: "Zucchini", alt: "西葫芦", seasonal: ["summer"], note: "少油快炒。" },
+        { id: "radish", name: "白萝卜", priority: "低热量配菜", imageKey: "Radish", alt: "白萝卜", seasonal: ["autumn", "winter"], note: "适合炖汤或清炒，体积足。" },
+        { id: "carrot", name: "胡萝卜", priority: "低热量配菜", imageKey: "Carrot", alt: "胡萝卜", seasonal: ["autumn", "winter"], note: "少量增加甜味和颜色，不用糖汁。" },
+        { id: "bitter-melon", name: "苦瓜", priority: "低热量配菜", imageKey: "Bitter Melon", alt: "苦瓜", seasonal: ["summer"], note: "适合鸡蛋或瘦肉，先焯水减苦。" },
+        { id: "loofah", name: "丝瓜", priority: "低热量配菜", imageKey: "Loofah", alt: "丝瓜", seasonal: ["summer"], note: "适合虾仁、鸡蛋汤。" },
+        { id: "celtuce", name: "莴笋", priority: "低热量配菜", imageKey: "Celtuce", alt: "莴笋", seasonal: ["spring", "summer"], note: "凉拌或快炒都清爽。" },
         { id: "eggplant", name: "茄子少油", priority: "低热量配菜", imageKey: "Egg Plants", alt: "茄子", seasonal: ["summer", "autumn"], note: "容易吸油，优先蒸后拌。" },
         { id: "pepper", name: "青椒 / 彩椒", priority: "低热量配菜", imageKey: "Pepper", alt: "彩椒", seasonal: ["summer", "autumn"], note: "适合牛肉、鸡肉、菌菇。" },
         { id: "kelp", name: "海带", priority: "海藻类", imageKey: "Cabbage", alt: "海带", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合豆腐汤、鸡蛋汤。" },
@@ -889,7 +958,10 @@
       {
         id: "chicken-mushroom-sweet-potato",
         title: "去皮鸡肉菌菇红薯盘",
-        imageAlt: "去皮鸡肉菌菇红薯盘成品菜",
+        menuTitle: "去皮鸡肉菌菇 + 红薯",
+        dishGroups: ["去皮鸡肉菌菇", "红薯"],
+        imageFoods: ["chicken", "shiitake", "sweet-potato"],
+        imageAlt: "去皮鸡肉、菌菇和红薯食材组合图",
         carbs: ["sweet-potato", "purple-sweet-potato"],
         proteins: ["chicken"],
         fibers: ["shiitake", "mushroom", "enoki", "king-oyster", "shimeji", "spinach", "bok-choy"],
@@ -904,8 +976,11 @@
       {
         id: "shrimp-broccoli-quinoa",
         title: "虾仁西兰花藜麦碗",
-        imageAlt: "虾仁西兰花藜麦碗成品菜",
-        carbs: ["quinoa", "brown-rice"],
+        menuTitle: "虾仁西兰花藜麦碗",
+        dishGroups: ["虾仁西兰花藜麦碗"],
+        imageFoods: ["shrimp", "broccoli", "quinoa"],
+        imageAlt: "虾仁、西兰花和藜麦食材组合图",
+        carbs: ["quinoa", "tricolor-quinoa", "brown-rice"],
         proteins: ["shrimp"],
         fibers: ["broccoli", "lettuce", "cucumber", "purple-cabbage", "tomato"],
         seasonal: ["spring", "summer"],
@@ -919,9 +994,12 @@
       {
         id: "tomato-fish-brown-rice",
         title: "番茄鱼片杂粮半饭",
-        imageAlt: "番茄鱼片杂粮半饭成品菜",
+        menuTitle: "番茄鱼片汤菜 + 杂粮半饭",
+        dishGroups: ["番茄鱼片汤菜", "杂粮半饭"],
+        imageFoods: ["fish", "tomato", "brown-rice"],
+        imageAlt: "鱼片、番茄和杂粮饭食材组合图",
         carbs: ["brown-rice", "black-rice", "quinoa"],
-        proteins: ["fish", "tuna", "salmon"],
+        proteins: ["fish"],
         fibers: ["tomato", "napa", "enoki", "shimeji", "spinach", "bok-choy"],
         seasonal: ["summer", "autumn", "winter"],
         tags: ["汤菜", "少油", "家庭共餐"],
@@ -934,7 +1012,10 @@
       {
         id: "tofu-egg-seaweed-soba",
         title: "豆腐鸡蛋海带荞麦汤面",
-        imageAlt: "豆腐鸡蛋海带荞麦汤面成品菜",
+        menuTitle: "豆腐鸡蛋海带荞麦汤面",
+        dishGroups: ["豆腐鸡蛋海带荞麦汤面"],
+        imageFoods: ["tofu", "egg", "soba"],
+        imageAlt: "豆腐、鸡蛋和荞麦面食材组合图",
         carbs: ["soba"],
         proteins: ["tofu", "egg", "dried-tofu"],
         fibers: ["kelp", "wakame", "nori", "spinach", "napa", "bok-choy"],
@@ -949,7 +1030,10 @@
       {
         id: "lean-beef-pepper-yam",
         title: "瘦牛彩椒杏鲍菇配山药",
-        imageAlt: "瘦牛彩椒杏鲍菇配山药成品菜",
+        menuTitle: "瘦牛彩椒杏鲍菇 + 清蒸山药",
+        dishGroups: ["瘦牛彩椒杏鲍菇", "清蒸山药"],
+        imageFoods: ["lean-beef", "pepper", "yam"],
+        imageAlt: "瘦牛肉、彩椒和山药食材组合图",
         carbs: ["yam", "pumpkin", "potato"],
         proteins: ["lean-beef"],
         fibers: ["pepper", "king-oyster", "mushroom", "cucumber", "lettuce"],
@@ -964,13 +1048,16 @@
       {
         id: "shellfish-winter-melon-corn",
         title: "贝类冬瓜汤配玉米",
-        imageAlt: "贝类冬瓜汤配玉米成品菜",
+        menuTitle: "贝类冬瓜汤 + 玉米",
+        dishGroups: ["贝类冬瓜汤", "玉米"],
+        imageFoods: ["shellfish", "winter-melon", "corn"],
+        imageAlt: "花甲、冬瓜和玉米食材组合图",
         carbs: ["corn"],
         proteins: ["shellfish", "shrimp"],
         fibers: ["winter-melon", "wakame", "kelp", "bok-choy", "spinach"],
         seasonal: ["summer", "autumn"],
         tags: ["汤菜", "低油", "不叠米饭"],
-        ingredients: ["玉米", "贝类或虾", "冬瓜", "裙带菜", "绿叶菜", "姜丝"],
+        ingredients: ["玉米", "花甲或蛤蜊", "冬瓜", "裙带菜", "绿叶菜", "姜丝"],
         portionNote: "本人玉米半根到一根内，不再叠加米饭；冬瓜汤菜可多盛。",
         why: "玉米已算主食，不再叠加米饭；汤菜体积大，适合家庭晚餐。",
         lowOilAdaptation: "直接清汤煮，姜丝去腥；不做蒜蓉粉丝贝类，也不加浓汤底。",
@@ -979,7 +1066,10 @@
       {
         id: "lean-pork-tomato-purple-potato",
         title: "瘦猪肉番茄绿叶菜配紫薯",
-        imageAlt: "瘦猪肉番茄绿叶菜配紫薯成品菜",
+        menuTitle: "瘦猪肉番茄绿叶菜 + 紫薯",
+        dishGroups: ["瘦猪肉番茄绿叶菜", "紫薯"],
+        imageFoods: ["lean-pork", "tomato", "purple-sweet-potato"],
+        imageAlt: "瘦猪肉、番茄和紫薯食材组合图",
         carbs: ["purple-sweet-potato", "sweet-potato"],
         proteins: ["lean-pork"],
         fibers: ["tomato", "spinach", "lettuce", "bok-choy", "cucumber"],
@@ -992,9 +1082,66 @@
         steps: ["紫薯蒸熟，按本人半份装盘。", "瘦肉切薄片，用姜蒜去腥后快炒。", "加入番茄和绿叶菜同炒或加水做汤。"]
       },
       {
+        id: "lean-pork-celery-wood-ear-millet",
+        title: "瘦肉芹菜木耳小米饭",
+        menuTitle: "瘦肉芹菜木耳 + 小米饭",
+        dishGroups: ["瘦肉芹菜木耳", "小米饭"],
+        imageFoods: ["lean-pork", "celery", "millet-rice"],
+        imageAlt: "瘦肉、芹菜和小米饭食材组合图",
+        carbs: ["millet-rice", "brown-rice", "black-rice"],
+        proteins: ["lean-pork", "dried-tofu", "tofu-skin"],
+        fibers: ["celery", "wood-ear", "carrot", "celtuce"],
+        seasonal: ["spring", "autumn", "winter"],
+        tags: ["家常快炒", "高纤维", "少油"],
+        ingredients: ["小米或二米饭", "猪里脊或豆干", "芹菜", "木耳", "胡萝卜", "姜蒜"],
+        portionNote: "本人小米饭半碗，瘦肉 1 个掌心，芹菜木耳加到半盘；家人可正常加饭。",
+        why: "芹菜和木耳很家常，能把咀嚼感和体积做足，不需要重油重酱。",
+        lowOilAdaptation: "瘦肉或豆干先快炒后盛出，芹菜木耳用少量油和水汽炒熟，不做甜口勾芡。",
+        steps: ["小米或二米饭提前煮好，本人先盛半碗。", "瘦肉切丝少量低钠酱油抓匀，快炒变色。", "芹菜、木耳、胡萝卜入锅快炒，最后回锅合拌。"]
+      },
+      {
+        id: "chicken-leg-oyster-mushroom-bun",
+        title: "去皮鸡腿平菇杂粮馒头",
+        menuTitle: "去皮鸡腿平菇 + 杂粮馒头",
+        dishGroups: ["去皮鸡腿平菇", "杂粮馒头"],
+        imageFoods: ["chicken-leg", "oyster-mushroom", "mixed-grain-bun"],
+        imageAlt: "去皮鸡腿、平菇和杂粮馒头食材组合图",
+        carbs: ["mixed-grain-bun", "sweet-potato", "corn"],
+        proteins: ["chicken-leg", "chicken"],
+        fibers: ["oyster-mushroom", "bok-choy", "water-spinach", "radish"],
+        seasonal: ["spring", "autumn", "winter"],
+        tags: ["家常", "好入口", "少油"],
+        ingredients: ["去皮鸡腿", "平菇", "小白菜或空心菜", "杂粮馒头", "姜", "黑胡椒"],
+        portionNote: "本人杂粮馒头半个到一个内，鸡腿去皮，平菇和绿叶菜补到半盘。",
+        why: "去皮鸡腿比鸡胸更容易长期坚持，平菇和绿叶菜让一锅菜更有体积。",
+        lowOilAdaptation: "鸡腿去皮后少油煎香或炖煮，平菇先炒出水，不加黄油和浓酱。",
+        steps: ["杂粮馒头蒸热，本人先按半个到一个控制。", "鸡腿去皮切块，用姜和黑胡椒调味后少油煎或炖。", "加入平菇和绿叶菜，收成清淡家常口味。"]
+      },
+      {
+        id: "tofu-skin-chrysanthemum-soba",
+        title: "豆皮茼蒿荞麦汤面",
+        menuTitle: "豆皮茼蒿 + 荞麦面半份",
+        dishGroups: ["豆皮茼蒿", "荞麦面半份"],
+        imageFoods: ["tofu-skin", "chrysanthemum", "soba"],
+        imageAlt: "豆皮、茼蒿和荞麦面食材组合图",
+        carbs: ["soba"],
+        proteins: ["tofu-skin", "tofu", "egg"],
+        fibers: ["chrysanthemum", "napa", "wood-ear", "spinach"],
+        seasonal: ["autumn", "winter", "spring"],
+        tags: ["汤面", "清淡", "半份主食"],
+        ingredients: ["荞麦面", "豆皮或千张", "茼蒿", "木耳", "鸡蛋可选", "低钠酱油"],
+        portionNote: "本人荞麦面半份，不和米饭叠加；活动量高的日子再把面量加到正常一份。",
+        why: "荞麦面可以保留，但减脂默认用半份，靠豆皮和蔬菜把饱腹感补起来。",
+        lowOilAdaptation: "全程汤煮，调味用醋、胡椒和少量低钠酱油，不放辣油和葱油。",
+        steps: ["荞麦面按半份煮好，捞出备用。", "清汤下豆皮、木耳和茼蒿煮软。", "需要时加一个蛋花，最后放回荞麦面。"]
+      },
+      {
         id: "edamame-tofu-purple-cabbage",
         title: "毛豆豆腐紫甘蓝杂粮碗",
-        imageAlt: "毛豆豆腐紫甘蓝杂粮碗成品菜",
+        menuTitle: "毛豆豆腐紫甘蓝杂粮碗",
+        dishGroups: ["毛豆豆腐紫甘蓝杂粮碗"],
+        imageFoods: ["edamame", "tofu", "purple-cabbage"],
+        imageAlt: "毛豆、豆腐和紫甘蓝食材组合图",
         carbs: ["brown-rice", "black-rice", "beans"],
         proteins: ["edamame", "tofu", "dried-tofu"],
         fibers: ["purple-cabbage", "cucumber", "lettuce", "tomato", "broccoli"],
@@ -1247,8 +1394,27 @@
       document.querySelector('[data-role="season-note"]').textContent = `当前：${label}。右侧只保留最可做的 1-2 道菜。`;
     }
 
-    function recipeImage(recipe) {
-      return RECIPE_IMAGE_URLS[recipe.id] || fallbackImage;
+    function menuTitle(recipe) {
+      if (recipe.menuTitle) return recipe.menuTitle;
+      if (recipe.dishGroups?.length) return recipe.dishGroups.join(" + ");
+      return recipe.title;
+    }
+
+    function recipeImageFoods(recipe) {
+      const ids = recipe.imageFoods?.length
+        ? recipe.imageFoods
+        : [recipe.proteins[0], recipe.fibers[0], recipe.carbs[0]].filter(Boolean);
+      return ids.slice(0, 3).map((id) => byId[id]).filter(Boolean);
+    }
+
+    function recipeComboImageHtml(recipe) {
+      return `
+        <div class="recipe-combo-image" role="img" aria-label="${recipe.imageAlt}">
+          ${recipeImageFoods(recipe).map((food) => `
+            <img src="${foodImage(food)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=fallbackImage;">
+          `).join("")}
+        </div>
+      `;
     }
 
     function renderRecipeCard(recipe) {
@@ -1256,10 +1422,10 @@
       const card = document.createElement("article");
       card.className = "recipe-card";
       card.innerHTML = `
-        <img class="recipe-finished-image" src="${recipeImage(recipe)}" alt="${recipe.imageAlt}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=fallbackImage;" aria-label="成品菜图片">
+        ${recipeComboImageHtml(recipe)}
         <div class="recipe-body">
           <div class="recipe-title-row">
-            <h3>${recipe.title}</h3>
+            <h3>${menuTitle(recipe)}</h3>
             <span class="score">${recipe.score} 分</span>
           </div>
           <div class="chip-row">${seasonChip}${recipe.tags.map((tag) => `<span class="chip">${tag}</span>`).join("")}</div>
@@ -1305,10 +1471,11 @@
 
     function randomSteadyMeal() {
       const steady = [
-        ["sweet-potato", "chicken", ["shiitake", "bok-choy"]],
-        ["quinoa", "shrimp", ["broccoli", "lettuce"]],
+        ["sweet-potato", "chicken-leg", ["oyster-mushroom", "water-spinach"]],
+        ["millet-rice", "lean-pork", ["celery", "wood-ear"]],
+        ["tricolor-quinoa", "shrimp", ["broccoli", "lettuce"]],
         ["brown-rice", "fish", ["tomato", "shimeji"]],
-        ["soba", "tofu", ["wakame", "spinach"]],
+        ["soba", "tofu-skin", ["chrysanthemum", "wood-ear"]],
         ["corn", "shellfish", ["winter-melon", "bok-choy"]]
       ].filter((meal) => meal.some((id) => isSeasonal(byId[id] || { seasonal: [] })));
       const pool = steady.length ? steady : [["sweet-potato", "chicken", ["shiitake", "bok-choy"]]];
