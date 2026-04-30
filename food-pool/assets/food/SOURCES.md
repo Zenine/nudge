@@ -31,12 +31,14 @@
 | edamame.webp | https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Edamame_by_Zesmerelda_in_Chicago.jpg/960px-Edamame_by_Zesmerelda_in_Chicago.jpg |
 | lean-pork.webp | https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Poledwiczka_wieprzowa.JPG/960px-Poledwiczka_wieprzowa.JPG |
 | lean-beef.webp | https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20beef.jpg?width=640 |
+| skinless-duck.webp | https://commons.wikimedia.org/wiki/Special:FilePath/Duck%20breast%20meat%20french.JPG?width=640 |
+| lean-lamb.webp | https://commons.wikimedia.org/wiki/Special:FilePath/Lamb%20meat%20%282%29.jpg?width=640 |
+| crayfish.webp | https://commons.wikimedia.org/wiki/Special:FilePath/Boiled%20crawfishes.jpg?width=640 |
 | shellfish.webp | https://commons.wikimedia.org/wiki/Special:FilePath/Spisula%20solida.jpg?width=640 |
 | greek-yogurt.webp | https://upload.wikimedia.org/wikipedia/commons/2/2c/Labneh01.jpg |
 | whey.webp | https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Whey_powder.jpg/960px-Whey_powder.jpg |
 | salmon.webp | https://commons.wikimedia.org/wiki/Special:FilePath/Raw%20salmon%20fillets.jpg?width=640 |
 | tuna.webp | https://upload.wikimedia.org/wikipedia/commons/2/21/Tuna_assortment.png |
-| turkey.webp | https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Thanksgiving_Turkey.jpg/960px-Thanksgiving_Turkey.jpg |
 | spinach.webp | https://commons.wikimedia.org/wiki/Special:FilePath/Spinach.JPG?width=640 |
 | lettuce.webp | https://upload.wikimedia.org/wikipedia/commons/e/ec/Hydroponic_lettuce_leaves_green.jpg |
 | water-spinach.webp | https://commons.wikimedia.org/wiki/Special:FilePath/Ipomoea%20aquatica.jpg?width=640 |

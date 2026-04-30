@@ -1131,12 +1131,14 @@
       edamame: "assets/food/edamame.webp",
       "lean-pork": "assets/food/lean-pork.webp",
       "lean-beef": "assets/food/lean-beef.webp",
+      "skinless-duck": "assets/food/skinless-duck.webp",
+      "lean-lamb": "assets/food/lean-lamb.webp",
+      crayfish: "assets/food/crayfish.webp",
       shellfish: "assets/food/shellfish.webp",
       "greek-yogurt": "assets/food/greek-yogurt.webp",
       whey: "assets/food/whey.webp",
       salmon: "assets/food/salmon.webp",
       tuna: "assets/food/tuna.webp",
-      turkey: "assets/food/turkey.webp",
       spinach: "assets/food/spinach.webp",
       lettuce: "assets/food/lettuce.webp",
       "water-spinach": "assets/food/water-spinach.webp",
@@ -1204,6 +1206,9 @@
         { id: "edamame", name: "毛豆", priority: "高", imageKey: "Green Beans", alt: "毛豆", seasonal: ["summer", "autumn"], note: "毛豆属于豆类蛋白，也有碳水；适合作为蛋白补充，不当纯瘦蛋白无限加。" },
         { id: "lean-pork", name: "瘦猪肉", priority: "中", imageKey: "Pork", alt: "瘦猪肉", seasonal: ["spring", "summer", "autumn", "winter"], note: "里脊或瘦肉，不红烧加糖。" },
         { id: "lean-beef", name: "瘦牛肉", priority: "中", imageKey: "Beef", alt: "瘦牛肉", seasonal: ["autumn", "winter"], note: "频率控制在每周 1 次左右。" },
+        { id: "skinless-duck", name: "去皮鸭肉", priority: "中", imageKey: "Duck Breast", alt: "去皮鸭肉", seasonal: ["autumn", "winter"], note: "鸭肉只选去皮瘦肉，清炖或少油煎，避开烤鸭皮和浓油鸭汤。" },
+        { id: "lean-lamb", name: "羊里脊 / 羊腿瘦肉", priority: "低频", imageKey: "Lamb", alt: "羊里脊和羊腿瘦肉", seasonal: ["autumn", "winter"], note: "低频变化项，白萝卜清炖后撇油，少油孜然也要控制量。" },
+        { id: "crayfish", name: "小龙虾", priority: "低频", imageKey: "Crayfish", alt: "小龙虾", seasonal: ["spring", "summer"], note: "小龙虾算蛋白；优先水煮、清蒸或少油蒜蓉，避开麻辣重油和浓汤汁。" },
         { id: "shellfish", name: "花甲 / 蛤蜊", priority: "中", imageKey: "Clams", alt: "花甲和蛤蜊", seasonal: ["spring", "summer"], note: "适合冬瓜汤、番茄汤、菌菇汤。" }
       ],
       fibers: [
@@ -1311,22 +1316,22 @@
 
     const TEMPLATE_MATCH_RULES = {
       blanch: {
-        proteins: ["shrimp", "fish", "shellfish", "chicken", "chicken-leg"],
+        proteins: ["shrimp", "fish", "shellfish", "crayfish", "chicken", "chicken-leg"],
         carbs: [],
         fibers: ["spinach", "lettuce", "water-spinach", "youmaicai", "bok-choy", "chinese-broccoli", "broccoli", "cauliflower", "napa", "celtuce"]
       },
       soup: {
-        proteins: ["shrimp", "fish", "egg", "tofu", "tofu-skin", "shellfish"],
+        proteins: ["shrimp", "fish", "egg", "tofu", "tofu-skin", "shellfish", "crayfish", "skinless-duck", "lean-lamb"],
         carbs: ["soba", "whole-wheat-pasta", "mixed-grain-bun", "corn"],
         fibers: ["spinach", "chrysanthemum", "bok-choy", "napa", "mushroom", "wood-ear", "oyster-mushroom", "enoki", "shimeji", "tomato", "winter-melon", "radish", "loofah", "kelp", "wakame", "nori"]
       },
       "stir-fry": {
-        proteins: ["chicken", "chicken-leg", "dried-tofu", "tofu-skin", "lean-pork", "lean-beef", "egg"],
+        proteins: ["chicken", "chicken-leg", "dried-tofu", "tofu-skin", "lean-pork", "lean-beef", "skinless-duck", "lean-lamb", "egg"],
         carbs: [],
         fibers: ["water-spinach", "youmaicai", "bok-choy", "cauliflower", "cabbage", "mushroom", "wood-ear", "oyster-mushroom", "king-oyster", "shimeji", "celery", "zucchini", "carrot", "bitter-melon", "celtuce", "pepper"]
       },
       steam: {
-        proteins: ["fish", "egg", "chicken", "chicken-leg"],
+        proteins: ["fish", "egg", "chicken", "chicken-leg", "crayfish"],
         carbs: ["sweet-potato", "purple-sweet-potato", "mixed-grain-bun", "corn", "potato", "yam", "pumpkin"],
         fibers: ["winter-melon", "loofah", "eggplant", "mushroom", "oyster-mushroom"]
       },
@@ -1336,7 +1341,7 @@
         fibers: ["spinach", "lettuce", "broccoli", "purple-cabbage", "wood-ear", "cucumber", "tomato", "celtuce"]
       },
       "steam-pan": {
-        proteins: ["chicken", "chicken-leg", "lean-pork", "lean-beef"],
+        proteins: ["chicken", "chicken-leg", "lean-pork", "lean-beef", "skinless-duck", "lean-lamb"],
         carbs: ["sweet-potato", "purple-sweet-potato", "mixed-grain-bun", "corn", "potato", "yam", "pumpkin"],
         fibers: ["mushroom", "oyster-mushroom", "king-oyster", "radish", "carrot", "eggplant"]
       }
@@ -1590,6 +1595,12 @@
       if (protein) {
         if (protein.id === "lean-beef") {
           messages.push("瘦牛肉建议作为每周 1 次左右的变化项，这餐调味保持少油少糖。");
+        } else if (protein.id === "skinless-duck") {
+          messages.push("去皮鸭肉适合作为秋冬变化项；只吃瘦肉，先去皮去可见脂肪，汤菜记得撇油。");
+        } else if (protein.id === "lean-lamb") {
+          messages.push("羊肉属于低频变化项；选羊里脊或羊腿瘦肉，优先清炖撇油或少油快炒。");
+        } else if (protein.id === "crayfish") {
+          messages.push("小龙虾算蛋白，但更看做法；水煮、清蒸、少油蒜蓉可以，避开麻辣重油汤汁。");
         } else {
           messages.push(`${protein.name}适合作为这餐蛋白主轴，优先清蒸、白灼、少油煎烤或汤菜。`);
         }
