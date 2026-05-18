@@ -1081,6 +1081,7 @@
         <div class="recipe-list" data-role="recipes" id="final-recipes"></div>
       </section>
 
+      <p class="source-note">水果放加餐，不默认随正餐；低 GI 水果包括蓝莓、半个苹果、柚子、草莓；坚果限量 10-15g；12 小时夜间轻断食是可选习惯，不是强制医学建议。</p>
       <p class="source-note">项目开源在 <a href="https://github.com/Zenine/nudge" rel="noopener noreferrer">GitHub / Zenine/nudge</a>。本文只做日常执行参考，不能替代营养师建议。</p>
     </div>
   </main>
@@ -1115,6 +1116,8 @@
       soba: "assets/food/soba.webp",
       corn: "assets/food/corn.webp",
       potato: "assets/food/potato.webp",
+      taro: "assets/food/taro.webp",
+      "lotus-root": "assets/food/lotus-root.webp",
       yam: "assets/food/yam.webp",
       pumpkin: "assets/food/pumpkin.webp",
       "black-rice": "assets/food/black-rice.webp",
@@ -1177,19 +1180,21 @@
 
     const FOODS = {
       carbs: [
-        { id: "sweet-potato", name: "红薯", priority: "高", imageKey: "Sweet Potatoes", alt: "红薯", seasonal: ["autumn", "winter"], note: "日常主力，适合蒸烤后分装。" },
-        { id: "purple-sweet-potato", name: "紫薯", priority: "高", imageKey: "Sweet Potatoes", alt: "紫薯", seasonal: ["autumn", "winter"], note: "饱腹感强，适合和清淡蛋白搭配。" },
+        { id: "sweet-potato", name: "红薯", priority: "高", imageKey: "Sweet Potatoes", alt: "红薯", seasonal: ["autumn", "winter"], note: "拳头量起步，晚餐减半；适合蒸烤后分装。" },
+        { id: "purple-sweet-potato", name: "紫薯", priority: "高", imageKey: "Sweet Potatoes", alt: "紫薯", seasonal: ["autumn", "winter"], note: "拳头量起步，晚餐减半；饱腹感强，适合和清淡蛋白搭配。" },
         { id: "quinoa", name: "藜麦", priority: "高", imageKey: "Quinoa", alt: "藜麦", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合训练日午餐，口感轻。" },
         { id: "tricolor-quinoa", name: "三色藜麦", priority: "高", imageKey: "Tricolor Quinoa", alt: "三色藜麦", seasonal: ["spring", "summer", "autumn", "winter"], note: "和普通藜麦一样按半碗起步，适合拌饭碗。" },
-        { id: "oats", name: "燕麦", priority: "高", imageKey: "Oats", alt: "燕麦", seasonal: ["spring", "summer", "autumn", "winter"], note: "无糖版本，适合早餐或加餐。" },
+        { id: "oats", name: "燕麦", priority: "高", imageKey: "Oats", alt: "燕麦", seasonal: ["spring", "summer", "autumn", "winter"], note: "纯燕麦片 / 水煮 / 非速溶甜麦片；按本人半碗内起步。" },
         { id: "brown-rice", name: "糙米", priority: "高", imageKey: "Brown Rice", alt: "糙米", seasonal: ["spring", "summer", "autumn", "winter"], note: "本人半份，家人可加量。" },
         { id: "millet-rice", name: "小米 / 二米饭", priority: "高", imageKey: "Millet Rice", alt: "小米和二米饭", seasonal: ["spring", "summer", "autumn", "winter"], note: "家常替换项，本人半碗起步。" },
         { id: "mixed-grain-bun", name: "杂粮馒头", priority: "中", imageKey: "Steamed Bun", alt: "杂粮馒头", seasonal: ["spring", "summer", "autumn", "winter"], note: "本人半个到一个内，配汤菜更稳。" },
-        { id: "soba", name: "荞麦面", priority: "高", imageKey: "Brown Rice Noodle", alt: "荞麦面", seasonal: ["spring", "summer"], note: "荞麦面半份可以，不和米饭叠加；高活动量日再加。" },
-        { id: "corn", name: "玉米", priority: "中", imageKey: "Sweetcorn", alt: "玉米", seasonal: ["summer", "autumn"], note: "吃玉米就不再默认加米饭。" },
-        { id: "potato", name: "土豆", priority: "中", imageKey: "Potatoes", alt: "土豆", seasonal: ["spring", "autumn", "winter"], note: "优先蒸煮烤，避免油炸。" },
+        { id: "soba", name: "荞麦面", priority: "高", imageKey: "Brown Rice Noodle", alt: "荞麦面", seasonal: ["spring", "summer"], note: "荞麦面半份可以，尽量 100% 荞麦，少酱汁，不和米饭叠加；高活动量日再加。" },
+        { id: "corn", name: "玉米", priority: "中", imageKey: "Sweetcorn", alt: "玉米", seasonal: ["summer", "autumn"], note: "半根左右，已经算主食，不叠米饭。" },
+        { id: "potato", name: "土豆", priority: "中", imageKey: "Potatoes", alt: "土豆", seasonal: ["spring", "autumn", "winter"], note: "蒸煮后放凉更稳，避免油炸。" },
+        { id: "taro", name: "芋头", priority: "中", imageKey: "Taro", alt: "芋头", seasonal: ["autumn", "winter"], note: "2-3 个小芋头内，优先蒸煮，不叠米饭。" },
+        { id: "lotus-root", name: "莲藕", priority: "中", imageKey: "Lotus Root", alt: "莲藕", seasonal: ["autumn", "winter"], note: "淀粉类蔬菜，清炒或凉拌；按大半拳头，不叠米饭。" },
         { id: "yam", name: "山药", priority: "中", imageKey: "Potatoes", alt: "山药", seasonal: ["autumn", "winter"], note: "适合清蒸或汤菜。" },
-        { id: "pumpkin", name: "南瓜", priority: "中", imageKey: "Pumpkin", alt: "南瓜", seasonal: ["autumn", "winter"], note: "不和大量米饭叠加。" },
+        { id: "pumpkin", name: "南瓜", priority: "中", imageKey: "Pumpkin", alt: "南瓜", seasonal: ["autumn", "winter"], note: "适量，升糖略快，不叠米饭。" },
         { id: "black-rice", name: "黑米 / 紫米", priority: "中", imageKey: "Rice", alt: "黑米和紫米", seasonal: ["spring", "summer", "autumn", "winter"], note: "杂粮饭轮换项，本人半份。" },
         { id: "whole-wheat-pasta", name: "全麦意面", priority: "低频", imageKey: "Whole Wheat", alt: "全麦意面", seasonal: ["spring", "summer", "autumn", "winter"], note: "控制酱料和总量。" },
         { id: "beans", name: "豆类主食", priority: "低频", imageKey: "Cannellini Beans", alt: "豆类主食", seasonal: ["spring", "summer", "autumn", "winter"], note: "作为变化项，注意总碳水。" }
@@ -1198,13 +1203,13 @@
         { id: "shrimp", name: "虾", priority: "高", imageKey: "Prawns", alt: "虾", seasonal: ["spring", "summer"], note: "白灼、番茄汤、少油煎都稳。" },
         { id: "fish", name: "鲈鱼 / 草鱼", priority: "高", imageKey: "White Fish", alt: "鲈鱼和草鱼", seasonal: ["spring", "summer", "autumn", "winter"], note: "清蒸、煎烤少油、菌菇汤。" },
         { id: "chicken", name: "去皮鸡肉", priority: "高", imageKey: "Chicken Breast", alt: "去皮鸡肉", seasonal: ["spring", "summer", "autumn", "winter"], note: "鸡胸或去皮鸡腿，少油。" },
-        { id: "chicken-leg", name: "去皮鸡腿", priority: "高", imageKey: "Chicken Leg", alt: "去皮鸡腿", seasonal: ["spring", "summer", "autumn", "winter"], note: "比鸡胸更好入口，去皮少油煎或炖。" },
+        { id: "chicken-leg", name: "去皮鸡腿", priority: "高", imageKey: "Chicken Leg", alt: "去皮鸡腿", seasonal: ["spring", "summer", "autumn", "winter"], note: "去皮少油，不等于带皮鸡腿；比鸡胸更好入口。" },
         { id: "egg", name: "鸡蛋", priority: "高", imageKey: "Eggs", alt: "鸡蛋", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合和豆腐、绿叶菜组合。" },
         { id: "tofu", name: "豆腐", priority: "高", imageKey: "Tofu", alt: "豆腐", seasonal: ["spring", "summer", "autumn", "winter"], note: "番茄豆腐、海带豆腐汤很好用。" },
         { id: "dried-tofu", name: "豆干", priority: "高", imageKey: "Tofu", alt: "豆干", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合凉拌或少油炒蔬菜。" },
         { id: "tofu-skin", name: "豆皮 / 千张", priority: "高", imageKey: "Tofu Skin", alt: "豆皮和千张", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合凉拌、汤菜或和绿叶菜同炒。" },
         { id: "edamame", name: "毛豆", priority: "高", imageKey: "Green Beans", alt: "毛豆", seasonal: ["summer", "autumn"], note: "毛豆属于豆类蛋白，也有碳水；适合作为蛋白补充，不当纯瘦蛋白无限加。" },
-        { id: "lean-pork", name: "瘦猪肉", priority: "中", imageKey: "Pork", alt: "瘦猪肉", seasonal: ["spring", "summer", "autumn", "winter"], note: "里脊或瘦肉，不红烧加糖。" },
+        { id: "lean-pork", name: "瘦猪肉", priority: "中", imageKey: "Pork", alt: "瘦猪肉", seasonal: ["spring", "summer", "autumn", "winter"], note: "里脊或瘦肉，不卤肉、不红烧糖汁。" },
         { id: "lean-beef", name: "瘦牛肉", priority: "中", imageKey: "Beef", alt: "瘦牛肉", seasonal: ["autumn", "winter"], note: "频率控制在每周 1 次左右。" },
         { id: "skinless-duck", name: "去皮鸭肉", priority: "中", imageKey: "Duck Breast", alt: "去皮鸭肉", seasonal: ["autumn", "winter"], note: "鸭肉只选去皮瘦肉，清炖或少油煎，避开烤鸭皮和浓油鸭汤。" },
         { id: "lean-lamb", name: "羊里脊 / 羊腿瘦肉", priority: "低频", imageKey: "Lamb", alt: "羊里脊和羊腿瘦肉", seasonal: ["autumn", "winter"], note: "低频变化项，白萝卜清炖后撇油，少油孜然也要控制量。" },
@@ -1322,7 +1327,7 @@
       },
       soup: {
         proteins: ["shrimp", "fish", "egg", "tofu", "tofu-skin", "shellfish", "crayfish", "skinless-duck", "lean-lamb"],
-        carbs: ["soba", "whole-wheat-pasta", "mixed-grain-bun", "corn"],
+        carbs: ["soba", "whole-wheat-pasta", "mixed-grain-bun", "corn", "lotus-root"],
         fibers: ["spinach", "chrysanthemum", "bok-choy", "napa", "mushroom", "wood-ear", "oyster-mushroom", "enoki", "shimeji", "tomato", "winter-melon", "radish", "loofah", "kelp", "wakame", "nori"]
       },
       "stir-fry": {
@@ -1332,7 +1337,7 @@
       },
       steam: {
         proteins: ["fish", "egg", "chicken", "chicken-leg", "crayfish"],
-        carbs: ["sweet-potato", "purple-sweet-potato", "mixed-grain-bun", "corn", "potato", "yam", "pumpkin"],
+        carbs: ["sweet-potato", "purple-sweet-potato", "mixed-grain-bun", "corn", "potato", "taro", "yam", "pumpkin"],
         fibers: ["winter-melon", "loofah", "eggplant", "mushroom", "oyster-mushroom"]
       },
       "cold-mix": {
@@ -1342,7 +1347,7 @@
       },
       "steam-pan": {
         proteins: ["chicken", "chicken-leg", "lean-pork", "lean-beef", "skinless-duck", "lean-lamb"],
-        carbs: ["sweet-potato", "purple-sweet-potato", "mixed-grain-bun", "corn", "potato", "yam", "pumpkin"],
+        carbs: ["sweet-potato", "purple-sweet-potato", "mixed-grain-bun", "corn", "potato", "taro", "lotus-root", "yam", "pumpkin"],
         fibers: ["mushroom", "oyster-mushroom", "king-oyster", "radish", "carrot", "eggplant"]
       }
     };
@@ -1584,7 +1589,7 @@
       }
 
       if (carb) {
-        const carbMessage = ["corn", "potato", "pumpkin"].includes(carb.id)
+        const carbMessage = ["corn", "potato", "taro", "lotus-root", "pumpkin"].includes(carb.id)
           ? `${carb.name}已经算主食，这餐不要再默认叠加米饭。`
           : `${carb.name}可按本人 0.5 个拳头起步，训练日或活动多再提高。`;
         messages.push(carbMessage);
@@ -1602,7 +1607,7 @@
         } else if (protein.id === "crayfish") {
           messages.push("小龙虾算蛋白，但更看做法；水煮、清蒸、少油蒜蓉可以，避开麻辣重油汤汁。");
         } else {
-          messages.push(`${protein.name}适合作为这餐蛋白主轴，优先清蒸、白灼、少油煎烤或汤菜。`);
+          messages.push(`${protein.name}适合作为这餐蛋白主轴，优先清蒸、白灼、汤煮、凉拌、少油快炒。`);
         }
       } else {
         messages.push("还缺一份优质蛋白；优先鱼、虾、去皮鸡肉、豆腐或鸡蛋。");
@@ -1622,6 +1627,9 @@
         messages.push("还缺最后一步做法模板；选完模板后再生成最终菜谱。");
       }
 
+      messages.push("吃饭顺序：蔬菜→蛋白/肉→主食。");
+      messages.push("主食吃硬不吃软、放凉一点更稳；晚餐七八分饱，主食减量。");
+      messages.push("禁忌包括勾芡、糖醋、红烧糖汁、蜜汁、照烧甜酱、重油卤肉、软烂粥；推荐清蒸、白灼、汤煮、凉拌、少油快炒。");
       messages.push(`时令偏好：${seasonLabel}。时令食材会加分，但家里已有的非时令食材也可以用。`);
       return messages;
     }

@@ -15,6 +15,8 @@
 | soba.webp | https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Dried_soba_noodles_by_FotoosVanRobin.jpg/960px-Dried_soba_noodles_by_FotoosVanRobin.jpg |
 | corn.webp | https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Corn_on_the_cob_-_Massachusetts.jpg/960px-Corn_on_the_cob_-_Massachusetts.jpg |
 | potato.webp | https://commons.wikimedia.org/wiki/Special:FilePath/Russet%20Potatoes%20%2815460075017%29.jpg?width=640 |
+| taro.webp | https://commons.wikimedia.org/wiki/Special:FilePath/Taro_root.jpg?width=640 |
+| lotus-root.webp | https://commons.wikimedia.org/wiki/Special:FilePath/Lotus_root.jpg?width=640 |
 | yam.webp | https://upload.wikimedia.org/wikipedia/commons/3/3b/Dioscorea_polystachya_%28batatas%29.jpg |
 | pumpkin.webp | https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/FrenchMarketPumpkinsB.jpg/960px-FrenchMarketPumpkinsB.jpg |
 | black-rice.webp | https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Black_Rice.jpg/960px-Black_Rice.jpg |
