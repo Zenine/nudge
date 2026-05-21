@@ -6,6 +6,7 @@
 
 - 新增 `tests/` 回归测试，覆盖默认 LLM 配置、默认密钥路径、bootstrap 初始化、verify 编译检查和 README quick start。
 - 从 private control plane 吸收 public-safe 回归测试，覆盖 agent apply、MCP 工具列表、配置读取和 JSON schema contract。
+- 从 private README 吸收 public-safe 的 hero 图、架构图、读者入口和能力流程说明，并为 README 图片资产增加回归测试。
 - 新增本地维护文件：`TODO.md`。
 - 新增 runtime JSONL 日志：`<state.dir>/logs/nudge-runtime.jsonl`。
 - `requirements.txt` 增加 `pytest`，保证项目自带验证入口可以在新环境运行测试。

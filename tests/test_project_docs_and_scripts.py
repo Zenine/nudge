@@ -72,6 +72,10 @@ def test_default_readme_is_english_and_links_chinese_readme():
         assert command in readme
 
     assert "[Chinese documentation](README.zh-CN.md)" in readme
+    assert ".github/assets/readme-hero.png" in readme
+    assert "docs/assets/nudge-architecture-imagegen.png" in readme
+    assert "## Reader Paths" in readme
+    assert "## What It Does" in readme
 
 
 def test_chinese_readme_covers_installation_repair_usage_and_verification():
@@ -90,6 +94,22 @@ def test_chinese_readme_covers_installation_repair_usage_and_verification():
         assert section in readme
 
     assert "[English](README.md)" in readme
+    assert ".github/assets/readme-hero.png" in readme
+    assert "docs/assets/nudge-architecture-imagegen.png" in readme
+    assert "## 读者入口" in readme
+    assert "## 它做什么" in readme
+
+
+def test_readme_visual_assets_exist():
+    required_assets = [
+        ROOT / ".github" / "assets" / "readme-hero.png",
+        ROOT / "docs" / "assets" / "nudge-architecture-imagegen.png",
+        ROOT / "docs" / "assets" / "nudge-architecture.png",
+    ]
+
+    for path in required_assets:
+        assert path.exists()
+        assert path.stat().st_size > 100_000
 
 
 def test_readme_documents_all_supported_llm_providers_without_machine_specific_paths():

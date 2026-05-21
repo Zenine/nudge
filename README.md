@@ -1,10 +1,41 @@
-# Nudge
+<p align="center">
+  <h1 align="center">Nudge</h1>
+  <p align="center">
+    Local-first macOS automation for plans that actually reach Apple apps
+    <br />
+    <strong>Plan · Schedule · Remind · Track · Adapt</strong>
+    <br />
+    <br />
+    <a href="README.zh-CN.md">Chinese documentation</a> · <a href="https://github.com/Zenine/nudge/issues">Report Bug</a> · <a href="https://github.com/Zenine/nudge/issues">Request Feature</a>
+  </p>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Zenine/nudge/stargazers"><img src="https://img.shields.io/github/stars/Zenine/nudge?style=flat" alt="Stars"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.12+-blue" alt="Python"></a>
+  <a href="https://github.com/Zenine/nudge/issues"><img src="https://img.shields.io/github/issues/Zenine/nudge" alt="Issues"></a>
+</p>
+
+<p align="center">
+  <img src=".github/assets/readme-hero.png" alt="Nudge local-first Apple automation hero" width="100%">
+</p>
 
 [Chinese documentation](README.zh-CN.md)
 
 Nudge is a local-first macOS CLI runtime that turns structured requests or natural-language plans into Apple Calendar, Reminders, Notes, and Clock actions.
 
 This public repository contains the reusable runtime, CLI, Apple adapters, daemon, MCP wrapper, and installation scripts. Personal plans, local configuration, private state, API keys, Health exports, and user-specific documents are intentionally not included.
+
+## Reader Paths
+
+| If you are | Start with |
+|------------|------------|
+| Trying Nudge for the first time | [Quick Start](#quick-start) |
+| Setting up a Mac | [Installation](#installation), [Configuration](#configuration), [Diagnostics and Repair](#diagnostics-and-repair) |
+| Calling Nudge from another AI agent | [Agent and MCP](#agent-and-mcp) |
+| Maintaining the project | [Development and Verification](#development-and-verification), [Project Layout](#project-layout) |
+
+Rule of thumb: natural-language input goes through `nudge do` or the root command; already-structured actions go through `nudge agent apply` or MCP and skip the LLM.
 
 ## Feature Overview
 
@@ -14,6 +45,25 @@ This public repository contains the reusable runtime, CLI, Apple adapters, daemo
 - Store actions, plans, habits, health summaries, daemon queue rows, and run results in local SQLite.
 - Use local adapter contracts for Apple Calendar, Reminders, Notes, and Clock.
 - Support Anthropic, OpenAI-compatible APIs, DeepSeek, Qwen/DashScope, and Ollama.
+
+## What It Does
+
+```mermaid
+flowchart LR
+    generate["Generate<br/><small>LLM or structured action</small>"]
+    schedule["Schedule<br/><small>Write Apple apps</small>"]
+    remind["Remind<br/><small>Calendar / Reminders / Clock</small>"]
+    track["Track<br/><small>SQLite action state</small>"]
+    review["Review<br/><small>logs and sync</small>"]
+    adapt["Adapt<br/><small>confirmed changes</small>"]
+
+    generate --> schedule --> remind --> track --> review --> adapt
+    adapt -. "Next plan" .-> generate
+```
+
+<p align="center">
+  <img src="docs/assets/nudge-architecture-imagegen.png" alt="Nudge local-first architecture diagram" width="100%">
+</p>
 
 ## Requirements
 
