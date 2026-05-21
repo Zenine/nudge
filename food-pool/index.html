@@ -78,6 +78,13 @@
       box-shadow: var(--shadow);
     }
 
+    .main-column {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      align-content: start;
+    }
+
     .hero {
       padding: 20px;
       display: grid;
@@ -192,10 +199,37 @@
       color: #fff;
     }
 
+    .season-option.is-current-season {
+      border-color: var(--green-strong);
+      box-shadow: 0 0 0 2px rgba(47, 111, 79, 0.16);
+    }
+
+    .season-option.is-current-season:not([aria-pressed="true"]) {
+      background: rgba(47, 111, 79, 0.1);
+      color: var(--green-strong);
+    }
+
     .button-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 8px;
+    }
+
+    .quick-random-card {
+      display: grid;
+      gap: 8px;
+      border: 1px solid rgba(47, 111, 79, 0.22);
+      border-radius: calc(var(--radius) + 2px);
+      background: linear-gradient(135deg, rgba(47, 111, 79, 0.12), rgba(246, 161, 80, 0.12));
+      padding: 10px;
+    }
+
+    .quick-random-note {
+      margin: 0;
+      color: #3b443d;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.55;
     }
 
     .text-button,
@@ -508,6 +542,14 @@
       line-height: 1.45;
     }
 
+    .plate-portion {
+      display: block;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
     .analysis-list {
       display: grid;
       gap: 7px;
@@ -814,6 +856,10 @@
         justify-self: center;
       }
 
+      .main-column {
+        grid-column: 1 / 2;
+      }
+
       .recipe-catalog {
         grid-column: 1 / 2;
       }
@@ -962,9 +1008,12 @@
               <button type="button" class="season-option" data-action="season" data-season="winter" aria-pressed="false">冬季</button>
             </div>
           </div>
-          <div class="button-row">
-            <button type="button" class="primary-button" data-action="random">随机稳妥餐</button>
-            <button type="button" class="text-button" data-action="clear">清空重选</button>
+          <div class="quick-random-card" aria-label="快捷配餐">
+            <div class="button-row">
+              <button type="button" class="primary-button" data-action="random" aria-describedby="random-help">一键随机生成一餐</button>
+              <button type="button" class="text-button" data-action="clear">清空重选</button>
+            </div>
+            <p class="quick-random-note" id="random-help">不知道怎么选时点这里：会自动按当前时令填好主食、蛋白、蔬菜和做法模板；水果 / 坚果加餐仍需自己手动选。</p>
           </div>
         </div>
       </section>
@@ -988,8 +1037,9 @@
         </button>
       </nav>
 
-      <section class="workspace" aria-label="四步食材与做法选择">
-        <article class="choice-step is-open" data-role="step-carb" data-step="carb">
+      <div class="main-column">
+        <section class="workspace" aria-label="四步食材与做法选择">
+          <article class="choice-step is-open" data-role="step-carb" data-step="carb">
           <button type="button" class="step-toggle" data-action="toggle-step" data-target="carb">
             <span class="step-number">1</span>
             <span class="step-title">
@@ -1047,7 +1097,31 @@
             <div class="template-list" data-role="template-grid"></div>
           </div>
         </article>
-      </section>
+
+
+        <article class="choice-step" data-role="step-snack" data-step="snack">
+          <button type="button" class="step-toggle" data-action="toggle-step" data-target="snack">
+            <span class="step-number">+</span>
+            <span class="step-title">
+              <strong>可选加餐：水果 / 坚果</strong>
+              <span class="step-summary" data-role="summary-snack">不随正餐默认添加；按 1 拳水果 / 1 小把坚果限量</span>
+            </span>
+            <span class="step-state" data-role="state-snack">可选</span>
+          </button>
+          <div class="step-content">
+            <div class="food-grid" data-role="snack-grid"></div>
+          </div>
+        </article>
+        </section>
+
+        <section class="recipe-catalog" aria-labelledby="final-recipes-title">
+          <div class="result-head">
+            <h2 id="final-recipes-title">最终菜谱</h2>
+            <p>选完主食、蛋白、蔬菜和做法模板后，才生成一张和当前选择绑定的执行菜谱。</p>
+          </div>
+          <div class="recipe-list" data-role="recipes" id="final-recipes"></div>
+        </section>
+      </div>
 
       <aside class="result-panel" aria-label="组合分析与菜谱推荐">
         <div class="result-head">
@@ -1057,15 +1131,18 @@
 
         <div class="plate" aria-label="本人减脂盘">
           <div class="plate-box">
-            <strong>半盘</strong>
+            <strong>半盘蔬菜 / 高纤维</strong>
+            <em class="plate-portion">本人约 2 个拳头；中晚餐约 250g</em>
             <span data-role="plate-fiber">先选蔬菜 / 菌菇 / 海带类</span>
           </div>
           <div class="plate-box">
             <strong>四分之一盘蛋白</strong>
+            <em class="plate-portion">本人约 1 个掌心；午晚各一掌</em>
             <span data-role="plate-protein">选择蛋白</span>
           </div>
           <div class="plate-box">
             <strong>四分之一盘主食</strong>
+            <em class="plate-portion">本人约 0.5-1 个拳头；晚餐偏 0.5 拳</em>
             <span data-role="plate-carb">选择主食</span>
           </div>
         </div>
@@ -1073,15 +1150,7 @@
         <ul class="analysis-list" data-role="analysis"></ul>
       </aside>
 
-      <section class="recipe-catalog" aria-labelledby="final-recipes-title">
-        <div class="result-head">
-          <h2 id="final-recipes-title">最终菜谱</h2>
-          <p>选完主食、蛋白、蔬菜和做法模板后，才生成一张和当前选择绑定的执行菜谱。</p>
-        </div>
-        <div class="recipe-list" data-role="recipes" id="final-recipes"></div>
-      </section>
-
-      <p class="source-note">水果放加餐，不默认随正餐；低 GI 水果包括蓝莓、半个苹果、柚子、草莓；坚果限量 10-15g；12 小时夜间轻断食是可选习惯，不是强制医学建议。</p>
+      <p class="source-note">医院食物交换份对照：蛋白优先鸡肉、瘦牛肉片、鱼类、明虾 / 河虾、鸡蛋、南 / 北豆腐；纯牛奶放早餐或加餐，不默认进午晚餐组合。主食优先玉米、燕麦、红薯、山药、南瓜、土豆，少选白面条、白馒头和包子。水果放加餐，不默认随正餐；低 GI 水果包括苹果、樱桃、草莓、蓝莓、柚子，按 1 拳 / 天；核桃仁、杏仁按 1 小把 / 周或 10-15g 控量。12 小时夜间轻断食是可选习惯，不是强制医学建议。</p>
       <p class="source-note">项目开源在 <a href="https://github.com/Zenine/nudge" rel="noopener noreferrer">GitHub / Zenine/nudge</a>。本文只做日常执行参考，不能替代营养师建议。</p>
     </div>
   </main>
@@ -1175,7 +1244,14 @@
       pepper: "assets/food/pepper.webp",
       kelp: "assets/food/kelp.webp",
       wakame: "assets/food/wakame.webp",
-      nori: "assets/food/nori.webp"
+      nori: "assets/food/nori.webp",
+      apple: "assets/food/apple.webp",
+      cherry: "assets/food/cherry.webp",
+      strawberry: "assets/food/strawberry.webp",
+      blueberry: "assets/food/blueberry.svg",
+      grapefruit: "assets/food/grapefruit.svg",
+      walnut: "assets/food/walnut.svg",
+      almond: "assets/food/almond.svg",
     };
 
     const FOODS = {
@@ -1200,17 +1276,17 @@
         { id: "beans", name: "豆类主食", priority: "低频", imageKey: "Cannellini Beans", alt: "豆类主食", seasonal: ["spring", "summer", "autumn", "winter"], note: "作为变化项，注意总碳水。" }
       ],
       proteins: [
-        { id: "shrimp", name: "虾", priority: "高", imageKey: "Prawns", alt: "虾", seasonal: ["spring", "summer"], note: "白灼、番茄汤、少油煎都稳。" },
-        { id: "fish", name: "鲈鱼 / 草鱼", priority: "高", imageKey: "White Fish", alt: "鲈鱼和草鱼", seasonal: ["spring", "summer", "autumn", "winter"], note: "清蒸、煎烤少油、菌菇汤。" },
+        { id: "shrimp", name: "明虾 / 河虾", priority: "高", imageKey: "Prawns", alt: "明虾和河虾", seasonal: ["spring", "summer"], note: "白灼、番茄汤、少油煎都稳；医院交换份表中属于优先蛋白。" },
+        { id: "fish", name: "鱼类（鲈鱼 / 草鱼）", priority: "高", imageKey: "White Fish", alt: "鲈鱼和草鱼", seasonal: ["spring", "summer", "autumn", "winter"], note: "清蒸、煎烤少油、菌菇汤；按医院交换份表作为优先蛋白。" },
         { id: "chicken", name: "去皮鸡肉", priority: "高", imageKey: "Chicken Breast", alt: "去皮鸡肉", seasonal: ["spring", "summer", "autumn", "winter"], note: "鸡胸或去皮鸡腿，少油。" },
         { id: "chicken-leg", name: "去皮鸡腿", priority: "高", imageKey: "Chicken Leg", alt: "去皮鸡腿", seasonal: ["spring", "summer", "autumn", "winter"], note: "去皮少油，不等于带皮鸡腿；比鸡胸更好入口。" },
         { id: "egg", name: "鸡蛋", priority: "高", imageKey: "Eggs", alt: "鸡蛋", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合和豆腐、绿叶菜组合。" },
-        { id: "tofu", name: "豆腐", priority: "高", imageKey: "Tofu", alt: "豆腐", seasonal: ["spring", "summer", "autumn", "winter"], note: "番茄豆腐、海带豆腐汤很好用。" },
+        { id: "tofu", name: "南 / 北豆腐", priority: "高", imageKey: "Tofu", alt: "南豆腐和北豆腐", seasonal: ["spring", "summer", "autumn", "winter"], note: "番茄豆腐、海带豆腐汤很好用；北豆腐更扎实，南豆腐更嫩，均按豆制品蛋白估算。" },
         { id: "dried-tofu", name: "豆干", priority: "高", imageKey: "Tofu", alt: "豆干", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合凉拌或少油炒蔬菜。" },
         { id: "tofu-skin", name: "豆皮 / 千张", priority: "高", imageKey: "Tofu Skin", alt: "豆皮和千张", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合凉拌、汤菜或和绿叶菜同炒。" },
         { id: "edamame", name: "毛豆", priority: "高", imageKey: "Green Beans", alt: "毛豆", seasonal: ["summer", "autumn"], note: "毛豆属于豆类蛋白，也有碳水；适合作为蛋白补充，不当纯瘦蛋白无限加。" },
         { id: "lean-pork", name: "瘦猪肉", priority: "中", imageKey: "Pork", alt: "瘦猪肉", seasonal: ["spring", "summer", "autumn", "winter"], note: "里脊或瘦肉，不卤肉、不红烧糖汁。" },
-        { id: "lean-beef", name: "瘦牛肉", priority: "中", imageKey: "Beef", alt: "瘦牛肉", seasonal: ["autumn", "winter"], note: "频率控制在每周 1 次左右。" },
+        { id: "lean-beef", name: "瘦牛肉片", priority: "中", imageKey: "Beef", alt: "瘦牛肉片", seasonal: ["autumn", "winter"], note: "医院交换份表可用蛋白；频率控制在每周 1 次左右，避开肥牛和重油汤底。" },
         { id: "skinless-duck", name: "去皮鸭肉", priority: "中", imageKey: "Duck Breast", alt: "去皮鸭肉", seasonal: ["autumn", "winter"], note: "鸭肉只选去皮瘦肉，清炖或少油煎，避开烤鸭皮和浓油鸭汤。" },
         { id: "lean-lamb", name: "羊里脊 / 羊腿瘦肉", priority: "低频", imageKey: "Lamb", alt: "羊里脊和羊腿瘦肉", seasonal: ["autumn", "winter"], note: "低频变化项，白萝卜清炖后撇油，少油孜然也要控制量。" },
         { id: "crayfish", name: "小龙虾", priority: "低频", imageKey: "Crayfish", alt: "小龙虾", seasonal: ["spring", "summer"], note: "小龙虾算蛋白；优先水煮、清蒸或少油蒜蓉，避开麻辣重油和浓汤汁。" },
@@ -1251,6 +1327,15 @@
         { id: "kelp", name: "海带", priority: "海藻类", imageKey: "Cabbage", alt: "海带", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合豆腐汤、鸡蛋汤。" },
         { id: "wakame", name: "裙带菜", priority: "海藻类", imageKey: "Cabbage", alt: "裙带菜", seasonal: ["spring", "summer", "autumn", "winter"], note: "快手汤菜很好用。" },
         { id: "nori", name: "紫菜", priority: "海藻类", imageKey: "Cabbage", alt: "紫菜", seasonal: ["spring", "summer", "autumn", "winter"], note: "适合紫菜蛋花汤。" }
+      ],
+      snacks: [
+        { id: "apple", name: "苹果", priority: "水果 1 拳 / 天", imageKey: "Apple", alt: "苹果", seasonal: ["autumn", "winter"], note: "低 GI 加餐选项；半个到 1 个拳头内，不替代正餐蛋白和蔬菜。" },
+        { id: "cherry", name: "樱桃", priority: "水果 1 拳 / 天", imageKey: "Cherries", alt: "樱桃", seasonal: ["spring", "summer"], note: "低 GI 水果；按 1 拳总量，不和其他水果叠加。" },
+        { id: "strawberry", name: "草莓", priority: "水果 1 拳 / 天", imageKey: "Strawberries", alt: "草莓", seasonal: ["spring"], note: "低 GI 水果；适合作为下午加餐，不加糖或炼乳。" },
+        { id: "blueberry", name: "蓝莓", priority: "水果 1 拳 / 天", imageKey: "Blueberries", alt: "蓝莓", seasonal: ["summer"], note: "低 GI 水果；小盒分量也要算进每日 1 拳水果。" },
+        { id: "grapefruit", name: "柚子", priority: "水果 1 拳 / 天", imageKey: "Grapefruit", alt: "柚子", seasonal: ["autumn", "winter"], note: "低 GI 水果；如正在用药，先确认是否有葡萄柚 / 柚子相互作用风险。" },
+        { id: "walnut", name: "核桃仁", priority: "坚果 1 小把 / 周", imageKey: "Walnuts", alt: "核桃仁", seasonal: ["spring", "summer", "autumn", "winter"], note: "脂肪密度高；按 1 小把 / 周或 10-15g 控量，不随手抓。" },
+        { id: "almond", name: "杏仁", priority: "坚果 1 小把 / 周", imageKey: "Almonds", alt: "杏仁", seasonal: ["spring", "summer", "autumn", "winter"], note: "脂肪密度高；无糖无盐优先，按 10-15g 控量。" }
       ]
     };
 
@@ -1367,12 +1452,13 @@
       carb: null,
       protein: null,
       fibers: [],
+      snacks: [],
       templateId: null,
       openStep: "carb",
       seasonFilter: "auto"
     };
 
-    const allFoods = [...FOODS.carbs, ...FOODS.proteins, ...FOODS.fibers];
+    const allFoods = [...FOODS.carbs, ...FOODS.proteins, ...FOODS.fibers, ...FOODS.snacks];
     const byId = Object.fromEntries(allFoods.map((food) => [food.id, food]));
 
     function getCurrentSeason() {
@@ -1393,14 +1479,24 @@
     }
 
     function updateSeasonControls() {
+      const currentSeason = getCurrentSeason();
       document.querySelectorAll('[data-action="season"]').forEach((button) => {
         const active = button.dataset.season === state.seasonFilter;
+        const current = button.dataset.season === currentSeason;
         button.classList.toggle("is-active", active);
+        button.classList.toggle("is-current-season", current);
         button.setAttribute("aria-pressed", String(active));
+        if (current) {
+          button.setAttribute("aria-current", "date");
+          button.title = `按当前日期识别为${SEASON_LABELS[currentSeason]}`;
+        } else {
+          button.removeAttribute("aria-current");
+          button.removeAttribute("title");
+        }
       });
 
       const label = state.seasonFilter === "auto"
-        ? `当前 ${SEASON_LABELS[getCurrentSeason()]}`
+        ? `自动 · 当前 ${SEASON_LABELS[currentSeason]}`
         : state.seasonFilter === "all"
           ? "全部时令"
           : SEASON_LABELS[state.seasonFilter];
@@ -1435,7 +1531,7 @@
     }
 
     function renderFoodCard(food, group) {
-      const pressed = group === "fiber" ? state.fibers.includes(food.id) : state[group] === food.id;
+      const pressed = ["fiber", "snack"].includes(group) ? state[`${group}s`].includes(food.id) : state[group] === food.id;
       const button = document.createElement("button");
       button.type = "button";
       button.className = "food-card";
@@ -1470,6 +1566,9 @@
       document.querySelector('[data-role="fiber-grid"]').replaceChildren(
         ...[...FOODS.fibers].sort(seasonSort).map((food) => renderFoodCard(food, "fiber"))
       );
+      document.querySelector('[data-role="snack-grid"]').replaceChildren(
+        ...[...FOODS.snacks].sort(seasonSort).map((food) => renderFoodCard(food, "snack"))
+      );
     }
 
     function collapseStep(step) {
@@ -1499,6 +1598,12 @@
             collapseStep("fiber");
             state.openStep = "template";
           }
+        }
+      } else if (group === "snack") {
+        if (state.snacks.includes(id)) {
+          state.snacks = state.snacks.filter((item) => item !== id);
+        } else {
+          state.snacks = [...state.snacks, id].slice(-2);
         }
       } else {
         state[group] = state[group] === id ? null : id;
@@ -1552,6 +1657,12 @@
       document.querySelector('[data-role="summary-protein"]').textContent = state.protein ? byId[state.protein].name : "鱼虾鸡豆制品优先";
       document.querySelector('[data-role="summary-fiber"]').textContent = state.fibers.length ? selectedNames(state.fibers) : "选 1-2 个，最好有绿叶菜或菌菇";
       document.querySelector('[data-role="summary-template"]').textContent = state.templateId ? templateById[state.templateId].title : "按当前食材只显示匹配模板";
+
+      const snackStep = document.querySelector('[data-step="snack"]');
+      snackStep.classList.toggle("is-open", state.openStep === "snack");
+      snackStep.classList.toggle("is-complete", state.snacks.length > 0);
+      document.querySelector('[data-role="state-snack"]').textContent = state.snacks.length ? `已选 ${state.snacks.length}` : "可选";
+      document.querySelector('[data-role="summary-snack"]').textContent = state.snacks.length ? selectedNames(state.snacks) : "不随正餐默认添加；按 1 拳水果 / 1 小把坚果限量";
     }
 
     function updateProgress() {
@@ -1580,11 +1691,12 @@
       const carb = byId[state.carb];
       const protein = byId[state.protein];
       const fibers = state.fibers.map((id) => byId[id]).filter(Boolean);
+      const snacks = state.snacks.map((id) => byId[id]).filter(Boolean);
       const template = templateById[state.templateId];
       const season = activeSeason();
       const seasonLabel = season === "all" ? "不限时令" : SEASON_LABELS[season];
 
-      if (!carb && !protein && fibers.length === 0) {
+      if (!carb && !protein && fibers.length === 0 && snacks.length === 0) {
         return [`当前按${seasonLabel}排序。先选主食、蛋白、1-2 个蔬菜，再选做法模板，下面才会生成最终菜谱。`];
       }
 
@@ -1627,6 +1739,12 @@
         messages.push("还缺最后一步做法模板；选完模板后再生成最终菜谱。");
       }
 
+      if (snacks.length) {
+        messages.push(`可选加餐：${selectedNames(state.snacks)}。水果合计按 1 拳 / 天；核桃仁、杏仁按 1 小把 / 周或 10-15g 控量。`);
+      } else {
+        messages.push("可选加餐不随正餐默认添加；需要时再选苹果、樱桃、草莓、蓝莓、柚子或少量核桃仁 / 杏仁。");
+      }
+
       messages.push("吃饭顺序：蔬菜→蛋白/肉→主食。");
       messages.push("主食吃硬不吃软、放凉一点更稳；晚餐七八分饱，主食减量。");
       messages.push("禁忌包括勾芡、糖醋、红烧糖汁、蜜汁、照烧甜酱、重油卤肉、软烂粥；推荐清蒸、白灼、汤煮、凉拌、少油快炒。");
@@ -1655,6 +1773,7 @@
       const carb = FOODS.carbs.find((food) => food.id === state.carb);
       const protein = FOODS.proteins.find((food) => food.id === state.protein);
       const fibers = state.fibers.map((id) => byId[id]).filter(Boolean);
+      const snacks = state.snacks.map((id) => byId[id]).filter(Boolean);
       const template = templateById[state.templateId];
       return { carb, protein, fibers, template };
     }
@@ -1798,7 +1917,7 @@
         time: template.time,
         difficulty: "简单",
         ingredients: [carb.name, protein.name, ...fibers.map((food) => food.name), "姜蒜可选", "醋 / 低钠酱油 / 胡椒"],
-        portionNote: `本人：${carb.name}按 0.5 个拳头起步，${protein.name}约 1 个掌心，${fiberNames}补到半盘以上。`,
+        portionNote: `本人：${carb.name}按 0.5-1 个拳头起步，晚餐偏 0.5 拳；${protein.name}约 1 个掌心；${fiberNames}补到约 2 个拳头 / 半盘以上。`,
         familyPortionNote: `家人：${carb.name}加到正常主食量，${protein.name}和蔬菜按人数放大。`,
         keyJudgement: `${template.keyPoint}；${fiberDish}单独按对应做法处理，不和${protein.name}糊成一锅。`,
         fallback: template.fallback,
@@ -1972,6 +2091,7 @@
       state.protein = pick[1];
       state.fibers = pick[2];
       state.templateId = pick[3];
+      state.snacks = [];
       state.openStep = "";
       render();
     }
@@ -1980,6 +2100,7 @@
       state.carb = null;
       state.protein = null;
       state.fibers = [];
+      state.snacks = [];
       state.templateId = null;
       state.openStep = "carb";
       render();

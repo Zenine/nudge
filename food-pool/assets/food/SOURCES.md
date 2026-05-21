@@ -75,3 +75,10 @@
 | kelp.webp | https://upload.wikimedia.org/wikipedia/commons/1/10/Kombu.jpg |
 | wakame.webp | https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/CSIRO_ScienceImage_952_Undaria_pinnatifida_Japanese_kelp.jpg/960px-CSIRO_ScienceImage_952_Undaria_pinnatifida_Japanese_kelp.jpg |
 | nori.webp | https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/Nori.jpg/960px-Nori.jpg |
+| apple.webp | https://commons.wikimedia.org/wiki/Special:FilePath/Red%20Apple.jpg?width=640 |
+| cherry.webp | https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Sweet_cherries_in_basket_2018_G1.jpg/960px-Sweet_cherries_in_basket_2018_G1.jpg |
+| strawberry.webp | https://upload.wikimedia.org/wikipedia/commons/d/de/FraiseFruitPhoto.jpg |
+| blueberry.svg | Local SVG fallback illustration generated for Food Pool snack image |
+| grapefruit.svg | Local SVG fallback illustration generated for Food Pool snack image |
+| walnut.svg | Local SVG fallback illustration generated for Food Pool snack image |
+| almond.svg | Local SVG fallback illustration generated for Food Pool snack image |
