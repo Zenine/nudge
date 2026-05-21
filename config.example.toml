@@ -1,0 +1,30 @@
+[general]
+default_calendar = "Personal"
+default_reminder_list = "Tasks"
+locale = "en-US"
+
+[state]
+dir = "~/.local/share/nudge"
+
+[llm]
+provider = "qwen"
+# api_key = ""            # Prefer environment variables or secrets_path.
+# secrets_path = "~/.config/nudge/secrets.yaml"
+
+[llm.models]
+fast = "qwen-plus"
+default = "qwen-plus"
+strong = "qwen-plus"
+
+[apple.calendar]
+backend = "native"
+
+[apple.reminders]
+backend = "native"
+
+[apple.notes]
+backend = "native"
+
+[apple.clock]
+backend = "shortcuts"
+shortcut_name = "Nudge Create Alarm"

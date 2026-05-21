@@ -1,0 +1,91 @@
+schema_version: "0.1"
+kind: skill
+metadata:
+  id: deep-work-weekly-rhythm
+  title: 每周深度工作节奏
+  version: 1.0.0
+  creator: Nudge Team
+  category: productivity
+audience:
+  goals:
+    - 保护高质量工作时间
+    - 减少碎片化任务拖延
+  level: busy_knowledge_worker
+assessment:
+  - id: main_project
+    question: 本周最重要的项目是什么？
+    type: text
+  - id: morning_energy
+    question: 你上午精力好吗？
+    type: boolean
+  - id: meetings_load
+    question: 本周会议负荷如何？
+    type: single_choice
+    options:
+      - id: low
+        label: 较少
+      - id: normal
+        label: 正常
+      - id: high
+        label: 很多
+personalization:
+  - id: heavy_meeting_week
+    when:
+      "==":
+        - var: assessment.meetings_load
+        - high
+    apply:
+      - op: set
+        path: plan_template.defaults.sessions_per_week
+        value: 3
+      - op: clamp
+        path: plan_template.defaults.session_minutes
+        max: 60
+  - id: morning_focus
+    when:
+      "==":
+        - var: assessment.morning_energy
+        - true
+    apply:
+      - op: set
+        path: plan_template.defaults.preferred_time
+        value: "09:00"
+plan_template:
+  defaults:
+    sessions_per_week: 4
+    session_minutes: 75
+    preferred_days: [Monday, Tuesday, Thursday, Friday]
+    preferred_time: "14:00"
+  phases:
+    - id: weekly_rhythm
+      title: 本周执行
+      weeks: 1
+      sessions:
+        - id: plan
+          title: 定义最重要产出
+          duration_minutes: 45
+        - id: deep_work_1
+          title: 深度工作块 1
+          duration_minutes: 75
+        - id: deep_work_2
+          title: 深度工作块 2
+          duration_minutes: 75
+        - id: shutdown_review
+          title: 收尾复盘
+          duration_minutes: 30
+tracking:
+  metrics:
+    - id: focus_block_completed
+      type: boolean
+    - id: distraction_count
+      type: number
+adaptation:
+  - id: too_many_distractions
+    trigger:
+      ">":
+        - var: history.distraction_avg_7d
+        - 5
+    apply:
+      - op: set
+        path: plan_template.defaults.session_minutes
+        value: 50

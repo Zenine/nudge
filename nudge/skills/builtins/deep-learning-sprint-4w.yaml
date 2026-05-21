@@ -1,0 +1,91 @@
+schema_version: "0.1"
+kind: skill
+metadata:
+  id: deep-learning-sprint-4w
+  title: 4 周深度学习冲刺
+  version: 1.0.0
+  creator: Nudge Team
+  category: learning
+audience:
+  goals:
+    - 连续学习一个主题
+    - 输出可复盘的笔记和作品
+  level: beginner_to_advanced
+assessment:
+  - id: topic
+    question: 这 4 周你想学习什么主题？
+    type: text
+  - id: weekly_hours
+    question: 你每周能投入多少小时？
+    type: number
+  - id: output_style
+    question: 你希望用什么方式输出？
+    type: single_choice
+    options:
+      - id: notes
+        label: 笔记
+      - id: demo
+        label: 小作品
+      - id: teaching
+        label: 给别人讲明白
+personalization:
+  - id: low_time_budget
+    when:
+      "<=":
+        - var: assessment.weekly_hours
+        - 3
+    apply:
+      - op: set
+        path: plan_template.defaults.sessions_per_week
+        value: 3
+      - op: clamp
+        path: plan_template.defaults.session_minutes
+        max: 35
+  - id: demo_output
+    when:
+      "==":
+        - var: assessment.output_style
+        - demo
+    apply:
+      - op: set
+        path: plan_template.phases[0].sessions[2].title
+        value: 小作品构建
+plan_template:
+  defaults:
+    sessions_per_week: 4
+    session_minutes: 50
+    preferred_days: [Tuesday, Thursday, Saturday, Sunday]
+    preferred_time: "20:00"
+  phases:
+    - id: sprint
+      title: 学习冲刺
+      weeks: 4
+      sessions:
+        - id: input
+          title: 深度阅读
+          duration_minutes: 50
+        - id: notes
+          title: 结构化笔记
+          duration_minutes: 40
+        - id: output
+          title: 输出练习
+          duration_minutes: 60
+        - id: review
+          title: 周复盘
+          duration_minutes: 30
+tracking:
+  metrics:
+    - id: session_completed
+      type: boolean
+    - id: artifact_created
+      type: boolean
+adaptation:
+  - id: falling_behind
+    trigger:
+      "<":
+        - var: history.completion_rate_7d
+        - 0.5
+    apply:
+      - op: clamp
+        path: plan_template.defaults.sessions_per_week
+        max: 3

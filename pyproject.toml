@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nudge-ai-life-coach"
+version = "0.5.0"
+description = "AI life coach CLI for planning, scheduling, reminders, and reviews."
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "AGPL-3.0-only"}
+authors = [
+  {name = "Zenine"}
+]
+dependencies = [
+  "anthropic",
+  "click",
+  "openai",
+  "PyYAML",
+]
+
+[project.scripts]
+nudge = "nudge.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["nudge*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+"nudge.apple" = ["eventkit_calendar_events.swift", "eventkit_reminders_due_today.swift", "eventkit_reminders_mutate.swift"]
+"nudge.skills" = ["builtins/*.yaml"]

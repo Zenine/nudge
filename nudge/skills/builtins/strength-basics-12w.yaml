@@ -1,0 +1,98 @@
+schema_version: "0.1"
+kind: skill
+metadata:
+  id: strength-basics-12w
+  title: 12 周力量基础
+  version: 1.0.0
+  creator: Nudge Team
+  category: fitness
+audience:
+  goals:
+    - 建立稳定训练习惯
+    - 提升基础力量
+  level: beginner_to_intermediate
+assessment:
+  - id: current_frequency
+    question: 你目前每周力量训练几次？
+    type: single_choice
+    options:
+      - id: never
+        label: 几乎没有
+      - id: one_or_two
+        label: 每周 1-2 次
+      - id: three_plus
+        label: 每周 3 次以上
+  - id: preferred_session_length
+    question: 你希望每次训练多长时间？
+    type: number
+personalization:
+  - id: beginner_frequency
+    when:
+      "==":
+        - var: assessment.current_frequency
+        - never
+    apply:
+      - op: set
+        path: plan_template.defaults.sessions_per_week
+        value: 3
+      - op: set
+        path: plan_template.defaults.session_minutes
+        value: 40
+  - id: short_sessions
+    when:
+      "<=":
+        - var: assessment.preferred_session_length
+        - 35
+    apply:
+      - op: clamp
+        path: plan_template.defaults.session_minutes
+        max: 35
+plan_template:
+  defaults:
+    sessions_per_week: 4
+    session_minutes: 45
+    preferred_days: [Monday, Wednesday, Friday, Sunday]
+    preferred_time: "07:30"
+  phases:
+    - id: foundation
+      title: 基础期
+      weeks: 4
+      sessions:
+        - id: upper_a
+          title: 上肢 A
+          duration_minutes: 45
+        - id: lower_a
+          title: 下肢 A
+          duration_minutes: 45
+        - id: full_body
+          title: 全身基础
+          duration_minutes: 40
+    - id: progression
+      title: 渐进期
+      weeks: 8
+      sessions:
+        - id: upper_b
+          title: 上肢 B
+          duration_minutes: 45
+        - id: lower_b
+          title: 下肢 B
+          duration_minutes: 45
+        - id: mobility
+          title: 灵活性与恢复
+          duration_minutes: 30
+tracking:
+  metrics:
+    - id: session_completed
+      type: boolean
+    - id: effort
+      type: number
+adaptation:
+  - id: too_hard_deload
+    trigger:
+      ">":
+        - var: history.effort_avg_7d
+        - 8
+    apply:
+      - op: clamp
+        path: plan_template.defaults.session_minutes
+        max: 35

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  case "$SOURCE" in
+    /*) ;;
+    *) SOURCE="$DIR/$SOURCE" ;;
+  esac
+done
+
+ROOT="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
+NUDGE_PYTHON="${NUDGE_PYTHON:-}"
+VENV_PY="$ROOT/.venv/bin/python"
+FALLBACK_PY="python3"
+
+if [[ -n "$NUDGE_PYTHON" ]]; then
+  exec "$NUDGE_PYTHON" "$ROOT/nudge.py" "$@"
+fi
+
+if [[ -x "$VENV_PY" ]]; then
+  exec "$VENV_PY" "$ROOT/nudge.py" "$@"
+fi
+
+exec "$FALLBACK_PY" "$ROOT/nudge.py" "$@"
