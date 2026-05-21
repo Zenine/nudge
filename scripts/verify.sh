@@ -18,6 +18,10 @@ else
 fi
 
 echo
+echo "== Python compile checks =="
+run python3 -m compileall -q nudge
+
+echo
 echo "== CLI smoke checks =="
 run bin/nudge --help >/dev/null
 run bin/nudge do --help >/dev/null

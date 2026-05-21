@@ -51,6 +51,14 @@ fi
 log "步骤1.5：安装 Python 依赖到项目 .venv"
 "$VENV_PY" -m pip install -r requirements.txt
 
+log "步骤1.6：初始化 config.toml"
+if [[ ! -f config.toml ]]; then
+  cp config.example.toml config.toml
+  echo "已从 config.example.toml 创建 config.toml"
+else
+  echo "config.toml 已存在，保留现有配置"
+fi
+
 log "步骤2：安装 Nudge 命令"
 "${ROOT}/scripts/install_cli.sh"
 
