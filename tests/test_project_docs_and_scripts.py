@@ -55,6 +55,7 @@ def test_default_readme_is_english_and_links_chinese_readme():
         "## Common Commands",
         "## Agent and MCP",
         "## Daemon Queue",
+        "## Documentation",
         "## Development and Verification",
     ]
     for section in required_sections:
@@ -76,6 +77,9 @@ def test_default_readme_is_english_and_links_chinese_readme():
     assert "docs/assets/nudge-architecture-imagegen.png" in readme
     assert "## Reader Paths" in readme
     assert "## What It Does" in readme
+    assert "[Docs Index](docs/README.md)" in readme
+    assert "[CLI](docs/CLI.md)" in readme
+    assert "[Architecture](docs/ARCHITECTURE.md)" in readme
 
 
 def test_chinese_readme_covers_installation_repair_usage_and_verification():
@@ -88,6 +92,7 @@ def test_chinese_readme_covers_installation_repair_usage_and_verification():
         "## 常用命令",
         "## Agent 与 MCP",
         "## Daemon 队列",
+        "## 文档",
         "## 开发与验证",
     ]
     for section in required_sections:
@@ -98,6 +103,40 @@ def test_chinese_readme_covers_installation_repair_usage_and_verification():
     assert "docs/assets/nudge-architecture-imagegen.png" in readme
     assert "## 读者入口" in readme
     assert "## 它做什么" in readme
+    assert "[文档索引](docs/README.md)" in readme
+    assert "[CLI](docs/CLI.md)" in readme
+    assert "[Architecture](docs/ARCHITECTURE.md)" in readme
+
+
+def test_public_docs_are_linked_and_scrubbed():
+    docs = [
+        "README.md",
+        "CLI.md",
+        "ARCHITECTURE.md",
+        "DESIGN.md",
+        "MCP_SECURITY.md",
+        "DAEMON_RUNBOOK.md",
+        "APPLE_ADAPTER_SURVEY.md",
+        "MODULE_MAP.md",
+        "SKILL_SPEC.md",
+        "PROMPT_PLAYBOOK.md",
+    ]
+
+    for name in docs:
+        assert (ROOT / "docs" / name).exists()
+
+    combined = "\n".join(
+        (ROOT / "docs" / name).read_text(encoding="utf-8")
+        for name in docs
+    )
+    blocked = [
+        "百度同步盘",
+        "niaite-email",
+        "/Users/zeninexu",
+        "docs/personal",
+    ]
+    for text in blocked:
+        assert text not in combined
 
 
 def test_readme_visual_assets_exist():

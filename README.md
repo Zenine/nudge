@@ -33,7 +33,7 @@ This public repository contains the reusable runtime, CLI, Apple adapters, daemo
 | Trying Nudge for the first time | [Quick Start](#quick-start) |
 | Setting up a Mac | [Installation](#installation), [Configuration](#configuration), [Diagnostics and Repair](#diagnostics-and-repair) |
 | Calling Nudge from another AI agent | [Agent and MCP](#agent-and-mcp) |
-| Maintaining the project | [Development and Verification](#development-and-verification), [Project Layout](#project-layout) |
+| Maintaining the project | [Documentation](#documentation), [Development and Verification](#development-and-verification), [Project Layout](#project-layout) |
 
 Rule of thumb: natural-language input goes through `nudge do` or the root command; already-structured actions go through `nudge agent apply` or MCP and skip the LLM.
 
@@ -454,6 +454,19 @@ Recovery:
 nudge daemon recover
 nudge daemon retry <request-id>
 ```
+
+## Documentation
+
+- [Docs Index](docs/README.md): public-safe documentation map.
+- [CLI](docs/CLI.md): command usage, JSON contracts, automation examples, and troubleshooting.
+- [Architecture](docs/ARCHITECTURE.md): local-first runtime architecture, data flow, Apple adapters, and MCP placement.
+- [Design](docs/DESIGN.md): product interaction principles and workflow constraints.
+- [MCP Security](docs/MCP_SECURITY.md): tool surface, capability boundaries, confirmation policy, and client guidance.
+- [Daemon Runbook](docs/DAEMON_RUNBOOK.md): daemon health, stale jobs, retry flow, launchd operations, and recovery.
+- [Apple Adapter Survey](docs/APPLE_ADAPTER_SURVEY.md): Calendar, Reminders, Notes, Clock, EventKit, AppleScript, and Shortcuts tradeoffs.
+- [Module Map](docs/MODULE_MAP.md): source navigation guide for common changes.
+- [Skill Spec](docs/SKILL_SPEC.md): deterministic skill format, rule limits, templates, and validation workflow.
+- [Prompt Playbook](docs/PROMPT_PLAYBOOK.md): prompt ownership, model tiers, and parsing guardrails.
 
 ## Private Data
 
