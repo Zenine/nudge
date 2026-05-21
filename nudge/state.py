@@ -1,7 +1,6 @@
 """Local state persistence using SQLite in the synced Nudge state directory."""
 
 import json
-import os
 import sqlite3
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
@@ -13,30 +12,16 @@ from nudge.sleep_reminders import (
     SLEEP_AUTO_SKIP_LOOKAHEAD_HOURS,
     later_sleep_reminders_after,
 )
-from nudge.config import load_config
-
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+from nudge.config import load_config, resolve_state_dir
 
 
 def _default_state_dir(config: dict | None = None) -> Path:
-    configured = os.environ.get("NUDGE_STATE_DIR")
-    if configured:
-        return Path(configured).expanduser()
-
     if config is None:
         try:
             config = load_config()
         except FileNotFoundError:
             config = {}
-
-    state_config = config.get("state", {}) if isinstance(config, dict) else {}
-    configured = state_config.get("dir") or state_config.get("directory")
-    if configured:
-        path = Path(str(configured)).expanduser()
-        return path if path.is_absolute() else PROJECT_ROOT / path
-
-    return PROJECT_ROOT / ".nudge"
+    return resolve_state_dir(config)
 
 
 STATE_DIR = _default_state_dir()

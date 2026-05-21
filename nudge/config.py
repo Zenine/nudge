@@ -1,13 +1,27 @@
 """Config loading and access."""
 
 import tomllib
+import os
 from pathlib import Path
 
 
 FAMILY_GROUP_ALIASES = ["家庭组", "家人", "全家", "大家", "所有人"]
 FAMILY_GROUP_PERSON = "__family_group__"
-DEFAULT_CALENDAR_NAME = "个人"
-DEFAULT_REMINDER_LIST = "日常"
+DEFAULT_CALENDAR_NAME = "Personal"
+DEFAULT_REMINDER_LIST = "Tasks"
+DEFAULT_NOTES_FOLDER = "Nudge"
+DEFAULT_CLOCK_SHORTCUT_NAME = "Nudge Create Alarm"
+DEFAULT_SECRETS_PATH = Path.home() / ".config" / "nudge" / "secrets.yaml"
+DEFAULT_LLM_CONFIG = {
+    "provider": "qwen",
+    "model": "qwen-plus",
+    "models": {
+        "default": "qwen-plus",
+        "fast": "qwen-plus",
+        "strong": "qwen-plus",
+    },
+}
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def load_config(path: str | Path | None = None) -> dict:
@@ -26,6 +40,22 @@ def load_config(path: str | Path | None = None) -> dict:
         )
     with open(path, "rb") as f:
         return tomllib.load(f)
+
+
+def resolve_state_dir(config: dict | None = None) -> Path:
+    """Resolve the local state directory for databases and runtime logs."""
+    configured = os.environ.get("NUDGE_STATE_DIR")
+    if configured:
+        return Path(configured).expanduser()
+
+    config = config or {}
+    state_config = config.get("state", {}) if isinstance(config, dict) else {}
+    configured = state_config.get("dir") or state_config.get("directory")
+    if configured:
+        path = Path(str(configured)).expanduser()
+        return path if path.is_absolute() else PROJECT_ROOT / path
+
+    return PROJECT_ROOT / ".nudge"
 
 
 def get_family_aliases(config: dict) -> tuple[list[str], dict[str, dict]]:

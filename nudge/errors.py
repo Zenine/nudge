@@ -3,6 +3,9 @@
 import json
 from dataclasses import dataclass
 
+from nudge.config import DEFAULT_CLOCK_SHORTCUT_NAME, DEFAULT_SECRETS_PATH
+from nudge.runtime_log import log_error_report
+
 
 @dataclass(frozen=True)
 class ErrorReport:
@@ -16,6 +19,7 @@ class ErrorReport:
 
     def render(self, indent: str = "") -> str:
         """Render as concise Chinese text for terminal output."""
+        log_error_report("error.render", self)
         lines = [
             f"ERROR [{self.code}]: {self.title}",
             f"发生了什么：{self.detail}",
@@ -109,7 +113,7 @@ def classify_llm_error(raw_error: str) -> ErrorReport:
             detail="当前 provider 的 API key 缺失或无效，Nudge 无法解析自然语言。",
             next_steps=(
                 "运行 `nudge doctor` 检查 provider、模型和密钥状态。",
-                "确认密钥在环境变量、config.toml [llm].secrets_path 或 `~/.config/nudge/secrets.yaml` 中。",
+                f"确认密钥在环境变量、config.toml [llm].secrets_path 或 `{DEFAULT_SECRETS_PATH}` 中。",
                 "不要把 API key 写入仓库。",
             ),
             raw_error=raw,
@@ -128,7 +132,7 @@ def classify_llm_error(raw_error: str) -> ErrorReport:
     )
 
 
-def classify_clock_error(raw_error: str, shortcut_name: str = "Nudge Create Alarm") -> ErrorReport:
+def classify_clock_error(raw_error: str, shortcut_name: str = DEFAULT_CLOCK_SHORTCUT_NAME) -> ErrorReport:
     """Classify macOS Shortcuts/Clock bridge errors."""
     raw = str(raw_error or "").strip()
     lower = raw.lower()

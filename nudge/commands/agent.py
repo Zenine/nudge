@@ -20,7 +20,13 @@ import click
 from nudge.action_hygiene import normalize_reminder_title
 from nudge.apple.adapters import UnsupportedAppleBackendError, resolve_apple_backends
 from nudge.commands.do import _action_schema_problems, execute_action
-from nudge.config import DEFAULT_CALENDAR_NAME, DEFAULT_REMINDER_LIST, get_defaults, load_config
+from nudge.config import (
+    DEFAULT_CALENDAR_NAME,
+    DEFAULT_NOTES_FOLDER,
+    DEFAULT_REMINDER_LIST,
+    get_defaults,
+    load_config,
+)
 from nudge.errors import (
     ErrorReport,
     agent_action_not_found_report,
@@ -562,7 +568,7 @@ def _normalize_action(action: dict, defaults: dict) -> dict:
             or action.get("folder")
             or target.get("folder")
             or target.get("name")
-            or "Nudge"
+            or DEFAULT_NOTES_FOLDER
         )
         return {
             "agent_type": action_type,

@@ -6,8 +6,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from nudge.config import DEFAULT_CLOCK_SHORTCUT_NAME
 
-DEFAULT_CREATE_ALARM_SHORTCUT = "Nudge Create Alarm"
+DEFAULT_CREATE_ALARM_SHORTCUT = DEFAULT_CLOCK_SHORTCUT_NAME
 SHORTCUTS_BIN = "/usr/bin/shortcuts"
 
 

@@ -14,9 +14,9 @@ import html
 import re
 
 from nudge.apple.common import escape, run_applescript
+from nudge.config import DEFAULT_NOTES_FOLDER
 
 
-DEFAULT_NOTES_FOLDER = "Nudge"
 MAX_NOTE_SUMMARY_LIMIT = 50
 DEFAULT_NOTE_SUMMARY_LIMIT = 20
 TITLE_SUMMARY_MAX_CHARS = 160

@@ -1,7 +1,8 @@
 """LLM provider abstraction — supports Anthropic, OpenAI, and OpenAI-compatible APIs."""
 
 import os
-from pathlib import Path
+
+from nudge.config import DEFAULT_LLM_CONFIG, DEFAULT_SECRETS_PATH
 
 _PROVIDERS = {}  # provider_name -> class
 
@@ -139,21 +140,6 @@ class DashScopeProvider(QwenProvider, provider_name="dashscope"):
 
 # ── Factory ──────────────────────────────────────────────────────
 
-# Default config if nothing is specified
-DEFAULT_LLM_CONFIG = {
-    "provider": "anthropic",
-    "model": "claude-sonnet-4-20250514",
-    "models": {
-        "default": "claude-sonnet-4-20250514",
-        "fast": "claude-haiku-4-5-20251001",
-        "strong": "claude-sonnet-4-20250514",
-    },
-}
-
-# Secret files are intentionally outside the repository. Private deployments can
-# set `secrets_path` in config.toml or use NUDGE_SECRETS_PATH / EMAIL_SECRETS_PATH.
-DEFAULT_SECRETS_PATH = Path.home() / ".config/nudge/secrets.yaml"
-
 # Env var names per provider, in priority order.
 _PROVIDER_ENV_KEYS = {
     "anthropic": ("ANTHROPIC_API_KEY",),
@@ -274,10 +260,10 @@ def create_provider(config: dict | None = None) -> LLMProvider:
     """Create an LLM provider from config.
 
     Config shape (from config.toml [llm]):
-        provider = "anthropic"  # or "openai", "deepseek", "qwen", "ollama"
-        api_key = "sk-..."      # optional, falls back to env var / secrets.yaml
+        provider = "qwen"       # or "dashscope", "openai", "anthropic", "deepseek", "ollama"
+        api_key = "..."         # optional, prefer env var / secrets.yaml
         base_url = "..."        # optional, for custom endpoints
-        model = "claude-sonnet-4-20250514"  # default model
+        model = "qwen-plus"     # optional default model
     """
     if config is None:
         config = {}

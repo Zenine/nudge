@@ -19,6 +19,7 @@ from nudge.apple.clock import DEFAULT_CREATE_ALARM_SHORTCUT
 from nudge.brain import NudgeBrainError, parse_actions, suggest_family_routing
 from nudge.config import (
     DEFAULT_CALENDAR_NAME,
+    DEFAULT_NOTES_FOLDER,
     DEFAULT_REMINDER_LIST,
     FAMILY_GROUP_PERSON,
     get_defaults,
@@ -354,7 +355,7 @@ def _json_target(
         )
         return {"kind": "Clock alarm", "name": shortcut_name}
     if action_type == "note":
-        return {"kind": "Notes folder", "name": defaults.get("default_notes_folder", "Nudge")}
+        return {"kind": "Notes folder", "name": defaults.get("default_notes_folder", DEFAULT_NOTES_FOLDER)}
     return {"kind": "Unknown", "name": ""}
 
 
@@ -628,7 +629,7 @@ def execute_action(
             return result.ok
 
         elif t == "note":
-            folder_name = defaults.get("default_notes_folder", "Nudge")
+            folder_name = defaults.get("default_notes_folder", DEFAULT_NOTES_FOLDER)
             result = apple_backends.notes.create_note(
                 title=action["title"],
                 body=action["body"],

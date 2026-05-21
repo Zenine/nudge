@@ -6,7 +6,13 @@ import click
 
 from nudge.apple.calendar import create_calendar_event, get_week_events, make_calendar_external_id
 from nudge.brain import NudgeBrainError, generate_workout_plan, parse_workout_log
-from nudge.config import get_calendar_map, get_configured_calendar_names, get_user_profile, load_config
+from nudge.config import (
+    DEFAULT_CALENDAR_NAME,
+    get_calendar_map,
+    get_configured_calendar_names,
+    get_user_profile,
+    load_config,
+)
 from nudge.errors import classify_apple_error
 from nudge.sleep_reminders import SLEEP_AFTER_SKIP_STATUS, is_neutral_sleep_skip
 from nudge.state import (
@@ -35,7 +41,7 @@ def plan(dry_run, config_path):
     config = load_config(config_path)
     profile = get_user_profile(config)
     cal_map = get_calendar_map(config)
-    workout_calendar = cal_map.get("workout", "个人")
+    workout_calendar = cal_map.get("workout", DEFAULT_CALENDAR_NAME)
 
     if not profile.get("fitness"):
         raise click.ClickException(

@@ -13,9 +13,17 @@ from nudge.apple.adapters import (
     get_reminders_backend,
 )
 from nudge.apple.mail import read_unread_count
-from nudge.config import get_configured_calendar_names, get_defaults, get_llm_config, load_config
+from nudge.config import (
+    DEFAULT_LLM_CONFIG,
+    DEFAULT_SECRETS_PATH,
+    get_configured_calendar_names,
+    get_defaults,
+    get_llm_config,
+    load_config,
+)
 from nudge.json_contract import versioned_payload
 from nudge.llm import LLMError, create_provider
+from nudge.runtime_log import log_doctor_checks
 
 
 PASS = "PASS"
@@ -65,9 +73,13 @@ def _configured_reminder_lists(config: dict) -> list[str]:
 def _check_llm(config: dict) -> CheckResult:
     """Check LLM provider configuration and local API key presence."""
     llm_config = get_llm_config(config)
-    provider_name = llm_config.get("provider", "anthropic")
+    provider_name = llm_config.get("provider", DEFAULT_LLM_CONFIG["provider"])
     models = llm_config.get("models", {})
-    default_model = models.get("default") or llm_config.get("model") or "未配置模型"
+    default_model = (
+        models.get("default")
+        or llm_config.get("model")
+        or DEFAULT_LLM_CONFIG["models"]["default"]
+    )
 
     try:
         provider = create_provider(llm_config)
@@ -87,7 +99,7 @@ def _check_llm(config: dict) -> CheckResult:
             FAIL,
             "LLM",
             f"LLM API key missing for provider={provider_name}, model={default_model}",
-            f"请设置 {hint}；或在 config.toml [llm] 配置 secrets_path。默认路径：~/.config/nudge/secrets.yaml",
+            f"请设置 {hint}；或在 config.toml [llm] 配置 secrets_path。默认路径：{DEFAULT_SECRETS_PATH}",
         )
 
     base_url = getattr(provider, "base_url", None)
@@ -352,6 +364,11 @@ def _print_checks(checks: list[CheckResult]) -> None:
 def doctor_command(ctx, config_path, json_output):
     """Check local configuration, LLM keys, and macOS app access."""
     checks = run_checks(config_path)
+    try:
+        config = load_config(config_path)
+    except Exception:
+        config = None
+    log_doctor_checks(checks, config=config)
     if json_output:
         click.echo(json.dumps(doctor_payload(checks), ensure_ascii=False))
     else:
