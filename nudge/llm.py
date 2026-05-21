@@ -1,6 +1,7 @@
 """LLM provider abstraction — supports Anthropic, OpenAI, and OpenAI-compatible APIs."""
 
 import os
+from pathlib import Path
 
 from nudge.config import DEFAULT_LLM_CONFIG, DEFAULT_SECRETS_PATH
 

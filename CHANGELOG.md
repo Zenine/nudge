@@ -24,3 +24,7 @@
 - 将用户可见默认配置集中到 `nudge.config`，包括 Calendar、Reminders、Notes、Clock shortcut、LLM 默认模型和 secrets 路径。
 - 删除本地开发过程 `LOG.md`，新增 runtime JSONL 日志记录 WARN/ERROR 以便用户排障。
 - README / README.zh-CN 补充 Apple 默认目标、macOS 权限获取和 runtime log 排障说明。
+
+### Fixed
+
+- 修复设置 `NUDGE_SECRETS_PATH` 或 `EMAIL_SECRETS_PATH` 时 LLM secrets 路径解析缺少 `Path` import 的问题。
