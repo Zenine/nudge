@@ -314,7 +314,7 @@ nudge daemon app uninstall
 - `nudge daemon health` 是巡检入口：合并 `launchd` 是否安装/加载、队列深度、stale `running` 和 `dead_letter`，输出可读文本或稳定 JSON；发现 `dead_letter` 时 `status=fail`、`ok=false`，但命令本身仍用于报告状态，不直接修改队列。
 - `nudge daemon health --notify` 会在存在异常时发送一条 macOS 本机通知；健康状态下静默不打扰。
 - `briefing morning/evening` 会读取同一份 daemon health 摘要；有异常时在 briefing 末尾追加「Nudge daemon 告警」和具体处理命令，例如 `nudge daemon recover`、`nudge daemon queue --status dead_letter --json`、`nudge daemon retry --request-id ...`。如果 briefing 带 `--notify`，daemon 告警会单独发一条「Nudge daemon 告警」通知，避免淹没在早晚报正文里。
-- `nudge daemon app install --login-item` 会生成 `~/Applications/Nudge Daemon Health.app`，提供一个可点击的图形化入口：一键查看 `daemon health`、打开 `com.nudge.agent` 日志路径、重启 daemon，并可加入 macOS Login Item。
+- `nudge daemon app install --login-item` 会生成 `~/Applications/Nudge Daemon Health.app`，提供一个可点击的图形化入口：显示当前 macOS 版本、Mac 型号和 CPU 架构，一键查看 `daemon health`、打开 `com.nudge.agent` 日志路径、重启 daemon，并可加入 macOS Login Item。
 - `daemon health --json` 会包含 `alert_policy`，把 `LAUNCHD_NOT_LOADED`、`STALE_RUNNING_COMMANDS`、`DEAD_LETTER_COMMANDS` 等告警映射到 `briefing+notification`、`recover`、`manual_replay` 等处理策略；`DEAD_LETTER_COMMANDS` 的升级策略是 `manual_review_required`，必须先按 [Daemon Runbook](DAEMON_RUNBOOK.md) 检查幂等再 retry。
 
 ### Agent 本地状态回写

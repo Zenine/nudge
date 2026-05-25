@@ -8,6 +8,7 @@ from nudge.config import (
     DEFAULT_NOTES_FOLDER,
     DEFAULT_REMINDER_LIST,
 )
+from nudge.daemon_control_app import render_control_app_script
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,6 +37,15 @@ def test_verify_runs_pytest_and_compile_checks():
 
     assert "python3 -m pytest tests/ -q" in script
     assert "python3 -m compileall -q nudge" in script
+
+
+def test_daemon_control_app_reads_system_profile_at_runtime():
+    script = render_control_app_script()
+
+    assert "sw_vers -productVersion" in script
+    assert "sysctl -n hw.model" in script
+    assert "uname -m" in script
+    assert "系统：" in script
 
 
 def test_readme_quick_start_matches_public_export_directory():

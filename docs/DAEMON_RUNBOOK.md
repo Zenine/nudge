@@ -204,4 +204,4 @@ nudge daemon app install --login-item
 nudge daemon app open
 ```
 
-这会生成 `~/Applications/Nudge Daemon Health.app`。这个 app 只调用本机 CLI：显示 `nudge daemon health`、打开 `com.nudge.agent` 日志、执行 `nudge daemon launchd restart`；不提供任意 shell 输入。
+这会生成 `~/Applications/Nudge Daemon Health.app`。这个 app 打开时会读取当前 macOS 版本、Mac 型号和 CPU 架构，并只调用本机 CLI：显示 `nudge daemon health`、打开 `com.nudge.agent` 日志、执行 `nudge daemon launchd restart`；不提供任意 shell 输入。

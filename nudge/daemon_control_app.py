@@ -42,6 +42,15 @@ def _escape_applescript(text: str) -> str:
     return text.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def _system_profile_cmd() -> str:
+    return (
+        'printf "系统：macOS %s / %s / %s" '
+        '"$(sw_vers -productVersion 2>/dev/null || echo unknown)" '
+        '"$(sysctl -n hw.model 2>/dev/null || echo unknown)" '
+        '"$(uname -m 2>/dev/null || echo unknown)"'
+    )
+
+
 def render_control_app_script() -> str:
     """Return AppleScript source for the clickable daemon control app."""
     paths = _paths()
@@ -51,9 +60,12 @@ def render_control_app_script() -> str:
     restart_cmd = f"{nudge_cmd} daemon launchd restart"
     health_cmd = f"{nudge_cmd} daemon health"
     open_logs_cmd = f"touch {out_log} {err_log}; open -R {err_log}"
+    system_profile_cmd = _system_profile_cmd()
 
-    return f"""set healthText to do shell script "{_escape_applescript(health_cmd)}"
-set buttonChoice to button returned of (display dialog healthText buttons {{"打开日志", "重启 daemon", "关闭"}} default button "关闭" with title "Nudge Daemon Health")
+    return f"""set systemProfile to do shell script "{_escape_applescript(system_profile_cmd)}"
+set healthText to do shell script "{_escape_applescript(health_cmd)}"
+set dialogText to systemProfile & return & return & healthText
+set buttonChoice to button returned of (display dialog dialogText buttons {{"打开日志", "重启 daemon", "关闭"}} default button "关闭" with title "Nudge Daemon Health")
 if buttonChoice is "打开日志" then
     do shell script "{_escape_applescript(open_logs_cmd)}"
 else if buttonChoice is "重启 daemon" then

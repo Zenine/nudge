@@ -14,6 +14,7 @@
 
 ### Changed
 
+- `Nudge Daemon Health.app` 打开时会运行期显示当前 macOS 版本、Mac 型号和 CPU 架构，避免图形化健康入口使用编译时写死的环境说明。
 - 默认 LLM provider 从 Anthropic 调整为 Qwen/DashScope，与安装脚本和示例配置保持一致。
 - 默认 secrets 路径统一为部署用户私有配置目录：`~/.config/nudge/secrets.yaml`。
 - `scripts/bootstrap_mac.sh` 在缺少 `config.toml` 时会先从 `config.example.toml` 初始化配置。
