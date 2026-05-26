@@ -341,6 +341,7 @@ Nudge 会把用户可修复的 warning/error 写入本地 JSONL 运行日志：
 ```
 
 日志记录来自诊断和可操作错误渲染的 WARN/ERROR 事件，用于排障；不会写入 API key 或 provider 原始输出。
+每次写入前，Nudge 会在当前文件超过 `runtime_log.max_bytes` 时轮转日志；默认值是 `1048576` 字节。轮转文件保留为同目录下的 `nudge-runtime.jsonl.1` 到 `.3`。
 
 常用查看命令：
 

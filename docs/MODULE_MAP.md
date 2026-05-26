@@ -222,7 +222,8 @@
 - `nudge/dogfood.py`：Nudge 自身使用情况周报。
 - `nudge/sleep_reminders.py`：睡眠终止型 reminder 后续自动跳过逻辑。
 - `nudge/family_routing.py`：家庭提醒路由。
-- `nudge/docs_audit.py`：文档债审计规则，包括断链、垃圾文件、旧计划/spec 和 TODO 历史标记。
+- `nudge/docs_audit.py`：文档债审计规则，包括断链、断锚点、缺图片、重复标题、索引一致性、垃圾文件、旧计划/spec 和 TODO 历史标记。
+- `nudge/runtime_log.py`：用户可修复 warning/error 的 JSONL 运行日志，按 `runtime_log.max_bytes` 轮转并保留 3 份历史文件。
 
 适合查：
 

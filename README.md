@@ -341,6 +341,7 @@ With the default state directory, that is:
 ```
 
 The log records WARN/ERROR events from diagnostics and rendered actionable errors. It is intended for troubleshooting and does not store API keys or raw provider output.
+Before each write, Nudge rotates the log when the current file is over `runtime_log.max_bytes`; the default is `1048576` bytes. It keeps `nudge-runtime.jsonl.1` through `.3` beside the active log.
 
 Useful commands:
 

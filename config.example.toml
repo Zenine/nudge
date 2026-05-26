@@ -7,6 +7,10 @@ locale = "en-US"
 [state]
 dir = "~/.local/share/nudge"
 
+[runtime_log]
+# Rotate nudge-runtime.jsonl before writes once the active file exceeds this size.
+max_bytes = 1048576
+
 [llm]
 provider = "qwen"
 # api_key = ""            # Prefer environment variables or secrets_path.

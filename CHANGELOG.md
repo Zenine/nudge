@@ -13,6 +13,9 @@
 - 新增只读 `nudge docs audit`，用于报告文档断链、系统垃圾文件、陈旧计划/spec、TODO 历史标记和过长入口文档。
 - `nudge daily sync` 新增 docs audit 结果；`--apply` 时如发现文档 error/warning，会创建一条本地文档维护 action。
 - `requirements.txt` 增加 `pytest`，保证项目自带验证入口可以在新环境运行测试。
+- 新增 `nudge agent apply` 合同测试，覆盖 dry-run token、plan-driven confirmation、批量上限和部分失败 payload。
+- 新增 MCP stdio JSON-RPC 合同测试，覆盖 initialize、tools/list、tools/call 输入错误和未知方法/工具响应。
+- 新增 docs audit public-safe 规则：断锚点、缺失图片资源、重复标题 slug、README 与 `docs/README.md` 索引不一致。
 
 ### Changed
 
@@ -33,6 +36,8 @@
 - 将用户可见默认配置集中到 `nudge.config`，包括 Calendar、Reminders、Notes、Clock shortcut、LLM 默认模型和 secrets 路径。
 - 删除本地开发过程 `LOG.md`，新增 runtime JSONL 日志记录 WARN/ERROR 以便用户排障。
 - README / README.zh-CN 补充 Apple 默认目标、macOS 权限获取和 runtime log 排障说明。
+- runtime JSONL 日志写入前会按 `runtime_log.max_bytes` 轮转，默认 1 MiB，并保留 3 份历史文件。
+- `config.example.toml` 补充 `[runtime_log] max_bytes` 示例配置。
 
 ### Fixed
 

@@ -504,7 +504,7 @@ nudge docs audit
 nudge docs audit --json
 ```
 
-`nudge docs audit` 是只读文档维护检查，不移动、不删除、不重写文件。它会报告 `DOCS_BROKEN_LINK`、`DOCS_JUNK_FILE`、`DOCS_STALE_PLAN`、`DOCS_ARCHIVE_CANDIDATE`、`DOCS_TODO_HISTORY` 和 `DOCS_LONG_ENTRYPOINT` 等问题；`--json` 输出同样带 `schema_version: "nudge.cli.v1"`。严重问题会让命令返回非 0，适合脚本或 daily sync 读取。
+`nudge docs audit` 是只读文档维护检查，不移动、不删除、不重写文件。它会报告 `DOCS_BROKEN_LINK`、`DOCS_BROKEN_ANCHOR`、`DOCS_BROKEN_IMAGE`、`DOCS_DUPLICATE_HEADING`、`DOCS_INDEX_MISMATCH`、`DOCS_JUNK_FILE`、`DOCS_STALE_PLAN`、`DOCS_ARCHIVE_CANDIDATE`、`DOCS_TODO_HISTORY` 和 `DOCS_LONG_ENTRYPOINT` 等问题；`--json` 输出同样带 `schema_version: "nudge.cli.v1"`。断链、断锚点、缺图片和系统垃圾文件等严重问题会让命令返回非 0，适合脚本或 daily sync 读取。
 
 ### 每日同步聚合命令
 

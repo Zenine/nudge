@@ -12,6 +12,8 @@ ENTRYPOINTS = ("README.md", "README.zh-CN.md")
 JUNK_FILENAMES = {".DS_Store", "Thumbs.db"}
 TODO_HISTORY_MARKERS = ("[x]", "✅", "Done", "已完成")
 MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
+MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
+MARKDOWN_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$", re.MULTILINE)
 
 
 def audit_docs(
@@ -37,6 +39,9 @@ def audit_docs(
     _check_stale_superpowers(root_path, report, current_date, stale_days)
     _check_entrypoint_archive_links(root_path, report)
     _check_markdown_links(root_path, report)
+    _check_markdown_images(root_path, report)
+    _check_duplicate_headings(root_path, report)
+    _check_docs_index_alignment(root_path, report)
     _check_todo_history(root_path, report)
     _check_long_entrypoints(root_path, report, max_entrypoint_lines)
     _finalize(report)
@@ -129,9 +134,9 @@ def _check_markdown_links(root: Path, report: dict) -> None:
         if _is_in_archive(root, path):
             continue
         for target in _markdown_link_targets(path):
-            if _is_external_link(target) or target.startswith("#"):
+            if _is_external_link(target):
                 continue
-            resolved = _resolve_markdown_link(path, target)
+            resolved = _resolve_markdown_link(path, target) or path
             if resolved is None:
                 continue
             if not resolved.exists():
@@ -143,6 +148,79 @@ def _check_markdown_links(root: Path, report: dict) -> None:
                     path.relative_to(root),
                     target=target,
                 )
+                continue
+            anchor = _anchor_from_target(target)
+            if anchor and resolved.suffix.lower() == ".md" and not _has_anchor(resolved, anchor):
+                _add(
+                    report,
+                    "errors",
+                    "DOCS_BROKEN_ANCHOR",
+                    "Markdown 内部链接指向不存在的标题锚点。",
+                    path.relative_to(root),
+                    target=target,
+                )
+
+
+def _check_markdown_images(root: Path, report: dict) -> None:
+    for path in _markdown_files(root):
+        if _is_in_archive(root, path):
+            continue
+        for target in _markdown_image_targets(path):
+            if _is_external_link(target):
+                continue
+            resolved = _resolve_markdown_link(path, target)
+            if resolved is None:
+                continue
+            if not resolved.exists():
+                _add(
+                    report,
+                    "errors",
+                    "DOCS_BROKEN_IMAGE",
+                    "Markdown 图片链接指向不存在的资源。",
+                    path.relative_to(root),
+                    target=target,
+                )
+
+
+def _check_duplicate_headings(root: Path, report: dict) -> None:
+    for path in _markdown_files(root):
+        if _is_in_archive(root, path):
+            continue
+        slugs: set[str] = set()
+        for heading in _heading_slugs(path):
+            if heading in slugs:
+                _add(
+                    report,
+                    "warnings",
+                    "DOCS_DUPLICATE_HEADING",
+                    "Markdown 文件包含生成相同 slug 的重复标题。",
+                    path.relative_to(root),
+                    slug=heading,
+                )
+                break
+            slugs.add(heading)
+
+
+def _check_docs_index_alignment(root: Path, report: dict) -> None:
+    readme = root / "README.md"
+    docs_readme = root / "docs" / "README.md"
+    if not readme.exists() or not docs_readme.exists():
+        return
+
+    readme_targets = _public_doc_targets(root, readme)
+    docs_targets = _public_doc_targets(root, docs_readme)
+    readme_targets.discard("docs/README.md")
+    docs_targets.discard("docs/README.md")
+    if readme_targets != docs_targets:
+        _add(
+            report,
+            "suggestions",
+            "DOCS_INDEX_MISMATCH",
+            "README 与 docs/README.md 的 public docs target 列表不一致。",
+            Path("README.md"),
+            missing_from_readme=sorted(docs_targets - readme_targets),
+            missing_from_docs_readme=sorted(readme_targets - docs_targets),
+        )
 
 
 def _check_todo_history(root: Path, report: dict) -> None:
@@ -203,6 +281,12 @@ def _markdown_link_targets(path: Path) -> list[str]:
     return [match.strip() for match in MARKDOWN_LINK_RE.findall(text)]
 
 
+def _markdown_image_targets(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8")
+    text = _strip_fenced_code_blocks(text)
+    return [match.strip() for match in MARKDOWN_IMAGE_RE.findall(text)]
+
+
 def _strip_fenced_code_blocks(text: str) -> str:
     kept: list[str] = []
     in_fence = False
@@ -225,6 +309,48 @@ def _resolve_markdown_link(source: Path, target: str) -> Path | None:
     if not clean:
         return None
     return (source.parent / clean).resolve()
+
+
+def _anchor_from_target(target: str) -> str | None:
+    if "#" not in target:
+        return None
+    anchor = target.split("#", 1)[1].strip()
+    return unquote(anchor) or None
+
+
+def _has_anchor(path: Path, anchor: str) -> bool:
+    return _github_heading_slug(anchor) in set(_heading_slugs(path))
+
+
+def _heading_slugs(path: Path) -> list[str]:
+    text = _strip_fenced_code_blocks(path.read_text(encoding="utf-8"))
+    return [_github_heading_slug(match.group(2)) for match in MARKDOWN_HEADING_RE.finditer(text)]
+
+
+def _github_heading_slug(text: str) -> str:
+    text = re.sub(r"<[^>]+>", "", text)
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = text.strip().lower()
+    text = "".join(char for char in text if char.isalnum() or char.isspace() or char == "-")
+    return re.sub(r"-+", "-", re.sub(r"\s+", "-", text)).strip("-")
+
+
+def _public_doc_targets(root: Path, path: Path) -> set[str]:
+    targets: set[str] = set()
+    for target in _markdown_link_targets(path):
+        if _is_external_link(target):
+            continue
+        resolved = _resolve_markdown_link(path, target)
+        if resolved is None or resolved.suffix.lower() != ".md":
+            continue
+        try:
+            relative = resolved.relative_to(root.resolve())
+        except ValueError:
+            continue
+        if relative.parts[:1] == ("docs",) and not _is_in_archive(root, resolved):
+            targets.add(relative.as_posix())
+    return targets
 
 
 def _finalize(report: dict) -> None:
