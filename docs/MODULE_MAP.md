@@ -77,6 +77,7 @@
 - `apple/notifications.py`：macOS 通知。
 - `apple/common.py`：AppleScript 执行、错误和共享工具。
 - `apple/adapters.py`：结构化 action 到具体 Apple adapter 的分发。
+- `apple/mock_backends.py`：in-memory backend 示例，用于非 macOS 测试或 agent 写入路径回归。
 - `apple/eventkit_*.swift`：EventKit 原生 helper，用于 Calendar / Reminders 性能和权限边界。
 
 适合查：

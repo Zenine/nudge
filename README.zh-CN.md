@@ -105,14 +105,7 @@ nudge --dry-run "Project sync tomorrow at 3pm"
 scripts/bootstrap_mac.sh
 ```
 
-脚本会执行这些步骤：
-
-- 检查 Python 版本。
-- 创建项目内 `.venv`。
-- 安装 `requirements.txt` 里的依赖。
-- 如果没有 `config.toml`，从 `config.example.toml` 创建。
-- 安装 `nudge` 命令入口。
-- 可选运行 `nudge doctor` 做权限和配置检查。
+脚本会创建项目内 `.venv`、安装依赖、在缺少本地配置时从 `config.example.toml` 初始化 `config.toml`、安装 `nudge` 命令，并可选运行 `nudge doctor`。
 
 如果不想安装到 PATH，也可以直接用仓库内入口：
 
@@ -121,310 +114,53 @@ bin/nudge --help
 bin/nudge doctor
 ```
 
+更完整的安装、launchd 配置、provider 配置、诊断和运行日志说明见 [安装、配置与排障](docs/SETUP.md)。
+
 ## 配置
 
-先复制示例配置：
+Nudge 从本地 `config.toml` 读取设置。先复制示例配置：
 
 ```bash
 cp config.example.toml config.toml
 ```
 
-最小配置：
+重点检查这些配置：
 
-```toml
-[general]
-default_calendar = "Personal"
-default_reminder_list = "Tasks"
-locale = "en-US"
+| 范围 | 配置 |
+|------|------|
+| Apple 目标 | `[general].default_calendar`、`[general].default_reminder_list`、`[general].default_notes_folder` |
+| 状态目录 | `[state].dir` |
+| LLM | `[llm].provider`、`[llm].secrets_path`、`[llm.models].fast/default/strong` |
+| Clock | `[apple.clock].backend = "shortcuts"`、`[apple.clock].shortcut_name = "Nudge Create Alarm"` |
 
-[state]
-dir = "~/.local/share/nudge"
-
-[llm]
-provider = "qwen"
-secrets_path = "~/.config/nudge/secrets.yaml"
-
-[llm.models]
-fast = "qwen-plus"
-default = "qwen-plus"
-strong = "qwen-plus"
-```
-
-`secrets_path` 应指向部署用户自己的私有文件。默认值是 `~/.config/nudge/secrets.yaml`；也可以用 `NUDGE_SECRETS_PATH` 或 `EMAIL_SECRETS_PATH` 覆盖。不要把任何密钥放进仓库。
-
-密钥优先级：
-
-1. `config.toml [llm].api_key`
-2. provider 专用环境变量
-3. `secrets_path`
-4. `LLM_API_KEY`
-
-长期部署建议用环境变量或 `secrets_path`，不要把 `api_key` 直接写进仓库目录里的文件。
-
-### Apple 默认目标
-
-默认 Apple 写入目标在 `config.toml` 中配置：
-
-```toml
-[general]
-default_calendar = "Personal"
-default_reminder_list = "Tasks"
-default_notes_folder = "Nudge"
-
-[apple.clock]
-backend = "shortcuts"
-shortcut_name = "Nudge Create Alarm"
-```
-
-请在目标 Mac 上创建同名 Calendar、Reminders list 和 Notes folder，或把这些值改成已有本地名称。
-
-常见环境变量：
-
-```bash
-export DASHSCOPE_API_KEY="<你的 DashScope key>"
-export OPENAI_API_KEY="<你的 OpenAI key>"
-export ANTHROPIC_API_KEY="<你的 Anthropic key>"
-```
-
-`secrets.yaml` 使用简单的顶层 key/value：
-
-```yaml
-dashscope_api_key: "<你的 DashScope key>"
-openai_api_key: "<你的 OpenAI key>"
-anthropic_api_key: "<你的 Anthropic key>"
-deepseek_api_key: "<你的 DeepSeek key>"
-```
-
-## 大模型配置
-
-Nudge 的 LLM 配置在 `config.toml [llm]` 和 `[llm.models]`。`provider` 决定调用哪类接口，`fast`、`default`、`strong` 可以分别给轻量解析、普通对话和复杂规划使用不同模型。
-
-### Qwen/DashScope
-
-```toml
-[llm]
-provider = "qwen"
-secrets_path = "~/.config/nudge/secrets.yaml"
-
-[llm.models]
-fast = "qwen-plus"
-default = "qwen-plus"
-strong = "qwen-plus"
-```
-
-可用密钥位置：
-
-- 环境变量：`DASHSCOPE_API_KEY` 或 `QWEN_API_KEY`
-- `secrets.yaml`：`dashscope_api_key` 或 `qwen_api_key`
-
-`provider = "dashscope"` 是 `qwen` 的别名。
-
-### OpenAI
-
-```toml
-[llm]
-provider = "openai"
-secrets_path = "~/.config/nudge/secrets.yaml"
-
-[llm.models]
-fast = "gpt-4.1-mini"
-default = "gpt-4.1"
-strong = "gpt-4.1"
-```
-
-可用密钥位置：
-
-- 环境变量：`OPENAI_API_KEY`
-- `secrets.yaml`：`openai_api_key`
-
-如需 OpenAI-compatible 网关，可以加 `base_url`：
-
-```toml
-[llm]
-provider = "openai"
-base_url = "https://your-compatible-endpoint/v1"
-```
-
-### Anthropic
-
-```toml
-[llm]
-provider = "anthropic"
-secrets_path = "~/.config/nudge/secrets.yaml"
-
-[llm.models]
-fast = "claude-haiku-4-5-20251001"
-default = "claude-sonnet-4-20250514"
-strong = "claude-sonnet-4-20250514"
-```
-
-可用密钥位置：
-
-- 环境变量：`ANTHROPIC_API_KEY`
-- `secrets.yaml`：`anthropic_api_key`
-
-### DeepSeek
-
-```toml
-[llm]
-provider = "deepseek"
-secrets_path = "~/.config/nudge/secrets.yaml"
-
-[llm.models]
-fast = "deepseek-chat"
-default = "deepseek-chat"
-strong = "deepseek-chat"
-```
-
-可用密钥位置：
-
-- 环境变量：`DEEPSEEK_API_KEY`
-- `secrets.yaml`：`deepseek_api_key`
-
-### Ollama
-
-Ollama 适合本机离线或内网部署，不需要 API key。先启动 Ollama：
-
-```bash
-ollama serve
-```
-
-配置示例：
-
-```toml
-[llm]
-provider = "ollama"
-base_url = "http://localhost:11434/v1"
-
-[llm.models]
-fast = "llama3.1"
-default = "llama3.1"
-strong = "llama3.1"
-```
+密钥按内联配置、provider 专用环境变量、`secrets_path`、`LLM_API_KEY` 的顺序解析。长期部署优先用环境变量或私有 `secrets.yaml`；不要把密钥放进仓库。支持的 provider 包括 Qwen/DashScope、OpenAI-compatible API、Anthropic、DeepSeek 和 Ollama。provider 片段和 key 名称见 [安装、配置与排障](docs/SETUP.md)。
 
 ## 诊断与修复
 
-先跑诊断：
+运行：
 
 ```bash
 nudge doctor
-```
-
-输出 JSON 方便脚本读取：
-
-```bash
 nudge doctor --json
 ```
 
-常见问题：
-
-- `Config file not found`：运行 `cp config.example.toml config.toml`，或给命令加 `--config <path>`。
-- 找不到 API key：设置 provider 对应环境变量，或在 `config.toml [llm].secrets_path` 指向部署用户自己的 `secrets.yaml`。
-- Calendar 权限失败：打开 macOS System Settings -> Privacy & Security -> Calendars，给 Terminal、iTerm、Python 或当前 shell 所在应用授权；如果系统区分访问级别，请选择 Full Calendar Access。
-- Reminders 权限失败：打开 System Settings -> Privacy & Security -> Reminders，允许 Terminal、iTerm、Python 或当前运行 Nudge 的应用访问。
-- Notes / Mail Automation 权限失败：打开 System Settings -> Privacy & Security -> Automation，允许当前 shell 所在应用控制 Notes 或 Mail。
-- 闹钟创建失败：确认 Shortcuts 里存在 `Nudge Create Alarm`，或在 `config.toml [apple.clock].shortcut_name` 改成实际名称。
-- `nudge` 命令找不到：先试 `bin/nudge --help`；如果可用，把 `~/.local/bin` 加到 PATH。
-
-## 运行日志
-
-Nudge 会把用户可修复的 warning/error 写入本地 JSONL 运行日志：
-
-```text
-<state.dir>/logs/nudge-runtime.jsonl
-```
-
-默认 state 目录下路径是：
-
-```text
-.nudge/logs/nudge-runtime.jsonl
-```
-
-日志记录来自诊断和可操作错误渲染的 WARN/ERROR 事件，用于排障；不会写入 API key 或 provider 原始输出。
-每次写入前，Nudge 会在当前文件超过 `runtime_log.max_bytes` 时轮转日志；默认值是 `1048576` 字节。轮转文件保留为同目录下的 `nudge-runtime.jsonl.1` 到 `.3`。
-
-常用查看命令：
-
-```bash
-tail -n 50 .nudge/logs/nudge-runtime.jsonl
-nudge doctor
-nudge doctor --json
-```
+`doctor` 会检查配置、LLM key、Apple 应用权限、配置的 Calendar/Reminders 目标、Notes Automation 自动化权限和 Clock Shortcuts bridge。较新的 macOS 上，Calendar 写入和读取可能需要 Full Calendar Access。运行时 warning 和可操作错误会写入 `<state.dir>/logs/nudge-runtime.jsonl`。常见修复步骤和日志轮转细节见 [安装、配置与排障](docs/SETUP.md)。
 
 ## 常用命令
 
-自然语言创建动作，先预览：
+| 目标 | 命令 |
+|------|------|
+| 预览自然语言写入 | `nudge --dry-run "明天下午3点开项目同步会"`；`nudge do --dry-run "明天下午3点开项目同步会"` |
+| 确认后真实写入 | `nudge "明天下午3点开项目同步会"` |
+| 从文件读取计划 | `nudge do --file plan.txt --dry-run` |
+| 输出稳定 JSON | `nudge do --json --dry-run "明天10点提醒我交材料"` |
+| 生成简报 | `nudge briefing morning`；`nudge briefing evening --notify` |
+| 记录执行反馈 | `nudge log done "完成了深度工作"`；`nudge check-in partial "做了一半"` |
+| 复盘和调整 | `nudge review daily`；`nudge review weekly --adapt --dry-run` |
+| 同步维护 | `nudge daily sync --json`；`nudge reminders sync-completed`；`nudge docs audit --json` |
+| 备份/导出本地状态 | `nudge db backup`；`nudge db export` |
 
-```bash
-nudge --dry-run "明天下午3点开项目同步会，提醒我早上准备材料"
-nudge do --dry-run "明天早上8点提醒我跑步"
-```
-
-确认无误后真实写入：
-
-```bash
-nudge "明天下午3点开项目同步会"
-```
-
-从文件读取计划：
-
-```bash
-nudge do --file plan.txt --dry-run
-```
-
-输出稳定 JSON：
-
-```bash
-nudge do "明天10点提醒我交材料" --dry-run --json
-```
-
-生成晨间或晚间简报：
-
-```bash
-nudge briefing morning
-nudge briefing evening --notify
-```
-
-记录执行反馈：
-
-```bash
-nudge log done "完成了深度工作"
-nudge log skipped --reason no_time --next-action reschedule
-nudge check-in partial "做了一半，明天继续"
-```
-
-查看空闲时间和周期复盘：
-
-```bash
-nudge schedule "找2小时深度工作时间"
-nudge review daily
-nudge review weekly --adapt --dry-run
-```
-
-习惯、健康和提醒同步：
-
-```bash
-nudge habits --help
-nudge health import ~/Downloads/apple_health_export.zip
-nudge health daily
-nudge daily sync --json
-nudge reminders sync-completed
-```
-
-自动化和文档维护：
-
-```bash
-scripts/bootstrap_launchd.sh status
-nudge docs audit
-nudge docs audit --json
-```
-
-数据库备份：
-
-```bash
-nudge db backup
-nudge db export
-```
+完整 CLI 契约、JSON 结构、返回码、自动化示例和排障见 [CLI](docs/CLI.md)。
 
 ## Agent 与 MCP
 
@@ -480,6 +216,7 @@ nudge daemon retry <request-id>
 ## 文档
 
 - [文档索引](docs/README.md)：public-safe 文档地图。
+- [安装、配置与排障](docs/SETUP.md)：安装、本地配置、LLM provider、诊断和运行日志。
 - [CLI](docs/CLI.md)：命令用法、JSON contract、自动化示例和排障。
 - [Architecture](docs/ARCHITECTURE.md)：local-first runtime 架构、数据流、Apple adapter 和 MCP 位置。
 - [Design](docs/DESIGN.md)：产品交互原则和工作流边界。

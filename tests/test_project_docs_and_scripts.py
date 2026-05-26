@@ -197,11 +197,11 @@ def test_public_docs_use_root_todo_not_legacy_docs_todo():
     assert "[TODO](../TODO.md)" in combined
 
 
-def test_docs_audit_suggestions_are_tracked_in_todo():
+def test_docs_audit_suggestion_policy_is_tracked_in_todo():
     todo = (ROOT / "TODO.md").read_text(encoding="utf-8")
 
-    assert "DOCS_LONG_ENTRYPOINT" in todo
     assert "docs audit" in todo
+    assert "suggestion" in todo
 
 
 def test_readme_visual_assets_exist():

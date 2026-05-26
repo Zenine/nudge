@@ -16,6 +16,8 @@
 - 新增 `nudge agent apply` 合同测试，覆盖 dry-run token、plan-driven confirmation、批量上限和部分失败 payload。
 - 新增 MCP stdio JSON-RPC 合同测试，覆盖 initialize、tools/list、tools/call 输入错误和未知方法/工具响应。
 - 新增 docs audit public-safe 规则：断锚点、缺失图片资源、重复标题 slug、README 与 `docs/README.md` 索引不一致。
+- 新增 `nudge do` 合同测试，覆盖坏 JSON、缺字段、结束时间早于开始时间和 family group 展开。
+- 新增 in-memory Apple mock backend 示例，方便非 macOS 环境验证 Apple 写入路径。
 
 ### Changed
 
@@ -38,9 +40,9 @@
 - README / README.zh-CN 补充 Apple 默认目标、macOS 权限获取和 runtime log 排障说明。
 - runtime JSONL 日志写入前会按 `runtime_log.max_bytes` 轮转，默认 1 MiB，并保留 3 份历史文件。
 - `config.example.toml` 补充 `[runtime_log] max_bytes` 示例配置。
+- README / README.zh-CN 收敛为入口页，把安装、provider、诊断和运行日志细节下沉到 `docs/SETUP.md`，使 docs audit entrypoint suggestion 归零。
 
 ### Fixed
 
 - 修复 public 文档中指向未导出 PRD/Roadmap/Business/docs TODO 的内部链接，避免 docs audit 在 public 仓库中失败。
-- 将 docs audit 当前 README 过长 suggestion 记录到 `TODO.md`，避免自动审计发现的问题只停留在命令输出中。
 - 修复设置 `NUDGE_SECRETS_PATH` 或 `EMAIL_SECRETS_PATH` 时 LLM secrets 路径解析缺少 `Path` import 的问题。

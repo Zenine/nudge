@@ -4,6 +4,7 @@ This directory contains public-safe project documentation for the reusable Nudge
 
 ## Start Here
 
+- [Setup](SETUP.md): installation, local configuration, LLM providers, diagnostics, and runtime logs.
 - [CLI](CLI.md): command usage, JSON contracts, return codes, automation examples, and troubleshooting.
 - [Architecture](ARCHITECTURE.md): local-first runtime architecture, data flow, Apple adapter boundaries, and MCP placement.
 - [Design](DESIGN.md): product interaction principles and user-facing workflow constraints.

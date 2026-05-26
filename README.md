@@ -103,328 +103,62 @@ Use the macOS bootstrap script:
 scripts/bootstrap_mac.sh
 ```
 
-The script:
+It creates a project-local `.venv`, installs dependencies, initializes `config.toml` from `config.example.toml` when needed, installs the `nudge` command, and can run `nudge doctor`.
 
-- checks the Python version;
-- creates a project-local `.venv`;
-- installs `requirements.txt`;
-- creates `config.toml` from `config.example.toml` if needed;
-- installs the `nudge` command;
-- optionally runs `nudge doctor`.
-
-You can also run the repository-local entrypoint without installing to `PATH`:
+Repository-local entrypoints are also available without adding anything to `PATH`:
 
 ```bash
 bin/nudge --help
 bin/nudge doctor
 ```
 
+Detailed installation, launchd setup, provider configuration, diagnostics, and runtime logs live in [Setup](docs/SETUP.md).
+
 ## Configuration
 
-Create local configuration from the example:
+Nudge reads local settings from `config.toml`. Start from the example:
 
 ```bash
 cp config.example.toml config.toml
 ```
 
-Minimal configuration:
+Core settings to check:
 
-```toml
-[general]
-default_calendar = "Personal"
-default_reminder_list = "Tasks"
-locale = "en-US"
+| Area | Setting |
+|------|---------|
+| Apple targets | `[general].default_calendar`, `[general].default_reminder_list`, `[general].default_notes_folder` |
+| State | `[state].dir` |
+| LLM | `[llm].provider`, `[llm].secrets_path`, `[llm.models].fast/default/strong` |
+| Clock | `[apple.clock].backend = "shortcuts"`, `[apple.clock].shortcut_name = "Nudge Create Alarm"` |
 
-[state]
-dir = "~/.local/share/nudge"
-
-[llm]
-provider = "qwen"
-secrets_path = "~/.config/nudge/secrets.yaml"
-
-[llm.models]
-fast = "qwen-plus"
-default = "qwen-plus"
-strong = "qwen-plus"
-```
-
-`secrets_path` should point to a private file owned by the deployment user. The default path is `~/.config/nudge/secrets.yaml`. You can also override it with `NUDGE_SECRETS_PATH` or `EMAIL_SECRETS_PATH`. Never store secrets in the repository.
-
-API key resolution order:
-
-1. `config.toml [llm].api_key`
-2. provider-specific environment variables
-3. `secrets_path`
-4. `LLM_API_KEY`
-
-For long-running deployments, prefer environment variables or `secrets_path` over inline `api_key`.
-
-### Apple Defaults
-
-The default Apple targets are configured in `config.toml`:
-
-```toml
-[general]
-default_calendar = "Personal"
-default_reminder_list = "Tasks"
-default_notes_folder = "Nudge"
-
-[apple.clock]
-backend = "shortcuts"
-shortcut_name = "Nudge Create Alarm"
-```
-
-Create matching Calendar, Reminders list, and Notes folder names on the target Mac, or change these values to match existing local names.
-
-Common environment variables:
-
-```bash
-export DASHSCOPE_API_KEY="<your DashScope key>"
-export OPENAI_API_KEY="<your OpenAI key>"
-export ANTHROPIC_API_KEY="<your Anthropic key>"
-```
-
-`secrets.yaml` uses simple top-level key/value entries:
-
-```yaml
-dashscope_api_key: "<your DashScope key>"
-openai_api_key: "<your OpenAI key>"
-anthropic_api_key: "<your Anthropic key>"
-deepseek_api_key: "<your DeepSeek key>"
-```
-
-## LLM Providers
-
-Nudge reads LLM settings from `config.toml [llm]` and `[llm.models]`. `provider` chooses the API family. `fast`, `default`, and `strong` can use separate models for lightweight parsing, normal chat, and heavier planning.
-
-### Qwen/DashScope
-
-Default configuration:
-
-```toml
-[llm]
-provider = "qwen"
-secrets_path = "~/.config/nudge/secrets.yaml"
-
-[llm.models]
-fast = "qwen-plus"
-default = "qwen-plus"
-strong = "qwen-plus"
-```
-
-Supported key sources:
-
-- environment: `DASHSCOPE_API_KEY` or `QWEN_API_KEY`
-- `secrets.yaml`: `dashscope_api_key` or `qwen_api_key`
-
-`provider = "dashscope"` is an alias for `qwen`.
-
-### OpenAI
-
-```toml
-[llm]
-provider = "openai"
-secrets_path = "~/.config/nudge/secrets.yaml"
-
-[llm.models]
-fast = "gpt-4.1-mini"
-default = "gpt-4.1"
-strong = "gpt-4.1"
-```
-
-Supported key sources:
-
-- environment: `OPENAI_API_KEY`
-- `secrets.yaml`: `openai_api_key`
-
-For an OpenAI-compatible gateway, set `base_url`:
-
-```toml
-[llm]
-provider = "openai"
-base_url = "https://your-compatible-endpoint/v1"
-```
-
-### Anthropic
-
-```toml
-[llm]
-provider = "anthropic"
-secrets_path = "~/.config/nudge/secrets.yaml"
-
-[llm.models]
-fast = "claude-haiku-4-5-20251001"
-default = "claude-sonnet-4-20250514"
-strong = "claude-sonnet-4-20250514"
-```
-
-Supported key sources:
-
-- environment: `ANTHROPIC_API_KEY`
-- `secrets.yaml`: `anthropic_api_key`
-
-### DeepSeek
-
-```toml
-[llm]
-provider = "deepseek"
-secrets_path = "~/.config/nudge/secrets.yaml"
-
-[llm.models]
-fast = "deepseek-chat"
-default = "deepseek-chat"
-strong = "deepseek-chat"
-```
-
-Supported key sources:
-
-- environment: `DEEPSEEK_API_KEY`
-- `secrets.yaml`: `deepseek_api_key`
-
-### Ollama
-
-Ollama is useful for local or private-network deployments and does not need an API key. Start Ollama first:
-
-```bash
-ollama serve
-```
-
-Configuration:
-
-```toml
-[llm]
-provider = "ollama"
-base_url = "http://localhost:11434/v1"
-
-[llm.models]
-fast = "llama3.1"
-default = "llama3.1"
-strong = "llama3.1"
-```
+Secrets are resolved from inline config, provider-specific environment variables, `secrets_path`, then `LLM_API_KEY`. Prefer environment variables or a private `secrets.yaml`; never store secrets in the repository. Supported providers include Qwen/DashScope, OpenAI-compatible APIs, Anthropic, DeepSeek, and Ollama. See [Setup](docs/SETUP.md) for provider snippets and key names.
 
 ## Diagnostics and Repair
 
-Run diagnostics first:
+Run:
 
 ```bash
 nudge doctor
-```
-
-Machine-readable output:
-
-```bash
 nudge doctor --json
 ```
 
-Common fixes:
-
-- `Config file not found`: run `cp config.example.toml config.toml`, or pass `--config <path>`.
-- Missing API key: set the provider-specific environment variable, or point `config.toml [llm].secrets_path` to the deployment user's private `secrets.yaml`.
-- Calendar permission failure: open macOS System Settings -> Privacy & Security -> Calendars, then grant the shell host app Full Calendar Access where macOS offers separate access levels.
-- Reminders permission failure: open System Settings -> Privacy & Security -> Reminders, then allow Terminal, iTerm, Python, or the app that runs Nudge.
-- Notes / Mail Automation failure: open System Settings -> Privacy & Security -> Automation, then allow the shell host app to control Notes or Mail.
-- Alarm creation failure: confirm that Shortcuts contains `Nudge Create Alarm`, or set the real shortcut name in `config.toml [apple.clock].shortcut_name`.
-- `nudge` command not found: try `bin/nudge --help`; if it works, add `~/.local/bin` to `PATH`.
-
-## Runtime Logs
-
-Nudge writes user-repairable warnings and errors to a local JSONL runtime log:
-
-```text
-<state.dir>/logs/nudge-runtime.jsonl
-```
-
-With the default state directory, that is:
-
-```text
-.nudge/logs/nudge-runtime.jsonl
-```
-
-The log records WARN/ERROR events from diagnostics and rendered actionable errors. It is intended for troubleshooting and does not store API keys or raw provider output.
-Before each write, Nudge rotates the log when the current file is over `runtime_log.max_bytes`; the default is `1048576` bytes. It keeps `nudge-runtime.jsonl.1` through `.3` beside the active log.
-
-Useful commands:
-
-```bash
-tail -n 50 .nudge/logs/nudge-runtime.jsonl
-nudge doctor
-nudge doctor --json
-```
+`doctor` checks config, LLM keys, Apple app permissions, configured Calendar/Reminders targets, Notes Automation, and the Clock Shortcuts bridge. Calendar writes and reads may require Full Calendar Access on recent macOS versions. Runtime warnings and actionable errors are written to `<state.dir>/logs/nudge-runtime.jsonl`. Common repair steps and log rotation details are in [Setup](docs/SETUP.md).
 
 ## Common Commands
 
-Preview natural-language writes:
+| Goal | Command |
+|------|---------|
+| Preview natural-language writes | `nudge --dry-run "Project sync tomorrow at 3pm"`; `nudge do --dry-run "Project sync tomorrow at 3pm"` |
+| Write after confirming | `nudge "Project sync tomorrow at 3pm"` |
+| Read a plan file | `nudge do --file plan.txt --dry-run` |
+| Emit stable JSON | `nudge do --json --dry-run "Submit the report tomorrow at 10am"` |
+| Generate briefings | `nudge briefing morning`; `nudge briefing evening --notify` |
+| Record feedback | `nudge log done "Finished deep work"`; `nudge check-in partial "Half done"` |
+| Review and adapt | `nudge review daily`; `nudge review weekly --adapt --dry-run` |
+| Sync maintenance | `nudge daily sync --json`; `nudge reminders sync-completed`; `nudge docs audit --json` |
+| Backup/export local state | `nudge db backup`; `nudge db export` |
 
-```bash
-nudge --dry-run "Project sync tomorrow at 3pm and remind me to prepare notes in the morning"
-nudge do --dry-run "Remind me to run tomorrow at 8am"
-```
-
-Write after confirming the preview:
-
-```bash
-nudge "Project sync tomorrow at 3pm"
-```
-
-Read a plan from a file:
-
-```bash
-nudge do --file plan.txt --dry-run
-```
-
-Emit stable JSON:
-
-```bash
-nudge do "Remind me to submit the report tomorrow at 10am" --dry-run --json
-```
-
-Generate briefings:
-
-```bash
-nudge briefing morning
-nudge briefing evening --notify
-```
-
-Log action feedback:
-
-```bash
-nudge log done "Finished deep work"
-nudge log skipped --reason no_time --next-action reschedule
-nudge check-in partial "Half done, continuing tomorrow"
-```
-
-Find time and review progress:
-
-```bash
-nudge schedule "Find a 2 hour deep-work block"
-nudge review daily
-nudge review weekly --adapt --dry-run
-```
-
-Habits, health, and reminder sync:
-
-```bash
-nudge habits --help
-nudge health import ~/Downloads/apple_health_export.zip
-nudge health daily
-nudge daily sync --json
-nudge reminders sync-completed
-```
-
-Automation and documentation maintenance:
-
-```bash
-scripts/bootstrap_launchd.sh status
-nudge docs audit
-nudge docs audit --json
-```
-
-Database backup:
-
-```bash
-nudge db backup
-nudge db export
-```
+For full CLI contracts, JSON shapes, return codes, automation examples, and troubleshooting, use [CLI](docs/CLI.md).
 
 ## Agent and MCP
 
@@ -480,6 +214,7 @@ nudge daemon retry <request-id>
 ## Documentation
 
 - [Docs Index](docs/README.md): public-safe documentation map.
+- [Setup](docs/SETUP.md): installation, local configuration, LLM providers, diagnostics, and runtime logs.
 - [CLI](docs/CLI.md): command usage, JSON contracts, automation examples, and troubleshooting.
 - [Architecture](docs/ARCHITECTURE.md): local-first runtime architecture, data flow, Apple adapters, and MCP placement.
 - [Design](docs/DESIGN.md): product interaction principles and workflow constraints.
