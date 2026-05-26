@@ -24,6 +24,7 @@
 - `scripts/bootstrap_launchd.sh` 新增 `com.nudge.daily-sync`，默认每天 07:15 运行 `nudge daily sync --apply --json`。
 - `scripts/verify.sh` 增加 `python3 -m compileall -q nudge` 编译检查。
 - `scripts/verify.sh` 增加 docs audit smoke 和只读文档审计。
+- Prompt 维护规则改为使用仓库根目录 `TODO.md`，并用测试防止 public 文档重新引用旧 `docs/TODO.md` 路径。
 - README 快速开始改为当前公共导出目录 `nudge-public`，并补充本机默认密钥路径说明。
 - README 扩展为完整使用文档，增加安装、配置、诊断修复、常用命令、Agent/MCP、daemon、开发验证和项目结构说明。
 - README 补充 Qwen/DashScope、OpenAI、Anthropic、DeepSeek、Ollama 的配置示例和密钥来源说明。
@@ -36,4 +37,5 @@
 ### Fixed
 
 - 修复 public 文档中指向未导出 PRD/Roadmap/Business/docs TODO 的内部链接，避免 docs audit 在 public 仓库中失败。
+- 将 docs audit 当前 README 过长 suggestion 记录到 `TODO.md`，避免自动审计发现的问题只停留在命令输出中。
 - 修复设置 `NUDGE_SECRETS_PATH` 或 `EMAIL_SECRETS_PATH` 时 LLM secrets 路径解析缺少 `Path` import 的问题。

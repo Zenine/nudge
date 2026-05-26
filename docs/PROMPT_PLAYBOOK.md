@@ -199,4 +199,4 @@
 - [ ] 在本文件增加 `### \`PROMPT_NAME\`` 小节。
 - [ ] 写明输入上下文、输出契约、模型档位。
 - [ ] 增加或更新测试。
-- [ ] 更新 `CHANGELOG.md`；如果对应 TODO 完成，也更新 `docs/TODO.md`。
+- [ ] 更新 `CHANGELOG.md`；如果对应 TODO 需要同步，也更新仓库根目录 `TODO.md`。

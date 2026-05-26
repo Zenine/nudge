@@ -185,6 +185,25 @@ def test_public_docs_are_linked_and_scrubbed():
         assert text not in combined
 
 
+def test_public_docs_use_root_todo_not_legacy_docs_todo():
+    docs = [
+        path
+        for path in (ROOT / "docs").rglob("*.md")
+        if ("archive" not in path.relative_to(ROOT).parts)
+    ]
+    combined = "\n".join(path.read_text(encoding="utf-8") for path in docs)
+
+    assert "docs/TODO.md" not in combined
+    assert "[TODO](../TODO.md)" in combined
+
+
+def test_docs_audit_suggestions_are_tracked_in_todo():
+    todo = (ROOT / "TODO.md").read_text(encoding="utf-8")
+
+    assert "DOCS_LONG_ENTRYPOINT" in todo
+    assert "docs audit" in todo
+
+
 def test_readme_visual_assets_exist():
     required_assets = [
         ROOT / ".github" / "assets" / "readme-hero.png",
