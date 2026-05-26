@@ -242,3 +242,37 @@ def test_daily_sync_keeps_docs_suggestions_read_only(monkeypatch):
     assert payload["docs"]["attention_required"] is False
     assert payload["docs"]["action_created"] is False
     assert payload["docs"]["maintenance_policy"]["suggestions"] == "suggestions_only"
+
+
+def test_daily_sync_configures_state_for_explicit_config(monkeypatch):
+    import nudge.commands.daily as daily
+
+    configured = []
+    config = {
+        "state": {"dir": "/tmp/nudge-daily-state"},
+        "general": {"default_reminder_list": "日常"},
+    }
+    monkeypatch.setattr(daily, "load_config", lambda p=None: config)
+    monkeypatch.setattr(daily, "configure_state", lambda loaded: configured.append(loaded))
+    monkeypatch.setattr(daily, "get_actions", lambda **kwargs: [])
+    monkeypatch.setattr(daily, "sync_completed_for_date", _empty_reminder_payload)
+    monkeypatch.setattr(
+        daily,
+        "audit_docs",
+        lambda root: {
+            "ok": True,
+            "summary": {"errors": 0, "warnings": 0, "suggestions": 0},
+            "errors": [],
+            "warnings": [],
+            "suggestions": [],
+        },
+    )
+
+    result = CliRunner().invoke(
+        cli,
+        ["daily", "sync", "--date", "2026-04-30", "--no-health", "--config", "custom.toml", "--json"],
+        prog_name="nudge",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert configured == [config]

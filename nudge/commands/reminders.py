@@ -13,7 +13,12 @@ from nudge.config import DEFAULT_REMINDER_LIST, get_defaults, load_config
 from nudge.feedback import build_feedback
 from nudge.json_contract import versioned_payload
 from nudge.sleep_reminders import is_sleep_terminal_action
-from nudge.state import complete_action, get_actions, skip_later_sleep_reminders_after_completion
+from nudge.state import (
+    complete_action,
+    configure_state,
+    get_actions,
+    skip_later_sleep_reminders_after_completion,
+)
 
 
 GENERAL_COMPLETED_MATCH_EARLY_HOURS = 12
@@ -39,6 +44,8 @@ def sync_completed_command(date_text, list_name, apply_changes, config_path, jso
     try:
         target_date = _parse_date(date_text)
         config = load_config(config_path)
+        if config_path:
+            configure_state(config)
         defaults = get_defaults(config)
         reminder_list = list_name or defaults.get("default_reminder_list", DEFAULT_REMINDER_LIST)
         payload = sync_completed_for_date(

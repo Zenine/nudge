@@ -6,8 +6,10 @@ import json
 from dataclasses import dataclass
 
 import pytest
+from click.testing import CliRunner
 
 from nudge.apple.adapters import AppleBackends, WriteResult
+from nudge.cli import cli
 from nudge.commands.agent import apply_agent_request
 from nudge.json_contract import CLI_SCHEMA_VERSION
 
@@ -102,6 +104,35 @@ def calendar_action(summary: str = "Project sync") -> dict:
 
 def apply_request(request: dict) -> tuple[dict, int]:
     return apply_agent_request(request=request, config=PUBLIC_CONFIG)
+
+
+def test_agent_apply_reads_request_from_file(monkeypatch, fake_apple_backends, tmp_path):
+    _backends, writes = fake_apple_backends
+    monkeypatch.setattr("nudge.commands.agent.load_config", lambda p=None: PUBLIC_CONFIG)
+    request_path = tmp_path / "request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "request_id": "file-input",
+                "dry_run": True,
+                "actions": [calendar_action()],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        cli,
+        ["agent", "apply", "--file", str(request_path), "--json"],
+        prog_name="nudge",
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["request_id"] == "file-input"
+    assert payload["actions"][0]["status"] == "dry_run"
+    assert writes["calendar"] == []
 
 
 @pytest.mark.parametrize(

@@ -19,7 +19,12 @@ from nudge.apple.notes import (
     MAX_NOTE_SUMMARY_LIMIT,
     list_nudge_note_summaries,
 )
-from nudge.commands.agent import MAX_AGENT_ACTIONS, apply_agent_request, apply_action_status
+from nudge.commands.agent import (
+    MAX_AGENT_ACTIONS,
+    _configure_agent_state,
+    apply_action_status,
+    apply_agent_request,
+)
 from nudge.commands.doctor import doctor_payload, run_checks
 from nudge.config import load_config
 from nudge.errors import ErrorReport, classify_apple_error
@@ -46,6 +51,8 @@ def serve_command(config_path):
     messages.
     """
     config = load_config(config_path)
+    if config_path:
+        _configure_agent_state(config)
     for raw_line in sys.stdin:
         line = raw_line.strip()
         if not line:

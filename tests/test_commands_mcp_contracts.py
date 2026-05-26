@@ -119,6 +119,31 @@ def test_unknown_method_and_unknown_tool_keep_stdout_jsonrpc_pure(monkeypatch):
     assert [line["jsonrpc"] for line in responses] == ["2.0", "2.0"]
 
 
+def test_mcp_serve_configures_agent_state_for_explicit_config(monkeypatch):
+    configured = []
+    custom_config = {
+        **PUBLIC_CONFIG,
+        "state": {"dir": "/tmp/nudge-mcp-test-state"},
+    }
+    monkeypatch.setattr("nudge.cli.load_config", lambda: PUBLIC_CONFIG)
+    monkeypatch.setattr("nudge.commands.mcp.load_config", lambda p=None: custom_config)
+    monkeypatch.setattr(
+        "nudge.commands.mcp._configure_agent_state",
+        lambda config: configured.append(config),
+    )
+
+    input_text = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}) + "\n"
+    result = CliRunner().invoke(
+        cli,
+        ["mcp", "serve", "--config", "custom.toml"],
+        input=input_text,
+        prog_name="nudge",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert configured == [custom_config]
+
+
 def _run_mcp(monkeypatch, messages):
     monkeypatch.setattr("nudge.cli.load_config", lambda: PUBLIC_CONFIG)
     monkeypatch.setattr("nudge.commands.mcp.load_config", lambda p=None: PUBLIC_CONFIG)

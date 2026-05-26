@@ -15,7 +15,7 @@ from nudge.docs_audit import audit_docs
 from nudge.failures import build_failure_visibility_report
 from nudge.health import apply_health_import, parse_apple_health_export
 from nudge.json_contract import versioned_payload
-from nudge.state import get_actions, log_action
+from nudge.state import configure_state, get_actions, log_action
 
 
 DEFAULT_HEALTH_EXPORT_DIR = (
@@ -85,7 +85,8 @@ def sync_command(
         health_end = _parse_date(health_to) if health_to else target_date + timedelta(days=1)
         if health_end <= health_start:
             raise ValueError("--health-to must be later than --health-from")
-        reminder_list = _reminder_list(list_name, config_path)
+        config = _load_daily_config(config_path)
+        reminder_list = _reminder_list(list_name, config)
 
         reminder_dates = _reminder_sync_dates(
             target_date=target_date,
@@ -163,13 +164,19 @@ def _reminder_start_date(target_date: date, date_from: str | None, lookback_days
     return start
 
 
-def _reminder_list(list_name: str | None, config_path: str | None) -> str:
-    if list_name:
-        return list_name
+def _load_daily_config(config_path: str | None) -> dict:
     try:
         config = load_config(config_path)
     except FileNotFoundError:
-        return DEFAULT_REMINDER_LIST
+        return {}
+    if config_path:
+        configure_state(config)
+    return config
+
+
+def _reminder_list(list_name: str | None, config: dict) -> str:
+    if list_name:
+        return list_name
     defaults = get_defaults(config)
     return defaults.get("default_reminder_list", DEFAULT_REMINDER_LIST)
 
