@@ -169,7 +169,10 @@ nudge doctor --json
 ```bash
 nudge agent apply --file request.json --dry-run
 nudge agent status --file status.json
+nudge agent status --config /path/to/config.toml --file status.json
 ```
+
+如果 action 是用自定义 `[state].dir` 创建的，状态回写也应传入同一个 `--config`。
 
 `nudge mcp serve` 提供本地 stdio MCP server，暴露有限工具面：
 
@@ -182,7 +185,10 @@ nudge agent status --file status.json
 
 ```bash
 nudge mcp serve
+nudge mcp serve --config /path/to/config.toml
 ```
+
+使用 `--config` 启动时，MCP 写入工具和 `report_action_status` 会使用该配置的 `[state].dir` 保存 SQLite 状态和确认 token。
 
 ## Daemon 队列
 

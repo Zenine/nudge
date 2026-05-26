@@ -116,7 +116,7 @@ def apply_command(file_path, dry_run, config_path, json_output):
         )
         raise click.exceptions.Exit(1)
     if config_path:
-        _configure_agent_state(config)
+        configure_agent_state(config)
     payload, exit_code = apply_agent_request(
         request=request,
         config=config,
@@ -127,7 +127,7 @@ def apply_command(file_path, dry_run, config_path, json_output):
         raise click.exceptions.Exit(exit_code)
 
 
-def _configure_agent_state(config: dict) -> None:
+def configure_agent_state(config: dict) -> None:
     """Point agent state and confirmation token storage at a loaded config."""
     global STATE_DIR
 
@@ -135,11 +135,15 @@ def _configure_agent_state(config: dict) -> None:
     configure_confirmation_state(STATE_DIR)
 
 
+_configure_agent_state = configure_agent_state
+
+
 @agent_command.command("status")
 @click.option("--file", "-f", "request_file", default=None, help="Read status JSON from file")
 @click.option("--dry-run", "-n", is_flag=True, help="Preview only, do not write SQLite")
+@click.option("--config", "-c", "config_path", default=None, help="Config file path")
 @click.option("--json", "json_output", is_flag=True, help="Print stable JSON for scripts")
-def status_command(request_file, dry_run, json_output):
+def status_command(request_file, dry_run, config_path, json_output):
     """Update local action status from another local agent or automation tool."""
     del json_output  # agent status always emits JSON.
 
@@ -164,6 +168,19 @@ def status_command(request_file, dry_run, json_output):
             error=agent_status_request_error_report(f"invalid JSON: {e}"),
         )
         raise click.exceptions.Exit(1)
+
+    if config_path:
+        try:
+            config = load_config(config_path)
+        except Exception as e:
+            _emit_agent_error(
+                request_id=None,
+                source="agent.status",
+                dry_run=dry_run,
+                error=agent_status_request_error_report(f"cannot load config: {e}"),
+            )
+            raise click.exceptions.Exit(1)
+        configure_agent_state(config)
 
     payload, exit_code = apply_action_status(
         request=request,

@@ -21,7 +21,7 @@ from nudge.apple.notes import (
 )
 from nudge.commands.agent import (
     MAX_AGENT_ACTIONS,
-    _configure_agent_state,
+    configure_agent_state,
     apply_action_status,
     apply_agent_request,
 )
@@ -34,6 +34,7 @@ from nudge.json_contract import versioned_payload
 MCP_PROTOCOL_VERSION = "2025-11-25"
 SERVER_INFO = {"name": "nudge", "version": "0.5.0"}
 JSONRPC_VERSION = "2.0"
+_configure_agent_state = configure_agent_state
 
 
 @click.group("mcp")

@@ -7,9 +7,10 @@ import pytest
 from click.testing import CliRunner
 
 from nudge.cli import cli
-from nudge.commands.agent import _normalize_action, apply_agent_request
+from nudge.commands.agent import configure_agent_state, _normalize_action, apply_agent_request
 from nudge.config import get_defaults, get_family_aliases, load_config
 from nudge.json_contract import CLI_SCHEMA_VERSION, versioned_payload
+from nudge.state import get_action, log_action
 
 
 PUBLIC_CONFIG = {
@@ -185,6 +186,79 @@ def test_mcp_validation_error_is_tool_error(monkeypatch):
     assert responses[1]["result"]["structuredContent"]["ok"] is False
 
 
+def test_agent_status_uses_configured_state_dir(tmp_path):
+    custom_state = tmp_path / "custom-state"
+    default_state = tmp_path / "default-state"
+    config_path = _write_state_config(tmp_path, custom_state)
+
+    configure_agent_state({"state": {"dir": str(custom_state)}})
+    action_id = log_action(
+        action_type="reminder",
+        summary="Config-scoped status",
+        scheduled_at="2026-05-22 18:00",
+    )
+    configure_agent_state({"state": {"dir": str(default_state)}})
+
+    status_path = tmp_path / "status.json"
+    status_path.write_text(
+        json.dumps({"action_id": action_id, "status": "done", "source": "public-test"}),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        cli,
+        ["agent", "status", "--config", str(config_path), "--file", str(status_path)],
+        prog_name="nudge",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["ok"] is True
+    assert get_action(action_id)["status"] == "done"
+    assert (custom_state / "nudge.db").exists()
+    assert not (default_state / "nudge.db").exists()
+
+
+def test_mcp_serve_uses_configured_state_dir_for_confirmation_secret(tmp_path):
+    custom_state = tmp_path / "mcp-state"
+    default_state = tmp_path / "default-state"
+    config_path = _write_state_config(tmp_path, custom_state)
+    configure_agent_state({"state": {"dir": str(default_state)}})
+
+    message = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "apply_apple_actions",
+            "arguments": {
+                "request_id": "mcp-config-state",
+                "source": "public-test",
+                "dry_run": True,
+                "require_confirmation": True,
+                "actions": [
+                    {
+                        "type": "reminder.create",
+                        "name": "Confirm custom state",
+                        "due_date": "2026-05-22 18:00",
+                    }
+                ],
+            },
+        },
+    }
+    result = CliRunner().invoke(
+        cli,
+        ["mcp", "serve", "--config", str(config_path)],
+        input=json.dumps(message) + "\n",
+        prog_name="nudge",
+    )
+
+    assert result.exit_code == 0, result.output
+    response = json.loads(result.output)
+    assert response["result"]["structuredContent"]["ok"] is True
+    assert (custom_state / "agent_confirm_secret").exists()
+    assert not (default_state / "agent_confirm_secret").exists()
+
+
 def test_versioned_payload_adds_stable_schema_version():
     payload = versioned_payload({"ok": True, "value": 42})
 
@@ -208,3 +282,12 @@ def _run_mcp(messages, monkeypatch):
     result = CliRunner().invoke(cli, ["mcp", "serve"], input=input_text, prog_name="nudge")
     responses = [json.loads(line) for line in result.output.splitlines() if line.strip()]
     return result, responses
+
+
+def _write_state_config(tmp_path, state_dir):
+    path = tmp_path / "config.toml"
+    path.write_text(
+        "\n".join(["[state]", f'dir = "{state_dir}"', ""]),
+        encoding="utf-8",
+    )
+    return path

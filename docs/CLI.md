@@ -328,7 +328,10 @@ nudge daemon app uninstall
 nudge agent status --file status.json
 cat status.json | nudge agent status
 nudge agent status --dry-run --file status.json
+nudge agent status --config ./config.toml --file status.json
 ```
+
+如果 `agent apply`、daemon 或 MCP 使用了自定义 `[state].dir`，状态回写必须传入同一个 `--config`，确保读取和更新同一个 SQLite action 记录。
 
 请求字段：
 
@@ -364,7 +367,7 @@ nudge agent status --dry-run --file status.json
 `mcp serve` 通过 stdio 暴露四个 MCP tool：
 
 - `apply_apple_actions`：写入型工具，是 `agent apply` 的薄包装。MCP client 发送 `tools/call`，Nudge MCP server 把 tool arguments 当作同一份 agent request 执行；schema 对 `actions` 标记 `maxItems=10`，并暴露 `plan_driven`、`text_plan_confirmed`、`text_plan_ref` 文本计划确认字段。超限返回 `AGENT_BATCH_TOO_LARGE`。
-- `report_action_status`：状态回写工具，写入本地 SQLite action `status`、`feedback`，不调用 Apple apps。
+- `report_action_status`：状态回写工具，写入本地 SQLite action `status`、`feedback`，不调用 Apple apps；`mcp serve --config` 会让它使用该配置的 `[state].dir`。
 - `doctor_status`：只读诊断工具，返回 `nudge doctor --json` 同类 PASS/WARN/FAIL、message 和 hint；只允许 `include_pass` 参数，不允许 `config_path` 或任意文件路径。
 - `list_nudge_notes`：只读 Apple Notes 的固定 `Nudge` folder，只返回 note 标题、标题派生摘要和日期字段；不读取正文，不允许传任意 folder。
 

@@ -51,5 +51,6 @@
 - 修复 public 文档中指向未导出 PRD/Roadmap/Business/docs TODO 的内部链接，避免 docs audit 在 public 仓库中失败。
 - 修复设置 `NUDGE_SECRETS_PATH` 或 `EMAIL_SECRETS_PATH` 时 LLM secrets 路径解析缺少 `Path` import 的问题。
 - 修复 `nudge agent apply --file` 和 `nudge daemon enqueue --file` 读取请求文件时缺少 `Path` import 导致崩溃的问题。
+- 修复 `nudge agent status --config` 缺失，导致自定义 `[state].dir` 下的 action 状态回写仍查找默认 state 目录的问题。
 - 修复 `nudge mcp serve --config` 未切换自定义 state dir，导致 MCP 写入和 confirmation token 仍使用默认 `.nudge` 的问题。
 - 修复 `nudge daily sync --config` 与 `nudge reminders sync-completed --config` 只读取配置目标、但 SQLite state 仍指向默认目录的问题。

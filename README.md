@@ -167,7 +167,10 @@ For full CLI contracts, JSON shapes, return codes, automation examples, and trou
 ```bash
 nudge agent apply --file request.json --dry-run
 nudge agent status --file status.json
+nudge agent status --config /path/to/config.toml --file status.json
 ```
+
+Use the same `--config` for status updates when actions were created with a custom `[state].dir`.
 
 `nudge mcp serve` runs a local stdio MCP server with a deliberately small tool surface:
 
@@ -180,7 +183,10 @@ Start it with:
 
 ```bash
 nudge mcp serve
+nudge mcp serve --config /path/to/config.toml
 ```
+
+When started with `--config`, MCP write tools and `report_action_status` use that config's `[state].dir` for SQLite tracking and confirmation tokens.
 
 ## Daemon Queue
 
