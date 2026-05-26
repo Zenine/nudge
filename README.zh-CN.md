@@ -85,6 +85,18 @@ nudge --dry-run "Project sync tomorrow at 3pm"
 
 `scripts/bootstrap_mac.sh` 会创建项目内 `.venv`，并在缺少 `config.toml` 时从 `config.example.toml` 初始化配置。
 
+推荐使用流程：
+
+1. `nudge doctor` 检查配置、LLM key 和 Apple 权限。
+2. `nudge --dry-run "..."` 先看解析结果，不写 Apple 应用。
+3. `nudge "..."` 在确认无误后写入 Calendar / Reminders / Notes / Clock。
+4. `nudge log ...` 记录真实完成、跳过、部分完成、延期或阻塞。
+5. `nudge daily sync --json` 同步 Reminders 完成状态、HealthExport 汇总和 docs audit 结果。
+6. `nudge review weekly --adapt --dry-run` 做周复盘和安全调整建议。
+7. 需要自动化时再启用 `scripts/bootstrap_launchd.sh`，让 morning brief、daily sync、evening brief 和 daemon 固定运行。
+
+这个顺序的核心是：**先诊断，再 dry-run，再真实写入；先同步事实，再让复盘调整计划。**
+
 ## 安装
 
 推荐使用一键安装脚本：
@@ -394,7 +406,16 @@ nudge review weekly --adapt --dry-run
 nudge habits --help
 nudge health import ~/Downloads/apple_health_export.zip
 nudge health daily
+nudge daily sync --json
 nudge reminders sync-completed
+```
+
+自动化和文档维护：
+
+```bash
+scripts/bootstrap_launchd.sh status
+nudge docs audit
+nudge docs audit --json
 ```
 
 数据库备份：
@@ -445,6 +466,8 @@ nudge daemon launchd start
 nudge daemon launchd status
 nudge daemon launchd stop
 ```
+
+`scripts/bootstrap_launchd.sh` 会安装 morning briefing、daily sync、evening briefing 和无头 daemon。daily sync 会运行 `nudge daily sync --apply --json`；如果发现文档维护债，只创建本地 maintenance action，不移动、不删除、不重写任何文档。
 
 故障恢复：
 

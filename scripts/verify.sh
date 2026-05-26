@@ -26,8 +26,14 @@ echo "== CLI smoke checks =="
 run bin/nudge --help >/dev/null
 run bin/nudge do --help >/dev/null
 run bin/nudge doctor --help >/dev/null
+run bin/nudge docs --help >/dev/null
+run bin/nudge docs audit --help >/dev/null
 run bin/nudge daemon --help >/dev/null
 run bin/nudge mcp --help >/dev/null
+
+echo
+echo "== Documentation audit =="
+run bin/nudge docs audit --json >/dev/null
 
 echo
 echo "Nudge public verification passed"

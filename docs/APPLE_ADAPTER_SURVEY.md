@@ -3,7 +3,7 @@
 > 日期：2026-04-26  
 > 结论：保留 Nudge 自己的计划解析、dry-run、状态追踪和错误层；底层 Apple 写入/读取层设计成可替换 adapter。Calendar / Reminders 后续可评估接入现有 EventKit CLI 或 MCP；Notes 先保留项目内人类可读写入型 AppleScript adapter；Clock 继续使用 Shortcuts bridge。
 
-See also: [Architecture](ARCHITECTURE.md) | [CLI](CLI.md) | [TODO](TODO.md) | [CHANGELOG](../CHANGELOG.md)
+See also: [Architecture](ARCHITECTURE.md) | [CLI](CLI.md) | [TODO](../TODO.md) | [CHANGELOG](../CHANGELOG.md)
 
 ---
 

@@ -23,7 +23,7 @@
 职责：
 
 - 定义根命令和全局参数。
-- 注册 `do`、`doctor`、`briefing`、`review`、`schedule`、`daily`、`daemon`、`agent`、`mcp`、`skills` 等子命令。
+- 注册 `do`、`doctor`、`briefing`、`review`、`schedule`、`daily`、`docs`、`daemon`、`agent`、`mcp`、`skills` 等子命令。
 - 支持 `nudge "明天早上8点开会"` 这种根命令自然语言简写。
 - 处理 `--file` 和管道输入。
 
@@ -50,6 +50,7 @@
 - `commands/briefing.py`：早晚简报。
 - `commands/review.py`：周报、adapt 建议和安全 apply。
 - `commands/daily.py`：每日同步聚合入口。
+- `commands/docs.py`：只读文档审计入口。
 - `commands/reminders.py`：Apple Reminders 完成状态同步。
 - `commands/daemon.py`：本地队列、launchd、恢复和重试。
 - `commands/health.py`：Apple 健康导出导入与查询。
@@ -201,7 +202,7 @@
 相关文件：
 
 - `nudge/daemon_control_app.py`：daemon 控制 app 支持。
-- `scripts/bootstrap_launchd.sh`：安装早晚 briefing 和无头 daemon 的 launchd 任务。
+- `scripts/bootstrap_launchd.sh`：安装早晚 briefing、daily sync 和无头 daemon 的 launchd 任务。
 - `docs/DAEMON_RUNBOOK.md`：恢复、人工回放和故障排查。
 
 适合查：
@@ -221,6 +222,7 @@
 - `nudge/dogfood.py`：Nudge 自身使用情况周报。
 - `nudge/sleep_reminders.py`：睡眠终止型 reminder 后续自动跳过逻辑。
 - `nudge/family_routing.py`：家庭提醒路由。
+- `nudge/docs_audit.py`：文档债审计规则，包括断链、垃圾文件、旧计划/spec 和 TODO 历史标记。
 
 适合查：
 
@@ -287,6 +289,5 @@ scripts/verify.sh
 | 调整 MCP tool | `nudge/commands/mcp.py`、`docs/MCP_SECURITY.md`、`tests/test_commands_mcp.py` |
 | 修改本地状态 schema | `nudge/state.py`、`tests/test_state.py`、备份/恢复相关测试 |
 | 改 Skill Spec | `nudge/skills/`、`docs/SKILL_SPEC.md`、`tests/test_skills_*.py` |
-| 改安装体验 | `scripts/bootstrap_mac.sh`、`scripts/install_cli.sh`、`README_CN.md`、`README.md` |
+| 改安装体验 | `scripts/bootstrap_mac.sh`、`scripts/install_cli.sh`、`README.zh-CN.md`、`README.md` |
 | 改验证入口 | `scripts/verify.sh`、`tests/test_verify_script.py`、README 测试段落 |
-

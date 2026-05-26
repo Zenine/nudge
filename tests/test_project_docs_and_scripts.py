@@ -37,6 +37,42 @@ def test_verify_runs_pytest_and_compile_checks():
 
     assert "python3 -m pytest tests/ -q" in script
     assert "python3 -m compileall -q nudge" in script
+    assert "bin/nudge docs --help" in script
+    assert "bin/nudge docs audit --help" in script
+    assert "bin/nudge docs audit --json" in script
+
+
+def test_bootstrap_mac_guards_against_rosetta_python_on_apple_silicon():
+    script = (ROOT / "scripts" / "bootstrap_mac.sh").read_text(encoding="utf-8")
+
+    assert 'APPLE_SILICON_PYTHON="/opt/homebrew/bin/python3"' in script
+    assert "NUDGE_BOOTSTRAP_PYTHON" in script
+    assert "python_arch()" in script
+    assert "platform.machine()" in script
+    assert '"$python_arch" != "arm64"' in script
+    assert '"$python_arch" != "arm64e"' in script
+
+
+def test_bootstrap_mac_rebuilds_rosetta_virtualenv():
+    script = (ROOT / "scripts" / "bootstrap_mac.sh").read_text(encoding="utf-8")
+
+    assert "ensure_native_virtualenv()" in script
+    assert "rosetta-backup" in script
+    assert 'mv "$VENV_DIR" "$backup_dir"' in script
+
+
+def test_bootstrap_launchd_installs_daily_sync_job():
+    script = (ROOT / "scripts" / "bootstrap_launchd.sh").read_text(encoding="utf-8")
+
+    assert 'DAILY_SYNC_LABEL="com.nudge.daily-sync"' in script
+    assert "NUDGE_DAILY_SYNC_HOUR" in script
+    assert "NUDGE_DAILY_SYNC_MINUTE" in script
+    assert "render_daily_sync_plist" in script
+    assert "<string>daily</string>" in script
+    assert "<string>sync</string>" in script
+    assert "<string>--apply</string>" in script
+    assert "<string>--json</string>" in script
+    assert 'check_label "$DAILY_SYNC_LABEL"' in script
 
 
 def test_daemon_control_app_reads_system_profile_at_runtime():

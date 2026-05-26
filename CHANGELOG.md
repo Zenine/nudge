@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Unreleased - 2026-05-26
 
 ### Added
 
@@ -10,6 +10,8 @@
 - 从 private docs 吸收并清理 public-safe 文档：CLI、Architecture、Design、MCP Security、Daemon Runbook、Apple Adapter Survey、Module Map、Skill Spec、Prompt Playbook，并在 README 中增加文档索引。
 - 新增本地维护文件：`TODO.md`。
 - 新增 runtime JSONL 日志：`<state.dir>/logs/nudge-runtime.jsonl`。
+- 新增只读 `nudge docs audit`，用于报告文档断链、系统垃圾文件、陈旧计划/spec、TODO 历史标记和过长入口文档。
+- `nudge daily sync` 新增 docs audit 结果；`--apply` 时如发现文档 error/warning，会创建一条本地文档维护 action。
 - `requirements.txt` 增加 `pytest`，保证项目自带验证入口可以在新环境运行测试。
 
 ### Changed
@@ -18,7 +20,10 @@
 - 默认 LLM provider 从 Anthropic 调整为 Qwen/DashScope，与安装脚本和示例配置保持一致。
 - 默认 secrets 路径统一为部署用户私有配置目录：`~/.config/nudge/secrets.yaml`。
 - `scripts/bootstrap_mac.sh` 在缺少 `config.toml` 时会先从 `config.example.toml` 初始化配置。
+- `scripts/bootstrap_mac.sh` 在 Apple Silicon Mac 上优先使用原生 Python，并拒绝 Rosetta / x86_64 Python 创建 `.venv`。
+- `scripts/bootstrap_launchd.sh` 新增 `com.nudge.daily-sync`，默认每天 07:15 运行 `nudge daily sync --apply --json`。
 - `scripts/verify.sh` 增加 `python3 -m compileall -q nudge` 编译检查。
+- `scripts/verify.sh` 增加 docs audit smoke 和只读文档审计。
 - README 快速开始改为当前公共导出目录 `nudge-public`，并补充本机默认密钥路径说明。
 - README 扩展为完整使用文档，增加安装、配置、诊断修复、常用命令、Agent/MCP、daemon、开发验证和项目结构说明。
 - README 补充 Qwen/DashScope、OpenAI、Anthropic、DeepSeek、Ollama 的配置示例和密钥来源说明。
@@ -30,4 +35,5 @@
 
 ### Fixed
 
+- 修复 public 文档中指向未导出 PRD/Roadmap/Business/docs TODO 的内部链接，避免 docs audit 在 public 仓库中失败。
 - 修复设置 `NUDGE_SECRETS_PATH` 或 `EMAIL_SECRETS_PATH` 时 LLM secrets 路径解析缺少 `Path` import 的问题。

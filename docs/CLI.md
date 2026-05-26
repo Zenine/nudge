@@ -17,9 +17,9 @@ scripts/install_cli.sh
 scripts/bootstrap_mac.sh
 ```
 
-这个脚本会自动创建项目内 `.venv`、把依赖安装到隔离环境，并安装 `~/.local/bin/nudge` 指向固定路径 wrapper。普通用户不需要手动激活虚拟环境；`bin/nudge` 会优先使用项目内 `.venv/bin/python`，缺失时才回退系统 `python3`。
+这个脚本会自动创建项目内 `.venv`、把依赖安装到隔离环境，并安装 `~/.local/bin/nudge` 指向固定路径 wrapper。普通用户不需要手动激活虚拟环境；`bin/nudge` 会优先使用项目内 `.venv/bin/python`，缺失时才回退系统 `python3`。在 Apple Silicon Mac 上，脚本会优先选择 `/opt/homebrew/bin/python3`，并拒绝用 Rosetta / x86_64 Python 创建 `.venv`；如果检测到已有 `.venv` 是 Intel 环境，会备份后重建。
 
-如果希望直接配置自动化（默认每天早 7 点、晚 21:30 执行 briefing）：
+如果希望直接配置自动化（默认每天早 7 点执行 morning briefing、7:15 执行 daily sync、晚 21:30 执行 evening briefing）：
 
 ```bash
 scripts/bootstrap_launchd.sh
@@ -28,7 +28,10 @@ scripts/bootstrap_launchd.sh
 该脚本会安装：
 
 - morning/evening 两个 `briefing` 任务
+- `com.nudge.daily-sync` 每日维护任务（`nudge daily sync --apply --json`，包含 docs audit）
 - `com.nudge.agent` 长驻任务（`nudge daemon run`）
+
+daily sync 时间可用 `NUDGE_DAILY_SYNC_HOUR` / `NUDGE_DAILY_SYNC_MINUTE` 调整；它只通过 `daily sync` 写入本地 Nudge 状态，不直接移动、删除或重写文档。
 
 查看/卸载：
 
@@ -494,6 +497,15 @@ nudge log blocked --id <action_id> --reason waiting_on_other --next-action keep 
 
 `--notify` 会在存在待跟进问题时发送一条 macOS 本机通知；没有问题时静默跳过，避免打扰。`--json` 输出同样带 `schema_version: "nudge.cli.v1"`，脚本可读取 `report.summary`、各类明细和可选的 `notification` 结果。该命令只负责把失败显性化和本机提醒；IM 追问、自动重排和写回 Apple 应用仍属于后续主动跟进增强。
 
+### 文档审计
+
+```bash
+nudge docs audit
+nudge docs audit --json
+```
+
+`nudge docs audit` 是只读文档维护检查，不移动、不删除、不重写文件。它会报告 `DOCS_BROKEN_LINK`、`DOCS_JUNK_FILE`、`DOCS_STALE_PLAN`、`DOCS_ARCHIVE_CANDIDATE`、`DOCS_TODO_HISTORY` 和 `DOCS_LONG_ENTRYPOINT` 等问题；`--json` 输出同样带 `schema_version: "nudge.cli.v1"`。严重问题会让命令返回非 0，适合脚本或 daily sync 读取。
+
 ### 每日同步聚合命令
 
 ```bash
@@ -503,11 +515,13 @@ nudge daily sync --date 2026-04-30 --lookback-days 7 --apply --json
 nudge daily sync --date 2026-04-30 --no-health --apply --json
 ```
 
-`nudge daily sync` 是每日工作流入口：它把「拉 HealthExport 最新健康数据」「同步 Apple Reminders 完成状态」「列出剩余需要人工处理的过期/阻塞项」合成一个命令。默认 dry-run；确认输出后加 `--apply` 才会写 SQLite。
+`nudge daily sync` 是每日工作流入口：它把「拉 HealthExport 最新健康数据」「同步 Apple Reminders 完成状态」「列出剩余需要人工处理的过期/阻塞项」「检查文档维护债」合成一个命令。默认 dry-run；确认输出后加 `--apply` 才会写 SQLite。
 
 Reminders 部分会自动跑今天、昨天，并在 `--lookback-days` 窗口内补跑仍处于 `created` / `pending` 的 Nudge reminder 日期，避免只跑昨天/今天时漏掉更早的未同步完成项。也可以用 `--from YYYY-MM-DD` 强制从某天到 `--date` 全部补跑。它内部复用 `nudge reminders sync-completed` 的匹配规则，因此能保留 Apple Reminders `completionDate`，并继续支持睡眠终止提醒后的睡后作废逻辑。
 
 Health 部分默认自动选择 `~/Library/Mobile Documents/iCloud~HealthExport/Documents/Health/` 下最新的 `health-*.json` 或 ZIP，并导入 `[--date - lookback-days, --date + 1)` 窗口；也可用 `--health PATH` 指定文件，或用 `--no-health` 跳过。Calendar event 过期不会被自动标记完成，因为「过去了」不等于「做完了」；命令会在 `remaining_failures` 和 `human_needed` 中返回可复制的 `nudge log ... --id ...` 跟进命令。
+
+Docs 部分会复用 `nudge docs audit` 做只读检查，并在 JSON 的 `docs.report` 中返回结果。`docs.attention_required` 会在发现 error 或 warning 时变为 `true`；顶层 `ok` 仍只表示 Reminders / Health 同步本身是否失败。若 `--apply` 时发现文档 error / warning 且当天尚无打开的 `[Nudge Docs] 本周文档需要维护` action，命令只会创建一条本地 `maintenance` action；不会移动、删除或重写任何文档，也不会直接写 Apple Reminders。
 
 ### Reminders 完成状态同步
 

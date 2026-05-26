@@ -176,7 +176,7 @@ nudge daemon queue --status dead_letter --json
 - `dead_letter` 要么为空，要么每条都已记录为什么暂不 retry。
 - Apple Calendar / Reminders / Notes / Clock 没有明显重复写入。
 
-如果问题会反复出现，把现象补进 `docs/TODO.md` 的运行时可观测或告警策略条目，不靠记忆追踪。
+如果问题会反复出现，把现象补进仓库根目录 `TODO.md` 的运行时可观测或告警策略条目，不靠记忆追踪。
 
 ---
 

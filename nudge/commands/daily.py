@@ -11,10 +11,11 @@ import click
 
 from nudge.commands.reminders import sync_completed_for_date
 from nudge.config import DEFAULT_REMINDER_LIST, get_defaults, load_config
+from nudge.docs_audit import audit_docs
 from nudge.failures import build_failure_visibility_report
 from nudge.health import apply_health_import, parse_apple_health_export
 from nudge.json_contract import versioned_payload
-from nudge.state import get_actions
+from nudge.state import get_actions, log_action
 
 
 DEFAULT_HEALTH_EXPORT_DIR = (
@@ -27,6 +28,8 @@ DEFAULT_HEALTH_EXPORT_DIR = (
 )
 _PENDING_STATUSES = {"created", "pending"}
 _FAILURE_KEYS = ("pending_overdue", "blocked_open", "missing_reason", "missing_next_action", "deferred_open")
+DOCS_MAINTENANCE_SUMMARY = "[Nudge Docs] 本周文档需要维护"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 @click.group("daily")
@@ -103,6 +106,10 @@ def sync_command(
             date_to=health_end.isoformat(),
             apply_changes=apply_changes,
         )
+        docs_payload = _sync_docs_audit(
+            target_date=target_date,
+            apply_changes=apply_changes,
+        )
         remaining_report = _remaining_failures(target_date, overdue_hours)
         payload = versioned_payload({
             "ok": _all_ok(reminder_results, health_payload),
@@ -114,6 +121,7 @@ def sync_command(
                 "results": reminder_results,
             },
             "health": health_payload,
+            "docs": docs_payload,
             "remaining_failures": remaining_report,
             "human_needed": _priority_items(remaining_report, limit=10),
             "errors": _collect_errors(reminder_results, health_payload),
@@ -125,6 +133,7 @@ def sync_command(
             "date": date_text or date.today().isoformat(),
             "reminders": {"list": list_name or "", "dates": [], "results": []},
             "health": {"ok": False, "skipped": bool(skip_health), "errors": []},
+            "docs": {"ok": False, "report": {}, "attention_required": False, "action_created": False},
             "remaining_failures": {},
             "human_needed": [],
             "errors": [{"code": "DAILY_SYNC_FAILED", "message": str(exc)}],
@@ -274,6 +283,58 @@ def _latest_health_export() -> str | None:
     return str(latest)
 
 
+def _sync_docs_audit(*, target_date: date, apply_changes: bool) -> dict:
+    report = audit_docs(PROJECT_ROOT)
+    attention_required = _docs_attention_required(report)
+    payload = {
+        "ok": True,
+        "dry_run": not apply_changes,
+        "report": report,
+        "attention_required": attention_required,
+        "action_created": False,
+    }
+    if not attention_required:
+        return payload
+
+    existing = _existing_docs_maintenance_action(target_date)
+    if existing:
+        payload["existing_action_id"] = existing["id"]
+        return payload
+
+    if not apply_changes:
+        payload["would_create_action"] = True
+        return payload
+
+    action_id = log_action(
+        action_type="maintenance",
+        summary=DOCS_MAINTENANCE_SUMMARY,
+        scheduled_at=f"{target_date.isoformat()} 09:00",
+        status="created",
+    )
+    payload["action_created"] = True
+    payload["action_id"] = action_id
+    return payload
+
+
+def _docs_attention_required(report: dict) -> bool:
+    summary = report.get("summary") or {}
+    return int(summary.get("errors") or 0) > 0 or int(summary.get("warnings") or 0) > 0
+
+
+def _existing_docs_maintenance_action(target_date: date) -> dict | None:
+    start = datetime.combine(target_date, time.min).strftime("%Y-%m-%d %H:%M")
+    end = datetime.combine(target_date + timedelta(days=1), time.min).strftime("%Y-%m-%d %H:%M")
+    for action in get_actions(since=start, until=end):
+        if action.get("type") != "maintenance":
+            continue
+        if action.get("summary") != DOCS_MAINTENANCE_SUMMARY:
+            continue
+        if action.get("status") not in _PENDING_STATUSES:
+            continue
+        return action
+    return None
+
+
 def _remaining_failures(target_date: date, overdue_hours: int) -> dict:
     report_now = _report_now(target_date)
     return build_failure_visibility_report(
@@ -346,6 +407,14 @@ def _emit(payload: dict, json_output: bool) -> None:
             f"  health: {health.get('source')} · daily={summary.get('daily')} "
             f"· workouts={summary.get('workouts')}"
         )
+    docs = payload.get("docs") or {}
+    docs_summary = (docs.get("report") or {}).get("summary") or {}
+    click.echo(
+        "  docs: "
+        f"errors={docs_summary.get('errors', 0)} "
+        f"warnings={docs_summary.get('warnings', 0)} "
+        f"suggestions={docs_summary.get('suggestions', 0)}"
+    )
     failure_summary = (payload.get("remaining_failures") or {}).get("summary") or {}
     click.echo(
         "  remaining: "

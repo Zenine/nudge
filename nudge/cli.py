@@ -12,6 +12,7 @@ from nudge.commands.do import do_command
 from nudge.commands.doctor import doctor_command
 from nudge.commands.daily import daily_command
 from nudge.commands.db import db_command
+from nudge.commands.docs import docs_command
 from nudge.commands.dogfood import dogfood_command
 from nudge.commands.failures import failures_command
 from nudge.commands.habits import habits_command
@@ -78,6 +79,7 @@ cli.add_command(habits_command)
 cli.add_command(health_command)
 cli.add_command(daily_command)
 cli.add_command(db_command)
+cli.add_command(docs_command)
 cli.add_command(log_command)
 cli.add_command(check_in_command)
 cli.add_command(skills_command)

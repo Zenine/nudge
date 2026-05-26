@@ -1,10 +1,10 @@
 # Nudge — Product & Interaction Design v2
 
 > v2 日期：2026-04-25  
-> 对齐文档：[PRD v2](PRD.md)  
+> 对齐文档：PRD v2（private control-plane 文档，未随 public runtime 导出）
 > 当前设计重点：CLI 是当前 UI，先打磨 Dogfood 闭环，不马上设计完整 App。
 
-See also: [PRD](PRD.md) | [Architecture](ARCHITECTURE.md) | [Roadmap](ROADMAP.md) | [Business](BUSINESS.md) | [CLI](CLI.md) | [Skill Spec](SKILL_SPEC.md) | [TODO](TODO.md)
+See also: [Architecture](ARCHITECTURE.md) | [CLI](CLI.md) | [Skill Spec](SKILL_SPEC.md) | [TODO](../TODO.md)
 
 ---
 

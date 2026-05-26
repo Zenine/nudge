@@ -8,6 +8,8 @@ GUI_UID="$(id -u)"
 
 DEFAULT_MORNING_HOUR=7
 DEFAULT_MORNING_MINUTE=0
+DEFAULT_DAILY_SYNC_HOUR=7
+DEFAULT_DAILY_SYNC_MINUTE=15
 DEFAULT_EVENING_HOUR=21
 DEFAULT_EVENING_MINUTE=30
 DEFAULT_DAEMON_SLEEP_MS=3000
@@ -16,10 +18,12 @@ DEFAULT_DAEMON_MAX_ATTEMPTS=3
 DEFAULT_DAEMON_MAX_QUEUE_DEPTH=1000
 
 MORNING_LABEL="com.nudge.morning"
+DAILY_SYNC_LABEL="com.nudge.daily-sync"
 EVENING_LABEL="com.nudge.evening"
 DAEMON_LABEL="com.nudge.agent"
 
 MORNING_PLIST="${LAUNCH_DIR}/${MORNING_LABEL}.plist"
+DAILY_SYNC_PLIST="${LAUNCH_DIR}/${DAILY_SYNC_LABEL}.plist"
 EVENING_PLIST="${LAUNCH_DIR}/${EVENING_LABEL}.plist"
 DAEMON_PLIST="${LAUNCH_DIR}/${DAEMON_LABEL}.plist"
 
@@ -43,13 +47,14 @@ Usage:
   scripts/bootstrap_launchd.sh [install|uninstall|status|help]
 
 Commands:
-  install    生成并加载 morning/evening + daemon（常驻）任务（默认）
-  uninstall  卸载并移除三类 launchd 任务
+  install    生成并加载 morning/daily-sync/evening + daemon（常驻）任务（默认）
+  uninstall  卸载并移除四类 launchd 任务
   status    显示任务状态（已加载/未加载）
   help      显示本帮助
 
 Optional env:
   NUDGE_MORNING_HOUR / NUDGE_MORNING_MINUTE
+  NUDGE_DAILY_SYNC_HOUR / NUDGE_DAILY_SYNC_MINUTE
   NUDGE_EVENING_HOUR / NUDGE_EVENING_MINUTE
   NUDGE_DAEMON_SLEEP_MS
   NUDGE_DAEMON_STALE_MINUTES
@@ -114,6 +119,48 @@ render_daemon_plist() {
         <key>NUDGE_DAEMON_MAX_QUEUE_DEPTH</key>
         <string>${NUDGE_DAEMON_MAX_QUEUE_DEPTH:-$DEFAULT_DAEMON_MAX_QUEUE_DEPTH}</string>
     </dict>
+</dict>
+</plist>
+EOF
+}
+
+render_daily_sync_plist() {
+  local plist_path="$1"
+  local label="$2"
+  local hour="$3"
+  local minute="$4"
+
+  cat > "$plist_path" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>${label}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${NUDGE_CMD_PATH}</string>
+        <string>daily</string>
+        <string>sync</string>
+        <string>--apply</string>
+        <string>--json</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>${ROOT}</string>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>${hour}</integer>
+        <key>Minute</key>
+        <integer>${minute}</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>${LOG_DIR}/${label}.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>${LOG_DIR}/${label}.err.log</string>
+    <key>RunAtLoad</key>
+    <false/>
 </dict>
 </plist>
 EOF
@@ -209,6 +256,8 @@ cleanup_plist() {
 install_agents() {
   local morning_hour="${NUDGE_MORNING_HOUR:-$DEFAULT_MORNING_HOUR}"
   local morning_minute="${NUDGE_MORNING_MINUTE:-$DEFAULT_MORNING_MINUTE}"
+  local daily_sync_hour="${NUDGE_DAILY_SYNC_HOUR:-$DEFAULT_DAILY_SYNC_HOUR}"
+  local daily_sync_minute="${NUDGE_DAILY_SYNC_MINUTE:-$DEFAULT_DAILY_SYNC_MINUTE}"
   local evening_hour="${NUDGE_EVENING_HOUR:-$DEFAULT_EVENING_HOUR}"
   local evening_minute="${NUDGE_EVENING_MINUTE:-$DEFAULT_EVENING_MINUTE}"
   local daemon_sleep_ms="${NUDGE_DAEMON_SLEEP_MS:-$DEFAULT_DAEMON_SLEEP_MS}"
@@ -219,22 +268,27 @@ install_agents() {
   safe_mkdir
 
   render_plist "$MORNING_PLIST" "$MORNING_LABEL" "morning" "$morning_hour" "$morning_minute"
+  render_daily_sync_plist "$DAILY_SYNC_PLIST" "$DAILY_SYNC_LABEL" "$daily_sync_hour" "$daily_sync_minute"
   render_plist "$EVENING_PLIST" "$EVENING_LABEL" "evening" "$evening_hour" "$evening_minute"
   render_daemon_plist "$DAEMON_PLIST" "$DAEMON_LABEL"
 
   load_or_unload_agent "$MORNING_PLIST" install
+  load_or_unload_agent "$DAILY_SYNC_PLIST" install
   load_or_unload_agent "$EVENING_PLIST" install
   load_or_unload_agent "$DAEMON_PLIST" install
 
   echo "已安装并加载："
   check_label "$MORNING_LABEL"
+  check_label "$DAILY_SYNC_LABEL"
   check_label "$EVENING_LABEL"
   check_label "$DAEMON_LABEL"
   echo
   echo "日志输出："
   echo "  ${LOG_DIR}/${MORNING_LABEL}.out.log"
+  echo "  ${LOG_DIR}/${DAILY_SYNC_LABEL}.out.log"
   echo "  ${LOG_DIR}/${EVENING_LABEL}.out.log"
   echo "  ${LOG_DIR}/${MORNING_LABEL}.err.log"
+  echo "  ${LOG_DIR}/${DAILY_SYNC_LABEL}.err.log"
   echo "  ${LOG_DIR}/${EVENING_LABEL}.err.log"
   echo "  ${LOG_DIR}/${DAEMON_LABEL}.out.log"
   echo "  ${LOG_DIR}/${DAEMON_LABEL}.err.log"
@@ -248,17 +302,20 @@ install_agents() {
 
 uninstall_agents() {
   load_or_unload_agent "$MORNING_PLIST" uninstall
+  load_or_unload_agent "$DAILY_SYNC_PLIST" uninstall
   load_or_unload_agent "$EVENING_PLIST" uninstall
   load_or_unload_agent "$DAEMON_PLIST" uninstall
   cleanup_plist "$MORNING_PLIST"
+  cleanup_plist "$DAILY_SYNC_PLIST"
   cleanup_plist "$EVENING_PLIST"
   cleanup_plist "$DAEMON_PLIST"
-  echo "已卸载并移除 morning/evening/daemon 任务。"
+  echo "已卸载并移除 morning/daily-sync/evening/daemon 任务。"
 }
 
 show_status() {
   echo "Launchd 状态检查："
   check_label "$MORNING_LABEL"
+  check_label "$DAILY_SYNC_LABEL"
   check_label "$EVENING_LABEL"
   check_label "$DAEMON_LABEL"
 }
@@ -276,7 +333,7 @@ esac
 check_platform
 
 case "$COMMAND" in
-  help)
+  help|-h|--help)
     print_usage
     ;;
   install)

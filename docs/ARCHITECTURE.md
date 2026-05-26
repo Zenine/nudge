@@ -1,10 +1,10 @@
 # Nudge — Architecture v2
 
 > v2 日期：2026-04-25  
-> 对齐文档：[PRD v2](PRD.md)  
+> 对齐文档：PRD v2（private control-plane 文档，未随 public runtime 导出）
 > 架构定位：Local-first，本地 CLI 优先，服务 Mac + iPhone 用户的执行闭环。
 
-See also: [PRD](PRD.md) | [Design](DESIGN.md) | [Roadmap](ROADMAP.md) | [Business](BUSINESS.md) | [CLI](CLI.md) | [Skill Spec](SKILL_SPEC.md) | [Prompt Playbook](PROMPT_PLAYBOOK.md) | [Apple Adapter Survey](APPLE_ADAPTER_SURVEY.md) | [TODO](TODO.md)
+See also: [Design](DESIGN.md) | [CLI](CLI.md) | [Skill Spec](SKILL_SPEC.md) | [Prompt Playbook](PROMPT_PLAYBOOK.md) | [Apple Adapter Survey](APPLE_ADAPTER_SURVEY.md) | [TODO](../TODO.md)
 
 ---
 
@@ -551,5 +551,5 @@ scripts/verify.sh
 - 测试。
 - [CLI.md](CLI.md)（如果影响外部接口）。
 - [SKILL_SPEC.md](SKILL_SPEC.md)（如果影响 Skill）。
-- [TODO.md](TODO.md)。
+- [TODO.md](../TODO.md)。
 - [CHANGELOG.md](../CHANGELOG.md)。
