@@ -142,7 +142,7 @@ nudge doctor
 nudge doctor --json
 ```
 
-`doctor` checks config, LLM keys, Apple app permissions, configured Calendar/Reminders targets, Notes Automation, and the Clock Shortcuts bridge. Calendar writes and reads may require Full Calendar Access on recent macOS versions. Runtime warnings and actionable errors are written to `<state.dir>/logs/nudge-runtime.jsonl`. Common repair steps and log rotation details are in [Setup](docs/SETUP.md).
+`doctor` checks config, LLM keys, Apple app permissions, configured Calendar/Reminders targets, Notes Automation, and the Clock Shortcuts bridge. Calendar writes and reads may require Full Calendar Access on recent macOS versions. Runtime warnings, actionable errors, and daemon startup code revision records are written to `<state.dir>/logs/nudge-runtime.jsonl`. Common repair steps and log rotation details are in [Setup](docs/SETUP.md).
 
 ## Common Commands
 

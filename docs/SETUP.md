@@ -172,7 +172,7 @@ nudge doctor --json
 
 ## 运行日志
 
-Nudge 会把可由用户修复的 WARN/ERROR 写入本地 JSONL 运行日志：
+Nudge 会把可由用户修复的 WARN/ERROR 写入本地 JSONL 运行日志；`nudge daemon run` 启动时也会写入一条 INFO，记录当前代码 revision、工作树是否有本地改动、repo 路径和 daemon 参数，方便确认更新代码后实际运行的是哪一版：
 
 ```text
 <state.dir>/logs/nudge-runtime.jsonl
@@ -184,7 +184,7 @@ Nudge 会把可由用户修复的 WARN/ERROR 写入本地 JSONL 运行日志：
 .nudge/logs/nudge-runtime.jsonl
 ```
 
-日志记录诊断和可操作错误，不保存 API key 或 provider 原始输出。写入前，如果当前日志超过 `runtime_log.max_bytes`，Nudge 会轮转日志；默认上限为 `1048576` bytes，并保留 `nudge-runtime.jsonl.1` 到 `.3`。
+日志记录诊断、可操作错误和 daemon 启动上下文，不保存 API key 或 provider 原始输出。写入前，如果当前日志超过 `runtime_log.max_bytes`，Nudge 会轮转日志；默认上限为 `1048576` bytes，并保留 `nudge-runtime.jsonl.1` 到 `.3`。
 
 常用排障命令：
 

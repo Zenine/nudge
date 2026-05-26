@@ -42,3 +42,52 @@ def test_daemon_enqueue_reads_request_from_file(monkeypatch, tmp_path):
     assert payload["request_id"] == "queued-file-input"
     assert enqueued[0]["payload"]["request_id"] == "file-input"
     assert enqueued[0]["request_type"] == "agent.apply"
+
+
+def test_daemon_run_logs_startup_code_revision(monkeypatch, tmp_path):
+    import nudge.commands.daemon as daemon
+
+    state_dir = tmp_path / "state"
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "\n".join(["[state]", f'dir = "{state_dir}"', ""]),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        daemon,
+        "_repo_code_state",
+        lambda: {"repo_root": "/repo/nudge-public", "revision": "abc123", "dirty": False},
+    )
+    monkeypatch.setattr(
+        daemon,
+        "recover_stale_running_commands",
+        lambda **_kwargs: {"requeued_count": 0, "dead_lettered_count": 0},
+    )
+    monkeypatch.setattr(daemon, "claim_next_queued_command", lambda: None)
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "daemon",
+            "run",
+            "--config",
+            str(config_path),
+            "--once",
+            "--sleep-ms",
+            "250",
+        ],
+        prog_name="nudge",
+    )
+
+    assert result.exit_code == 0, result.output
+    log_path = state_dir / "logs" / "nudge-runtime.jsonl"
+    entry = json.loads(log_path.read_text(encoding="utf-8").splitlines()[0])
+    assert entry["level"] == "INFO"
+    assert entry["source"] == "daemon.run"
+    assert entry["message"] == "daemon started"
+    assert entry["revision"] == "abc123"
+    assert entry["dirty"] is False
+    assert entry["repo_root"] == "/repo/nudge-public"
+    assert entry["config_path"] == str(config_path)
+    assert entry["run_once"] is True
+    assert entry["sleep_ms"] == 250

@@ -144,7 +144,7 @@ nudge doctor
 nudge doctor --json
 ```
 
-`doctor` 会检查配置、LLM key、Apple 应用权限、配置的 Calendar/Reminders 目标、Notes Automation 自动化权限和 Clock Shortcuts bridge。较新的 macOS 上，Calendar 写入和读取可能需要 Full Calendar Access。运行时 warning 和可操作错误会写入 `<state.dir>/logs/nudge-runtime.jsonl`。常见修复步骤和日志轮转细节见 [安装、配置与排障](docs/SETUP.md)。
+`doctor` 会检查配置、LLM key、Apple 应用权限、配置的 Calendar/Reminders 目标、Notes Automation 自动化权限和 Clock Shortcuts bridge。较新的 macOS 上，Calendar 写入和读取可能需要 Full Calendar Access。运行时 warning、可操作错误和 daemon 启动时的代码版本记录会写入 `<state.dir>/logs/nudge-runtime.jsonl`。常见修复步骤和日志轮转细节见 [安装、配置与排障](docs/SETUP.md)。
 
 ## 常用命令
 

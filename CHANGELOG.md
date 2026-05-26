@@ -40,6 +40,7 @@
 - 删除本地开发过程 `LOG.md`，新增 runtime JSONL 日志记录 WARN/ERROR 以便用户排障。
 - README / README.zh-CN 补充 Apple 默认目标、macOS 权限获取和 runtime log 排障说明。
 - runtime JSONL 日志写入前会按 `runtime_log.max_bytes` 轮转，默认 1 MiB，并保留 3 份历史文件。
+- `nudge daemon run` 启动时会在 runtime JSONL 日志记录当前代码 revision、工作树 dirty 状态和 daemon 参数，便于确认更新代码后实际运行版本。
 - `config.example.toml` 补充 `[runtime_log] max_bytes` 示例配置。
 - README / README.zh-CN 收敛为入口页，把安装、provider、诊断和运行日志细节下沉到 `docs/SETUP.md`，使 docs audit entrypoint suggestion 归零。
 - 文档审计 suggestion 跟进策略产品化：保持 `nudge docs audit` 只读，暂不提供自动 `docs fix` 写入工作流。
