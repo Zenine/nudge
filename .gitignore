@@ -10,5 +10,8 @@ venv/
 # Local Nudge runtime state
 .nudge/
 
+# Local configuration; may reference private secrets paths
+config.toml
+
 # macOS filesystem metadata
 .DS_Store
