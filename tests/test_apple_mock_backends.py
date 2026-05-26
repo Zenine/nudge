@@ -28,7 +28,7 @@ def test_mock_apple_backends_capture_agent_writes_without_apple_apps(monkeypatch
     monkeypatch.setattr("nudge.state.DB_PATH", tmp_path / "nudge.db")
     monkeypatch.setattr("nudge.commands.agent.STATE_DIR", tmp_path)
     monkeypatch.setattr(
-        "nudge.commands.agent.CONFIRMATION_SECRET_PATH",
+        "nudge.commands.agent_confirmation.CONFIRMATION_SECRET_PATH",
         tmp_path / "agent_confirm_secret",
     )
 

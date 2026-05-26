@@ -75,6 +75,14 @@ def test_bootstrap_launchd_installs_daily_sync_job():
     assert 'check_label "$DAILY_SYNC_LABEL"' in script
 
 
+def test_daemon_python_and_launchd_sleep_defaults_match():
+    import nudge.commands.daemon as daemon
+
+    script = (ROOT / "scripts" / "bootstrap_launchd.sh").read_text(encoding="utf-8")
+
+    assert f"DEFAULT_DAEMON_SLEEP_MS={daemon.DEFAULT_DAEMON_SLEEP_MS}" in script
+
+
 def test_daemon_control_app_reads_system_profile_at_runtime():
     script = render_control_app_script()
 
@@ -197,11 +205,11 @@ def test_public_docs_use_root_todo_not_legacy_docs_todo():
     assert "[TODO](../TODO.md)" in combined
 
 
-def test_docs_audit_suggestion_policy_is_tracked_in_todo():
-    todo = (ROOT / "TODO.md").read_text(encoding="utf-8")
+def test_docs_audit_suggestion_policy_is_documented():
+    cli_docs = (ROOT / "docs" / "CLI.md").read_text(encoding="utf-8")
 
-    assert "docs audit" in todo
-    assert "suggestion" in todo
+    assert "suggestions_only" in cli_docs
+    assert "docs fix" in cli_docs
 
 
 def test_readme_visual_assets_exist():

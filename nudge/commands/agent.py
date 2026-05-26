@@ -8,17 +8,19 @@ calling AppleScript/EventKit directly.
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
-import secrets
 import sys
-from pathlib import Path
 
 import click
 
 from nudge.action_hygiene import normalize_reminder_title
 from nudge.apple.adapters import UnsupportedAppleBackendError, resolve_apple_backends
+from nudge.commands.agent_confirmation import (
+    CONFIRMATION_TOKEN_VERSION,
+    configure_confirmation_state,
+    confirmation_token,
+    confirmation_token_matches,
+)
 from nudge.commands.do import _action_schema_problems, execute_action
 from nudge.config import (
     DEFAULT_CALENDAR_NAME,
@@ -59,8 +61,6 @@ SUPPORTED_AGENT_ACTIONS = {
     "note.create": ("title", "body"),
 }
 MAX_AGENT_ACTIONS = 10
-CONFIRMATION_TOKEN_VERSION = "nudge.agent.confirm.v1"
-CONFIRMATION_SECRET_PATH = STATE_DIR / "agent_confirm_secret"
 
 
 @click.group("agent")
@@ -128,10 +128,10 @@ def apply_command(file_path, dry_run, config_path, json_output):
 
 def _configure_agent_state(config: dict) -> None:
     """Point agent state and confirmation token storage at a loaded config."""
-    global STATE_DIR, CONFIRMATION_SECRET_PATH
+    global STATE_DIR
 
     STATE_DIR = configure_state(config)
-    CONFIRMATION_SECRET_PATH = STATE_DIR / "agent_confirm_secret"
+    configure_confirmation_state(STATE_DIR)
 
 
 @agent_command.command("status")
@@ -615,7 +615,7 @@ def _apply_normalized_request(
     _fill_backend_targets(actions, apple_backends)
     if dry_run:
         dry_run_token = (
-            _confirmation_token(normalized)
+            confirmation_token(normalized)
             if normalized.require_confirmation
             else None
         )
@@ -631,7 +631,7 @@ def _apply_normalized_request(
         return payload, 0
 
     if normalized.require_confirmation:
-        expected_token = _confirmation_token(normalized)
+        expected_token = confirmation_token(normalized)
         if not normalized.dry_run_token:
             return _agent_error_payload(
                 request_id=normalized.request_id,
@@ -643,7 +643,7 @@ def _apply_normalized_request(
                 text_plan_confirmed=normalized.text_plan_confirmed,
                 text_plan_ref=normalized.text_plan_ref,
             ), 1
-        if not hmac.compare_digest(normalized.dry_run_token, expected_token):
+        if not confirmation_token_matches(normalized.dry_run_token, expected_token):
             return _agent_error_payload(
                 request_id=normalized.request_id,
                 source=normalized.source,
@@ -832,39 +832,6 @@ def _plan_text_confirmation_missing(normalized: _NormalizedRequest) -> bool:
     if not normalized.text_plan_confirmed:
         return True
     return not (normalized.text_plan_ref or "").strip()
-
-
-def _confirmation_token(normalized: _NormalizedRequest) -> str:
-    """Return a stable token binding a real write to a specific dry-run summary.
-
-    This is a confirmation token, not an authentication credential. It prevents
-    accidental or hidden mutation between dry-run and real write by hashing the
-    exact normalized actions, targets, request id, and source.
-    """
-    material = {
-        "version": CONFIRMATION_TOKEN_VERSION,
-        "request_id": normalized.request_id,
-        "source": normalized.source,
-        "plan_driven": normalized.plan_driven,
-        "text_plan_confirmed": normalized.text_plan_confirmed,
-        "text_plan_ref": normalized.text_plan_ref,
-        "actions": normalized.actions,
-    }
-    raw = json.dumps(material, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    digest = hmac.new(_confirmation_secret(), raw.encode("utf-8"), hashlib.sha256).hexdigest()
-    return f"{CONFIRMATION_TOKEN_VERSION}:{digest}"
-
-
-def _confirmation_secret() -> bytes:
-    """Return a stable local HMAC secret for dry-run confirmation tokens."""
-    try:
-        value = CONFIRMATION_SECRET_PATH.read_text(encoding="utf-8").strip()
-    except FileNotFoundError:
-        CONFIRMATION_SECRET_PATH.parent.mkdir(parents=True, exist_ok=True)
-        value = secrets.token_hex(32)
-        CONFIRMATION_SECRET_PATH.write_text(value + "\n", encoding="utf-8")
-        CONFIRMATION_SECRET_PATH.chmod(0o600)
-    return value.encode("utf-8")
 
 
 def _error_to_json(error: ErrorReport) -> dict:

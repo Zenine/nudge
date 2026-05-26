@@ -67,6 +67,10 @@ def test_daily_sync_reports_docs_audit_and_creates_maintenance_action_on_apply(m
     assert payload["docs"]["attention_required"] is True
     assert payload["docs"]["action_created"] is True
     assert payload["docs"]["action_id"] == "docs-action"
+    assert payload["docs"]["maintenance_policy"] == {
+        "action_triggers": ["errors", "warnings"],
+        "suggestions": "suggestions_only",
+    }
     assert audit_roots == [daily.PROJECT_ROOT]
     assert created_actions == [
         {
@@ -202,3 +206,39 @@ def test_daily_sync_creates_docs_maintenance_action_for_warning_only_report(monk
             "status": "created",
         }
     ]
+
+
+def test_daily_sync_keeps_docs_suggestions_read_only(monkeypatch):
+    import nudge.commands.daily as daily
+
+    monkeypatch.setattr(daily, "load_config", lambda p=None: {"general": {"default_reminder_list": "日常"}})
+    monkeypatch.setattr(daily, "get_actions", lambda **kwargs: [])
+    monkeypatch.setattr(daily, "sync_completed_for_date", _empty_reminder_payload)
+    monkeypatch.setattr(
+        daily,
+        "audit_docs",
+        lambda root: {
+            "ok": True,
+            "summary": {"errors": 0, "warnings": 0, "suggestions": 1},
+            "errors": [],
+            "warnings": [],
+            "suggestions": [{"code": "DOCS_LONG_ENTRYPOINT", "message": "long"}],
+        },
+    )
+    monkeypatch.setattr(
+        daily,
+        "log_action",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("suggestions must not create actions")),
+    )
+
+    result = CliRunner().invoke(
+        cli,
+        ["daily", "sync", "--date", "2026-04-30", "--no-health", "--apply", "--json"],
+        prog_name="nudge",
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["docs"]["attention_required"] is False
+    assert payload["docs"]["action_created"] is False
+    assert payload["docs"]["maintenance_policy"]["suggestions"] == "suggestions_only"

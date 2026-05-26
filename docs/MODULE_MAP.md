@@ -157,6 +157,18 @@
 - 其他项目应该如何构造 request。
 - `plan_driven`、`text_plan_confirmed`、`text_plan_ref` 等安全字段。
 
+### `nudge/commands/agent_confirmation.py`
+
+职责：
+
+- 生成并校验 agent apply 的 dry-run confirmation token。
+- 管理本机 `agent_confirm_secret` 文件位置。
+
+适合查：
+
+- `require_confirmation=true` 为什么必须先 dry-run。
+- dry-run 后修改 request 为什么会触发 `AGENT_CONFIRMATION_INVALID`。
+
 ### `nudge/errors.py`
 
 职责：

@@ -18,6 +18,7 @@
 - 新增 docs audit public-safe 规则：断锚点、缺失图片资源、重复标题 slug、README 与 `docs/README.md` 索引不一致。
 - 新增 `nudge do` 合同测试，覆盖坏 JSON、缺字段、结束时间早于开始时间和 family group 展开。
 - 新增 in-memory Apple mock backend 示例，方便非 macOS 环境验证 Apple 写入路径。
+- `nudge daily sync` 的 docs payload 新增 `maintenance_policy`，明确 error/warning 会触发维护 action，suggestion 仅提示。
 
 ### Changed
 
@@ -41,6 +42,9 @@
 - runtime JSONL 日志写入前会按 `runtime_log.max_bytes` 轮转，默认 1 MiB，并保留 3 份历史文件。
 - `config.example.toml` 补充 `[runtime_log] max_bytes` 示例配置。
 - README / README.zh-CN 收敛为入口页，把安装、provider、诊断和运行日志细节下沉到 `docs/SETUP.md`，使 docs audit entrypoint suggestion 归零。
+- 文档审计 suggestion 跟进策略产品化：保持 `nudge docs audit` 只读，暂不提供自动 `docs fix` 写入工作流。
+- 将 `nudge agent apply` 的 dry-run confirmation token 逻辑拆到独立模块，保持 token 格式和校验行为不变。
+- 收敛 daemon sleep 默认值到 Python 常量，并用测试确保它和 launchd bootstrap 默认值一致。
 
 ### Fixed
 

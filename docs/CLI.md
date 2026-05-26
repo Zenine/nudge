@@ -504,7 +504,7 @@ nudge docs audit
 nudge docs audit --json
 ```
 
-`nudge docs audit` 是只读文档维护检查，不移动、不删除、不重写文件。它会报告 `DOCS_BROKEN_LINK`、`DOCS_BROKEN_ANCHOR`、`DOCS_BROKEN_IMAGE`、`DOCS_DUPLICATE_HEADING`、`DOCS_INDEX_MISMATCH`、`DOCS_JUNK_FILE`、`DOCS_STALE_PLAN`、`DOCS_ARCHIVE_CANDIDATE`、`DOCS_TODO_HISTORY` 和 `DOCS_LONG_ENTRYPOINT` 等问题；`--json` 输出同样带 `schema_version: "nudge.cli.v1"`。断链、断锚点、缺图片和系统垃圾文件等严重问题会让命令返回非 0，适合脚本或 daily sync 读取。
+`nudge docs audit` 是只读文档维护检查，不移动、不删除、不重写文件。它会报告 `DOCS_BROKEN_LINK`、`DOCS_BROKEN_ANCHOR`、`DOCS_BROKEN_IMAGE`、`DOCS_DUPLICATE_HEADING`、`DOCS_INDEX_MISMATCH`、`DOCS_JUNK_FILE`、`DOCS_STALE_PLAN`、`DOCS_ARCHIVE_CANDIDATE`、`DOCS_TODO_HISTORY` 和 `DOCS_LONG_ENTRYPOINT` 等问题；`--json` 输出同样带 `schema_version: "nudge.cli.v1"`。断链、断锚点、缺图片和系统垃圾文件等严重问题会让命令返回非 0，适合脚本或 daily sync 读取。Suggestion 是只读提示，不触发自动维护 action；当前没有 `docs fix` 写入工作流。
 
 ### 每日同步聚合命令
 
@@ -521,7 +521,7 @@ Reminders 部分会自动跑今天、昨天，并在 `--lookback-days` 窗口内
 
 Health 部分默认自动选择 `~/Library/Mobile Documents/iCloud~HealthExport/Documents/Health/` 下最新的 `health-*.json` 或 ZIP，并导入 `[--date - lookback-days, --date + 1)` 窗口；也可用 `--health PATH` 指定文件，或用 `--no-health` 跳过。Calendar event 过期不会被自动标记完成，因为「过去了」不等于「做完了」；命令会在 `remaining_failures` 和 `human_needed` 中返回可复制的 `nudge log ... --id ...` 跟进命令。
 
-Docs 部分会复用 `nudge docs audit` 做只读检查，并在 JSON 的 `docs.report` 中返回结果。`docs.attention_required` 会在发现 error 或 warning 时变为 `true`；顶层 `ok` 仍只表示 Reminders / Health 同步本身是否失败。若 `--apply` 时发现文档 error / warning 且当天尚无打开的 `[Nudge Docs] 本周文档需要维护` action，命令只会创建一条本地 `maintenance` action；不会移动、删除或重写任何文档，也不会直接写 Apple Reminders。
+Docs 部分会复用 `nudge docs audit` 做只读检查，并在 JSON 的 `docs.report` 中返回结果。`docs.attention_required` 只会在发现 error 或 warning 时变为 `true`；suggestion 保留在 `docs.report.suggestions` 中提示人工判断，不进入 daily sync maintenance action。JSON 的 `docs.maintenance_policy` 会明确当前策略：`action_triggers` 为 `errors` / `warnings`，`suggestions` 为 `suggestions_only`。顶层 `ok` 仍只表示 Reminders / Health 同步本身是否失败。若 `--apply` 时发现文档 error / warning 且当天尚无打开的 `[Nudge Docs] 本周文档需要维护` action，命令只会创建一条本地 `maintenance` action；不会移动、删除或重写任何文档，也不会直接写 Apple Reminders。
 
 ### Reminders 完成状态同步
 

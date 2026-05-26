@@ -46,6 +46,7 @@ from nudge.state import (
 SUPPORTED_REQUEST_TYPES = {"agent.apply", "agent.status"}
 DEFAULT_DAEMON_STALE_MINUTES = 30
 DEFAULT_DAEMON_MAX_ATTEMPTS = 3
+DEFAULT_DAEMON_SLEEP_MS = 3000
 DAEMON_LAUNCHD_LABEL = "com.nudge.agent"
 DAEMON_ALERT_POLICY = {
     "LAUNCHD_UNSUPPORTED": {
@@ -360,7 +361,7 @@ def _write_launchd_plist(
         workdir=workdir or _repo_root(),
         out_log_path=paths["out_log_path"],
         err_log_path=paths["err_log_path"],
-        sleep_ms=sleep_ms or _int_from_env("NUDGE_DAEMON_SLEEP_MS", 3000),
+        sleep_ms=sleep_ms or _int_from_env("NUDGE_DAEMON_SLEEP_MS", DEFAULT_DAEMON_SLEEP_MS),
         stale_minutes=stale_minutes or _int_from_env("NUDGE_DAEMON_STALE_MINUTES", DEFAULT_DAEMON_STALE_MINUTES),
         max_attempts=max_attempts or _int_from_env("NUDGE_DAEMON_MAX_ATTEMPTS", DEFAULT_DAEMON_MAX_ATTEMPTS),
         max_queue_depth=max_queue_depth or _int_from_env("NUDGE_DAEMON_MAX_QUEUE_DEPTH", DEFAULT_COMMAND_QUEUE_MAX_DEPTH),
@@ -942,7 +943,7 @@ def run_command(config_path, run_once, sleep_ms, max_empty_cycles, recover_stale
         _configure_agent_state(daemon_config)
 
     if sleep_ms is None:
-        sleep_ms = int(os.environ.get("NUDGE_DAEMON_SLEEP_MS", "3000"))
+        sleep_ms = _int_from_env("NUDGE_DAEMON_SLEEP_MS", DEFAULT_DAEMON_SLEEP_MS)
     if sleep_ms < 250:
         sleep_ms = 250
     should_stop = {"value": False}

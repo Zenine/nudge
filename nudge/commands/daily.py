@@ -29,6 +29,7 @@ DEFAULT_HEALTH_EXPORT_DIR = (
 _PENDING_STATUSES = {"created", "pending"}
 _FAILURE_KEYS = ("pending_overdue", "blocked_open", "missing_reason", "missing_next_action", "deferred_open")
 DOCS_MAINTENANCE_SUMMARY = "[Nudge Docs] 本周文档需要维护"
+DOCS_SUGGESTION_POLICY = "suggestions_only"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -292,6 +293,10 @@ def _sync_docs_audit(*, target_date: date, apply_changes: bool) -> dict:
         "report": report,
         "attention_required": attention_required,
         "action_created": False,
+        "maintenance_policy": {
+            "action_triggers": ["errors", "warnings"],
+            "suggestions": DOCS_SUGGESTION_POLICY,
+        },
     }
     if not attention_required:
         return payload
