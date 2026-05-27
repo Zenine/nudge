@@ -22,16 +22,21 @@ DEFAULT_LLM_CONFIG = {
     },
 }
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+CONFIG_DIR_KEY = "__nudge_config_dir"
 
 
 def load_config(path: str | Path | None = None) -> dict:
-    """Load config.toml. Searches in script dir if no path given."""
+    """Load config.toml.
+
+    Precedence: explicit path, NUDGE_CONFIG, repository config.toml.
+    """
     if path is None:
-        path = Path(__file__).parent.parent / "config.toml"
+        env_path = os.environ.get("NUDGE_CONFIG")
+        path = Path(env_path).expanduser() if env_path else PROJECT_ROOT / "config.toml"
     else:
-        path = Path(path)
+        path = Path(path).expanduser()
         if not path.is_absolute():
-            path = Path(__file__).parent.parent / path
+            path = PROJECT_ROOT / path
 
     if not path.exists():
         raise FileNotFoundError(
@@ -39,7 +44,9 @@ def load_config(path: str | Path | None = None) -> dict:
             "Create one by copying config.example.toml, or run with --config."
         )
     with open(path, "rb") as f:
-        return tomllib.load(f)
+        config = tomllib.load(f)
+    config[CONFIG_DIR_KEY] = str(path.resolve().parent)
+    return config
 
 
 def resolve_state_dir(config: dict | None = None) -> Path:
@@ -53,7 +60,10 @@ def resolve_state_dir(config: dict | None = None) -> Path:
     configured = state_config.get("dir") or state_config.get("directory")
     if configured:
         path = Path(str(configured)).expanduser()
-        return path if path.is_absolute() else PROJECT_ROOT / path
+        if path.is_absolute():
+            return path
+        base = Path(str(config.get(CONFIG_DIR_KEY) or PROJECT_ROOT))
+        return base / path
 
     return PROJECT_ROOT / ".nudge"
 

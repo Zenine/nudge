@@ -36,6 +36,22 @@ scripts/bootstrap_launchd.sh status
 
 `nudge docs audit` is read-only. `nudge daily sync --apply --json` can create a local maintenance action when documentation errors or warnings need attention; it does not move, delete, or rewrite documentation.
 
+## Using a Private Overlay
+
+Nudge can run this public runtime while reading private configuration and SQLite state from another directory. Keep personal plans, database files, API key paths, Health exports, and machine-specific settings in that private overlay.
+
+```bash
+export NUDGE_CONFIG=/path/to/private/config.toml
+# Optional: override the state directory without editing config.toml.
+export NUDGE_STATE_DIR=/path/to/private/state
+
+bin/nudge doctor
+bin/nudge mcp serve
+bin/nudge agent status --file /path/to/status.json
+```
+
+If `NUDGE_CONFIG` points at a private config file, relative `[state].dir` values are resolved from that config file's directory. An explicit `--config /path/to/config.toml` takes priority over `NUDGE_CONFIG`.
+
 ## Private Data
 
 Keep these outside the public repository:
