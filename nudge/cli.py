@@ -10,9 +10,9 @@ from nudge.commands.briefing import briefing_command
 from nudge.commands.chat import chat_command
 from nudge.commands.do import do_command
 from nudge.commands.doctor import doctor_command
+from nudge.commands.docs import docs_command
 from nudge.commands.daily import daily_command
 from nudge.commands.db import db_command
-from nudge.commands.docs import docs_command
 from nudge.commands.dogfood import dogfood_command
 from nudge.commands.failures import failures_command
 from nudge.commands.habits import habits_command

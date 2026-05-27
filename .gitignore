@@ -1,17 +1,17 @@
-# Python bytecode and test caches
 __pycache__/
-*.py[cod]
-.pytest_cache/
-
-# Local virtual environments
+*.pyc
+.env
 .venv/
 venv/
-
-# Local Nudge runtime state
-.nudge/
-
-# Local configuration; may reference private secrets paths
-config.toml
-
-# macOS filesystem metadata
+*.egg-info/
+dist/
+build/
 .DS_Store
+.pytest_cache/
+.coverage
+config.toml
+.nudge/
+*.db
+*.sqlite
+*.sqlite3
+*.zip

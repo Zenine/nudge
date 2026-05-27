@@ -22,8 +22,8 @@ from nudge.apple.notes import (
 from nudge.commands.agent import (
     MAX_AGENT_ACTIONS,
     configure_agent_state,
-    apply_action_status,
     apply_agent_request,
+    apply_action_status,
 )
 from nudge.commands.doctor import doctor_payload, run_checks
 from nudge.config import load_config
@@ -32,7 +32,7 @@ from nudge.json_contract import versioned_payload
 
 
 MCP_PROTOCOL_VERSION = "2025-11-25"
-SERVER_INFO = {"name": "nudge", "version": "0.5.0"}
+SERVER_INFO = {"name": "nudge", "version": "0.5.1"}
 JSONRPC_VERSION = "2.0"
 _configure_agent_state = configure_agent_state
 
@@ -53,7 +53,7 @@ def serve_command(config_path):
     """
     config = load_config(config_path)
     if config_path:
-        _configure_agent_state(config)
+        configure_agent_state(config)
     for raw_line in sys.stdin:
         line = raw_line.strip()
         if not line:

@@ -135,6 +135,11 @@ formatter.dateFormat = "HH:mm"
 formatter.locale = Locale(identifier: "en_US_POSIX")
 formatter.timeZone = TimeZone.current
 
+let dueFormatter = DateFormatter()
+dueFormatter.dateFormat = "yyyy-MM-dd HH:mm"
+dueFormatter.locale = Locale(identifier: "en_US_POSIX")
+dueFormatter.timeZone = TimeZone.current
+
 let completedFormatter = DateFormatter()
 completedFormatter.dateFormat = "yyyy-MM-dd HH:mm"
 completedFormatter.locale = Locale(identifier: "en_US_POSIX")
@@ -147,19 +152,31 @@ store.fetchReminders(matching: predicate) { reminders in
         let dueTime: String
         if let dueDate = reminder.dueDateComponents?.date {
             dueTime = formatter.string(from: dueDate)
+            let dueAt = dueFormatter.string(from: dueDate)
+            if requestedMode == "completed" {
+                let completedAt: String
+                if let completionDate = reminder.completionDate {
+                    completedAt = completedFormatter.string(from: completionDate)
+                } else {
+                    completedAt = ""
+                }
+                rows.append("\(title)\t\(dueTime)\t\(list)\t\(completedAt)\t\(dueAt)")
+            } else {
+                rows.append("\(title)\t\(dueTime)\t\(list)\t\t\(dueAt)")
+            }
         } else {
             dueTime = ""
-        }
-        if requestedMode == "completed" {
-            let completedAt: String
-            if let completionDate = reminder.completionDate {
-                completedAt = completedFormatter.string(from: completionDate)
+            if requestedMode == "completed" {
+                let completedAt: String
+                if let completionDate = reminder.completionDate {
+                    completedAt = completedFormatter.string(from: completionDate)
+                } else {
+                    completedAt = ""
+                }
+                rows.append("\(title)\t\(dueTime)\t\(list)\t\(completedAt)\t")
             } else {
-                completedAt = ""
+                rows.append("\(title)\t\(dueTime)\t\(list)\t\t")
             }
-            rows.append("\(title)\t\(dueTime)\t\(list)\t\(completedAt)")
-        } else {
-            rows.append("\(title)\t\(dueTime)\t\(list)")
         }
     }
     semaphore.signal()

@@ -6,7 +6,7 @@ from typing import Any
 import click
 
 from nudge.action_hygiene import normalize_reminder_title
-from nudge.apple.reminders import complete_reminder
+from nudge.apple.reminders import complete_reminder, complete_reminder_by_external_id
 from nudge.brain import NudgeBrainError, parse_check_in_feedback
 from nudge.config import DEFAULT_REMINDER_LIST, get_defaults, load_config
 from nudge.errors import ErrorReport, classify_llm_error
@@ -313,11 +313,23 @@ def _sync_apple_reminder_completion(action: dict, status: str, dry_run: bool) ->
         }
 
     try:
-        ok, message = _complete_apple_reminder_by_possible_titles(
-            title,
-            str(action.get("scheduled_at") or ""),
-            reminder_list,
-        )
+        external_id = str(action.get("external_id") or "").strip()
+        if external_id:
+            ok, message = complete_reminder_by_external_id(external_id, reminder_list)
+            if not ok:
+                title_ok, title_message = _complete_apple_reminder_by_possible_titles(
+                    title,
+                    str(action.get("scheduled_at") or ""),
+                    reminder_list,
+                )
+                ok = title_ok
+                message = f"{message}; fallback title match: {title_message}"
+        else:
+            ok, message = _complete_apple_reminder_by_possible_titles(
+                title,
+                str(action.get("scheduled_at") or ""),
+                reminder_list,
+            )
     except Exception as exc:
         ok, message = False, str(exc)
     return {

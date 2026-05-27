@@ -446,6 +446,15 @@ def update_action_status(action_id: str, status: str, feedback: dict | None = No
         )
 
 
+def update_action_external_id(action_id: str, external_id: str) -> None:
+    """Attach a stable backend external id to an existing action."""
+    with _db() as conn:
+        conn.execute(
+            "UPDATE actions SET external_id = ? WHERE id = ?",
+            (external_id, action_id),
+        )
+
+
 def get_actions(
     status: str | None = None,
     since: str | None = None,

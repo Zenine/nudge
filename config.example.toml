@@ -1,20 +1,16 @@
 [general]
 default_calendar = "Personal"
 default_reminder_list = "Tasks"
-default_notes_folder = "Nudge"
 locale = "en-US"
 
 [state]
 dir = "~/.local/share/nudge"
 
-[runtime_log]
-# Rotate nudge-runtime.jsonl before writes once the active file exceeds this size.
-max_bytes = 1048576
-
 [llm]
 provider = "qwen"
 # api_key = ""            # Prefer environment variables or secrets_path.
 # secrets_path = "~/.config/nudge/secrets.yaml"
+# For fully local inference, use provider = "ollama" and an installed Ollama model.
 
 [llm.models]
 fast = "qwen-plus"

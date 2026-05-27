@@ -39,6 +39,7 @@ from nudge.apple.notes import (
 from nudge.apple.reminders import (
     create_reminder,
     list_reminder_lists,
+    make_reminder_external_id,
     probe_reminders_read,
 )
 from nudge.config import get_apple_backend_config
@@ -107,6 +108,7 @@ class RemindersBackend(Protocol):
         body: str | None = None,
         priority: int = 0,
         remind_date: datetime | None = None,
+        external_id: str | None = None,
     ) -> WriteResult:
         """Create one reminder."""
 
@@ -194,7 +196,9 @@ class NativeRemindersBackend:
         body: str | None = None,
         priority: int = 0,
         remind_date: datetime | None = None,
+        external_id: str | None = None,
     ) -> WriteResult:
+        external_id = external_id or make_reminder_external_id()
         ok, message = create_reminder(
             name=name,
             due_date=due_date,
@@ -202,11 +206,9 @@ class NativeRemindersBackend:
             body=body,
             priority=priority,
             remind_date=remind_date,
+            external_id=external_id,
         )
-        # The current AppleScript Reminders write path returns an object
-        # specifier, not a stable ID. Preserve existing tracking semantics until
-        # a backend can provide a safe external_id.
-        return WriteResult(ok=ok, message=message, external_id=None)
+        return WriteResult(ok=ok, message=message, external_id=external_id if ok else None)
 
 
 @dataclass(frozen=True)

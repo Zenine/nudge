@@ -47,7 +47,6 @@ from nudge.state import (
 SUPPORTED_REQUEST_TYPES = {"agent.apply", "agent.status"}
 DEFAULT_DAEMON_STALE_MINUTES = 30
 DEFAULT_DAEMON_MAX_ATTEMPTS = 3
-DEFAULT_DAEMON_SLEEP_MS = 3000
 DAEMON_LAUNCHD_LABEL = "com.nudge.agent"
 DAEMON_ALERT_POLICY = {
     "LAUNCHD_UNSUPPORTED": {
@@ -198,7 +197,11 @@ def _repo_root() -> Path:
 def _repo_code_state() -> dict[str, object]:
     """Best-effort code revision metadata for runtime logs."""
     root = _repo_root()
-    state: dict[str, object] = {"repo_root": str(root)}
+    state: dict[str, object] = {
+        "repo_root": str(root),
+        "revision": "unknown",
+        "dirty": False,
+    }
     try:
         revision = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
@@ -208,7 +211,8 @@ def _repo_code_state() -> dict[str, object]:
             check=False,
         )
         if revision.returncode == 0:
-            state["revision"] = revision.stdout.strip()
+            state["revision"] = revision.stdout.strip() or "unknown"
+
         dirty = subprocess.run(
             ["git", "status", "--short"],
             cwd=root,
@@ -219,7 +223,7 @@ def _repo_code_state() -> dict[str, object]:
         if dirty.returncode == 0:
             state["dirty"] = bool(dirty.stdout.strip())
     except OSError:
-        state["revision"] = "unknown"
+        pass
     return state
 
 
@@ -390,7 +394,7 @@ def _write_launchd_plist(
         workdir=workdir or _repo_root(),
         out_log_path=paths["out_log_path"],
         err_log_path=paths["err_log_path"],
-        sleep_ms=sleep_ms or _int_from_env("NUDGE_DAEMON_SLEEP_MS", DEFAULT_DAEMON_SLEEP_MS),
+        sleep_ms=sleep_ms or _int_from_env("NUDGE_DAEMON_SLEEP_MS", 3000),
         stale_minutes=stale_minutes or _int_from_env("NUDGE_DAEMON_STALE_MINUTES", DEFAULT_DAEMON_STALE_MINUTES),
         max_attempts=max_attempts or _int_from_env("NUDGE_DAEMON_MAX_ATTEMPTS", DEFAULT_DAEMON_MAX_ATTEMPTS),
         max_queue_depth=max_queue_depth or _int_from_env("NUDGE_DAEMON_MAX_QUEUE_DEPTH", DEFAULT_COMMAND_QUEUE_MAX_DEPTH),
@@ -873,23 +877,26 @@ def _log_daemon_start(
     recover_stale_minutes: int,
     max_attempts: int,
 ) -> None:
-    code_state = _repo_code_state()
-    append_runtime_log(
-        {
-            "level": "INFO",
-            "source": "daemon.run",
-            "message": "daemon started",
-            "repo_root": code_state.get("repo_root"),
-            "revision": code_state.get("revision"),
-            "dirty": code_state.get("dirty"),
-            "config_path": str(config_path) if config_path is not None else "",
-            "run_once": run_once,
-            "sleep_ms": sleep_ms,
-            "recover_stale_minutes": recover_stale_minutes,
-            "max_attempts": max_attempts,
-        },
-        config=config,
-    )
+    try:
+        code_state = _repo_code_state()
+        append_runtime_log(
+            {
+                "level": "INFO",
+                "source": "daemon.run",
+                "message": "daemon started",
+                "repo_root": code_state.get("repo_root"),
+                "revision": code_state.get("revision"),
+                "dirty": code_state.get("dirty"),
+                "config_path": str(config_path) if config_path is not None else "",
+                "run_once": run_once,
+                "sleep_ms": sleep_ms,
+                "recover_stale_minutes": recover_stale_minutes,
+                "max_attempts": max_attempts,
+            },
+            config=config,
+        )
+    except Exception:
+        pass
 
 
 @daemon_command.command("health")
@@ -1000,7 +1007,7 @@ def run_command(config_path, run_once, sleep_ms, max_empty_cycles, recover_stale
         _configure_agent_state(daemon_config)
 
     if sleep_ms is None:
-        sleep_ms = _int_from_env("NUDGE_DAEMON_SLEEP_MS", DEFAULT_DAEMON_SLEEP_MS)
+        sleep_ms = int(os.environ.get("NUDGE_DAEMON_SLEEP_MS", "3000"))
     if sleep_ms < 250:
         sleep_ms = 250
     should_stop = {"value": False}

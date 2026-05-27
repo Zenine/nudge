@@ -29,7 +29,6 @@ DEFAULT_HEALTH_EXPORT_DIR = (
 _PENDING_STATUSES = {"created", "pending"}
 _FAILURE_KEYS = ("pending_overdue", "blocked_open", "missing_reason", "missing_next_action", "deferred_open")
 DOCS_MAINTENANCE_SUMMARY = "[Nudge Docs] 本周文档需要维护"
-DOCS_SUGGESTION_POLICY = "suggestions_only"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -135,7 +134,6 @@ def sync_command(
             "date": date_text or date.today().isoformat(),
             "reminders": {"list": list_name or "", "dates": [], "results": []},
             "health": {"ok": False, "skipped": bool(skip_health), "errors": []},
-            "docs": {"ok": False, "report": {}, "attention_required": False, "action_created": False},
             "remaining_failures": {},
             "human_needed": [],
             "errors": [{"code": "DAILY_SYNC_FAILED", "message": str(exc)}],
@@ -174,9 +172,11 @@ def _load_daily_config(config_path: str | None) -> dict:
     return config
 
 
-def _reminder_list(list_name: str | None, config: dict) -> str:
+def _reminder_list(list_name: str | None, config: dict | str | None) -> str:
     if list_name:
         return list_name
+    if not isinstance(config, dict):
+        config = _load_daily_config(config)
     defaults = get_defaults(config)
     return defaults.get("default_reminder_list", DEFAULT_REMINDER_LIST)
 
@@ -300,10 +300,6 @@ def _sync_docs_audit(*, target_date: date, apply_changes: bool) -> dict:
         "report": report,
         "attention_required": attention_required,
         "action_created": False,
-        "maintenance_policy": {
-            "action_triggers": ["errors", "warnings"],
-            "suggestions": DOCS_SUGGESTION_POLICY,
-        },
     }
     if not attention_required:
         return payload
@@ -419,14 +415,6 @@ def _emit(payload: dict, json_output: bool) -> None:
             f"  health: {health.get('source')} · daily={summary.get('daily')} "
             f"· workouts={summary.get('workouts')}"
         )
-    docs = payload.get("docs") or {}
-    docs_summary = (docs.get("report") or {}).get("summary") or {}
-    click.echo(
-        "  docs: "
-        f"errors={docs_summary.get('errors', 0)} "
-        f"warnings={docs_summary.get('warnings', 0)} "
-        f"suggestions={docs_summary.get('suggestions', 0)}"
-    )
     failure_summary = (payload.get("remaining_failures") or {}).get("summary") or {}
     click.echo(
         "  remaining: "

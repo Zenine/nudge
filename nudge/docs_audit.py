@@ -8,9 +8,10 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 
-ENTRYPOINTS = ("README.md", "README.zh-CN.md")
+ENTRYPOINTS = ("README.md", "README_CN.md")
 JUNK_FILENAMES = {".DS_Store", "Thumbs.db"}
 TODO_HISTORY_MARKERS = ("[x]", "✅", "Done", "已完成")
+DUPLICATE_HEADING_EXEMPT_FILES = {Path("CHANGELOG.md")}
 MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
 MARKDOWN_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$", re.MULTILINE)
@@ -118,7 +119,8 @@ def _check_entrypoint_archive_links(root: Path, report: dict) -> None:
         if not path.exists():
             continue
         for target in _markdown_link_targets(path):
-            if target.startswith("docs/archive/"):
+            resolved = _resolve_markdown_link(path, target)
+            if resolved is not None and _is_in_archive(root, resolved):
                 _add(
                     report,
                     "errors",
@@ -184,7 +186,7 @@ def _check_markdown_images(root: Path, report: dict) -> None:
 
 def _check_duplicate_headings(root: Path, report: dict) -> None:
     for path in _markdown_files(root):
-        if _is_in_archive(root, path):
+        if _is_in_archive(root, path) or _is_duplicate_heading_exempt(root, path):
             continue
         slugs: set[str] = set()
         for heading in _heading_slugs(path):
@@ -202,25 +204,28 @@ def _check_duplicate_headings(root: Path, report: dict) -> None:
 
 
 def _check_docs_index_alignment(root: Path, report: dict) -> None:
-    readme = root / "README.md"
     docs_readme = root / "docs" / "README.md"
-    if not readme.exists() or not docs_readme.exists():
+    if not docs_readme.exists():
         return
 
-    readme_targets = _public_doc_targets(root, readme)
     docs_targets = _public_doc_targets(root, docs_readme)
-    readme_targets.discard("docs/README.md")
     docs_targets.discard("docs/README.md")
-    if readme_targets != docs_targets:
-        _add(
-            report,
-            "suggestions",
-            "DOCS_INDEX_MISMATCH",
-            "README 与 docs/README.md 的 public docs target 列表不一致。",
-            Path("README.md"),
-            missing_from_readme=sorted(docs_targets - readme_targets),
-            missing_from_docs_readme=sorted(readme_targets - docs_targets),
-        )
+    for entrypoint in ENTRYPOINTS:
+        readme = root / entrypoint
+        if not readme.exists():
+            continue
+        readme_targets = _public_doc_targets(root, readme)
+        readme_targets.discard("docs/README.md")
+        if readme_targets != docs_targets:
+            _add(
+                report,
+                "suggestions",
+                "DOCS_INDEX_MISMATCH",
+                f"{entrypoint} 与 docs/README.md 的 docs target 列表不一致。",
+                Path(entrypoint),
+                missing_from_readme=sorted(docs_targets - readme_targets),
+                missing_from_docs_readme=sorted(readme_targets - docs_targets),
+            )
 
 
 def _check_todo_history(root: Path, report: dict) -> None:
@@ -272,7 +277,15 @@ def _is_in_archive(root: Path, path: Path) -> bool:
         relative = path.relative_to(root)
     except ValueError:
         return False
-    return relative.parts[:2] == ("docs", "archive")
+    return relative.parts[:1] == ("docs",) and "archive" in relative.parts
+
+
+def _is_duplicate_heading_exempt(root: Path, path: Path) -> bool:
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        return False
+    return relative in DUPLICATE_HEADING_EXEMPT_FILES
 
 
 def _markdown_link_targets(path: Path) -> list[str]:

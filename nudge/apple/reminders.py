@@ -3,6 +3,7 @@
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 from nudge.apple.common import date_block, escape, run_applescript
 
@@ -11,6 +12,27 @@ from nudge.apple.common import date_block, escape, run_applescript
 DEFAULT_READ_TIMEOUT = 35
 EVENTKIT_DUE_TODAY_SCRIPT = Path(__file__).with_name("eventkit_reminders_due_today.swift")
 EVENTKIT_MUTATE_SCRIPT = Path(__file__).with_name("eventkit_reminders_mutate.swift")
+REMINDER_EXTERNAL_ID_PREFIX = "nudge://reminder/"
+REMINDER_EXTERNAL_ID_MARKER = "Nudge-ID:"
+
+
+def make_reminder_external_id() -> str:
+    """Return a stable Nudge-owned identifier for Apple Reminders correlation."""
+    return f"{REMINDER_EXTERNAL_ID_PREFIX}{uuid4().hex}"
+
+
+def reminder_external_id_marker(external_id: str) -> str:
+    """Return the notes marker used as a fallback for Reminders URL matching."""
+    return f"{REMINDER_EXTERNAL_ID_MARKER} {external_id}"
+
+
+def _body_with_external_id(body: str | None, external_id: str | None) -> str | None:
+    if not external_id:
+        return body
+    marker = reminder_external_id_marker(external_id)
+    if body and marker in body:
+        return body
+    return f"{body.rstrip()}\n\n{marker}" if body else marker
 
 
 def list_reminder_lists(timeout: int = 5) -> tuple[bool, list[str] | str]:
@@ -179,6 +201,8 @@ def _parse_due_today_rows(raw: str) -> list[dict]:
             }
             if len(parts) >= 4 and parts[3]:
                 reminder["completed_at"] = parts[3]
+            if len(parts) >= 5 and parts[4]:
+                reminder["due_at"] = parts[4]
             reminders.append(reminder)
     return reminders
 
@@ -189,6 +213,10 @@ def _run_eventkit_mutation(
     list_name: str,
     timeout: int = 30,
     due_date: str | None = None,
+    body: str | None = None,
+    priority: int = 0,
+    remind_date: str | None = None,
+    external_id: str | None = None,
 ) -> tuple[bool, str]:
     """Run an EventKit reminder mutation and return (success, message)."""
     cmd = [
@@ -200,6 +228,22 @@ def _run_eventkit_mutation(
     ]
     if due_date:
         cmd.append(due_date)
+    if operation == "create":
+        cmd.extend([
+            str(priority),
+            remind_date or "",
+            external_id or "",
+            body or "",
+        ])
+    elif operation == "set-id":
+        cmd.extend([
+            str(priority),
+            remind_date or "",
+            external_id or "",
+            body or "",
+        ])
+    elif external_id and operation != "complete-id":
+        cmd.append(external_id)
     try:
         result = subprocess.run(
             cmd,
@@ -227,15 +271,36 @@ def create_reminder(
     priority: int = 0,
     remind_date: datetime | None = None,
     timeout: int = 30,
+    external_id: str | None = None,
 ) -> tuple[bool, str]:
     """Create a Reminder. Returns (success, id/error)."""
+    if external_id:
+        remind_text = remind_date.strftime("%Y-%m-%d %H:%M") if remind_date else ""
+        ok, result = _run_eventkit_mutation(
+            "create",
+            name,
+            list_name,
+            timeout=timeout,
+            due_date=due_date.strftime("%Y-%m-%d %H:%M"),
+            body=_body_with_external_id(body, external_id),
+            priority=priority,
+            remind_date=remind_text,
+            external_id=external_id,
+        )
+        if ok:
+            return True, external_id
+        eventkit_error = result
+    else:
+        eventkit_error = ""
+
     date_blocks = [date_block("dueDate", due_date)]
     props = [
         f'name:"{escape(name)}"',
         "due date:dueDate",
     ]
-    if body:
-        props.append(f'body:"{escape(body)}"')
+    fallback_body = _body_with_external_id(body, external_id)
+    if fallback_body:
+        props.append(f'body:"{escape(fallback_body)}"')
     if priority > 0:
         props.append(f"priority:{priority}")
     if remind_date:
@@ -253,7 +318,12 @@ tell application "Reminders"
     end tell
 end tell"""
 
-    return run_applescript(script, timeout=timeout)
+    ok, result = run_applescript(script, timeout=timeout)
+    if ok and external_id:
+        return True, external_id
+    if not ok and eventkit_error:
+        return False, f"EventKit failed: {eventkit_error}; AppleScript failed: {result}"
+    return ok, result
 
 
 def get_reminders(
@@ -423,6 +493,45 @@ end tell
     if eventkit_error:
         return False, f"EventKit failed: {eventkit_error}; AppleScript failed: {result}"
     return False, result
+
+
+def complete_reminder_by_external_id(
+    external_id: str,
+    list_name: str,
+    timeout: int = 30,
+) -> tuple[bool, str]:
+    """Mark one Nudge-owned Apple Reminder as completed by stable external id."""
+    ok, result = _run_eventkit_mutation(
+        "complete-id",
+        external_id,
+        list_name,
+        timeout=timeout,
+        external_id=external_id,
+    )
+    if ok:
+        return True, result
+    return False, f"EventKit failed for reminder external_id completion: {result}"
+
+
+def set_reminder_external_id(
+    name: str,
+    list_name: str,
+    due_date: str,
+    external_id: str,
+    timeout: int = 30,
+) -> tuple[bool, str]:
+    """Attach a stable Nudge external id to exactly one existing reminder."""
+    ok, result = _run_eventkit_mutation(
+        "set-id",
+        name,
+        list_name,
+        timeout=timeout,
+        due_date=due_date,
+        external_id=external_id,
+    )
+    if ok:
+        return True, result
+    return False, f"EventKit failed for reminder external_id backfill: {result}"
 
 
 def delete_reminder(

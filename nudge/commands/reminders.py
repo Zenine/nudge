@@ -8,7 +8,13 @@ from datetime import date, datetime, timedelta
 import click
 
 from nudge.action_hygiene import normalize_reminder_title
-from nudge.apple.reminders import complete_reminder, query_completed_on_date, query_due_on_date
+from nudge.apple.reminders import (
+    complete_reminder,
+    make_reminder_external_id,
+    query_completed_on_date,
+    query_due_on_date,
+    set_reminder_external_id,
+)
 from nudge.config import DEFAULT_REMINDER_LIST, get_defaults, load_config
 from nudge.feedback import build_feedback
 from nudge.json_contract import versioned_payload
@@ -18,6 +24,7 @@ from nudge.state import (
     configure_state,
     get_actions,
     skip_later_sleep_reminders_after_completion,
+    update_action_external_id,
 )
 
 
@@ -65,6 +72,240 @@ def sync_completed_command(date_text, list_name, apply_changes, config_path, jso
         )
         _emit(payload, json_output)
         raise click.exceptions.Exit(1)
+
+
+@reminders_command.command("backfill-ids")
+@click.option("--from", "from_text", default=None, help="Backfill actions scheduled on/after YYYY-MM-DD")
+@click.option("--to", "to_text", default=None, help="Backfill actions scheduled before YYYY-MM-DD")
+@click.option("--list", "list_name", default=None, help="Reminder list name; defaults to config")
+@click.option("--include-completed", is_flag=True, help="Also inspect already completed Apple Reminders")
+@click.option("--limit", type=int, default=None, help="Maximum legacy actions to inspect")
+@click.option("--apply", "apply_changes", is_flag=True, help="Write IDs to Apple Reminders and SQLite")
+@click.option("--config", "-c", "config_path", default=None, help="Config file path")
+@click.option("--json", "json_output", is_flag=True, help="Print stable JSON for scripts")
+def backfill_ids_command(
+    from_text,
+    to_text,
+    list_name,
+    include_completed,
+    limit,
+    apply_changes,
+    config_path,
+    json_output,
+):
+    """Attach stable Nudge IDs to legacy Apple Reminders."""
+    try:
+        config = load_config(config_path)
+        if config_path:
+            configure_state(config)
+        defaults = get_defaults(config)
+        reminder_list = list_name or defaults.get("default_reminder_list", DEFAULT_REMINDER_LIST)
+        from_date = date.fromisoformat(from_text) if from_text else None
+        to_date = date.fromisoformat(to_text) if to_text else None
+        payload = backfill_ids(
+            reminder_list=reminder_list,
+            from_date=from_date,
+            to_date=to_date,
+            include_completed=include_completed,
+            limit=limit,
+            apply_changes=apply_changes,
+        )
+        _emit_backfill(payload, json_output)
+        if not payload.get("ok"):
+            raise click.exceptions.Exit(1)
+    except ValueError as exc:
+        payload = versioned_payload({
+            "ok": False,
+            "dry_run": not apply_changes,
+            "list": list_name or "",
+            "checked": 0,
+            "would_update": 0,
+            "updated": 0,
+            "candidates": [],
+            "missing": [],
+            "ambiguous": [],
+            "skipped": [],
+            "errors": [{"code": "REMINDERS_BACKFILL_FAILED", "message": str(exc)}],
+        })
+        _emit_backfill(payload, json_output)
+        raise click.exceptions.Exit(1)
+
+
+def backfill_ids(
+    *,
+    reminder_list: str,
+    from_date: date | None,
+    to_date: date | None,
+    include_completed: bool,
+    limit: int | None,
+    apply_changes: bool,
+) -> dict:
+    """Backfill stable external ids for legacy reminder actions."""
+    actions = _legacy_reminder_actions(from_date=from_date, to_date=to_date, limit=limit)
+    candidates: list[dict] = []
+    missing: list[dict] = []
+    ambiguous: list[dict] = []
+    skipped: list[dict] = []
+    errors: list[dict] = []
+    updated = 0
+
+    query_cache: dict[tuple[date, bool], list[dict] | str] = {}
+
+    for action in actions:
+        target_date = _action_date(action)
+        if target_date is None:
+            skipped.append({**_backfill_action_payload(action), "reason": "missing_or_invalid_scheduled_at"})
+            continue
+        ok, incomplete = _cached_due_reminders(query_cache, reminder_list, target_date)
+        if not ok:
+            errors.append({
+                "code": "REMINDERS_QUERY_FAILED",
+                "id": action.get("id"),
+                "message": str(incomplete),
+            })
+            continue
+        reminders = list(incomplete)
+        if include_completed:
+            for completed_date in (target_date, target_date + timedelta(days=1)):
+                completed_ok, completed = _cached_completed_reminders(query_cache, reminder_list, completed_date)
+                if completed_ok:
+                    reminders.extend(completed)
+                else:
+                    errors.append({
+                        "code": "REMINDERS_COMPLETED_QUERY_FAILED",
+                        "id": action.get("id"),
+                        "message": str(completed),
+                    })
+        matches = _matching_reminders_for_backfill(action, reminders)
+        item = _backfill_action_payload(action)
+        item["matches"] = len(matches)
+        if len(matches) == 0:
+            missing.append(item)
+            continue
+        if len(matches) > 1:
+            item["matched_titles"] = [match.get("name") for match in matches]
+            ambiguous.append(item)
+            continue
+
+        external_id = make_reminder_external_id()
+        item["external_id"] = external_id
+        candidates.append(item)
+        if apply_changes:
+            ok, message = set_reminder_external_id(
+                str(matches[0].get("name") or action.get("summary") or ""),
+                reminder_list,
+                str(action.get("scheduled_at") or ""),
+                external_id,
+            )
+            item["apple_message"] = message
+            if not ok:
+                errors.append({
+                    "code": "REMINDERS_SET_ID_FAILED",
+                    "id": action.get("id"),
+                    "message": message,
+                })
+                continue
+            update_action_external_id(str(action["id"]), external_id)
+            updated += 1
+
+    return versioned_payload({
+        "ok": not errors,
+        "dry_run": not apply_changes,
+        "list": reminder_list,
+        "from": from_date.isoformat() if from_date else None,
+        "to": to_date.isoformat() if to_date else None,
+        "include_completed": include_completed,
+        "checked": len(actions),
+        "would_update": len(candidates),
+        "updated": updated,
+        "candidates": candidates,
+        "missing": missing,
+        "ambiguous": ambiguous,
+        "skipped": skipped,
+        "errors": errors,
+    })
+
+
+def _cached_due_reminders(
+    cache: dict[tuple[date, bool], list[dict] | str],
+    reminder_list: str,
+    target_date: date,
+) -> tuple[bool, list[dict] | str]:
+    key = (target_date, False)
+    if key not in cache:
+        ok, result = query_due_on_date(reminder_list, target_date)
+        cache[key] = result if ok else str(result)
+    result = cache[key]
+    return (False, result) if isinstance(result, str) else (True, result)
+
+
+def _cached_completed_reminders(
+    cache: dict[tuple[date, bool], list[dict] | str],
+    reminder_list: str,
+    target_date: date,
+) -> tuple[bool, list[dict] | str]:
+    key = (target_date, True)
+    if key not in cache:
+        ok, result = query_completed_on_date(reminder_list, target_date)
+        cache[key] = result if ok else str(result)
+    result = cache[key]
+    return (False, result) if isinstance(result, str) else (True, result)
+
+
+def _legacy_reminder_actions(
+    *,
+    from_date: date | None,
+    to_date: date | None,
+    limit: int | None,
+) -> list[dict]:
+    since = f"{from_date.isoformat()} 00:00" if from_date else None
+    until = f"{to_date.isoformat()} 00:00" if to_date else None
+    actions = [
+        action
+        for action in get_actions(since=since, until=until)
+        if action.get("type") == "reminder"
+        and not action.get("external_id")
+        and action.get("summary")
+        and action.get("scheduled_at")
+    ]
+    actions.sort(key=lambda item: str(item.get("scheduled_at") or ""))
+    if limit is not None:
+        return actions[:max(limit, 0)]
+    return actions
+
+
+def _action_date(action: dict) -> date | None:
+    try:
+        return date.fromisoformat(str(action.get("scheduled_at") or "")[:10])
+    except ValueError:
+        return None
+
+
+def _backfill_action_payload(action: dict) -> dict:
+    return {
+        "id": action.get("id"),
+        "summary": action.get("summary"),
+        "scheduled_at": action.get("scheduled_at"),
+        "status": action.get("status"),
+    }
+
+
+def _matching_reminders_for_backfill(action: dict, reminders: list[dict]) -> list[dict]:
+    scheduled_at = str(action.get("scheduled_at") or "")
+    action_time = _time_part(scheduled_at)
+    summary = str(action.get("summary") or "")
+    normalized_summary = normalize_reminder_title(summary, scheduled_at)
+    matches = []
+    for reminder in reminders:
+        due_at = str(reminder.get("due_at") or "")
+        if due_at and due_at[:16] != scheduled_at[:16]:
+            continue
+        if str(reminder.get("due_time") or "") != action_time:
+            continue
+        reminder_name = str(reminder.get("name") or "")
+        if reminder_name == summary or normalize_reminder_title(reminder_name, scheduled_at) == normalized_summary:
+            matches.append(reminder)
+    return matches
 
 
 def sync_completed_for_date(
@@ -243,6 +484,9 @@ def _matches_any_incomplete(action: dict, incomplete: list[dict]) -> bool:
     summary = str(action.get("summary") or "")
     normalized_summary = normalize_reminder_title(summary, scheduled_at)
     for reminder in incomplete:
+        due_at = str(reminder.get("due_at") or "")
+        if due_at and due_at[:16] != scheduled_at[:16]:
+            continue
         if str(reminder.get("due_time") or "") != action_time:
             continue
         reminder_name = str(reminder.get("name") or "")
@@ -260,6 +504,9 @@ def _matching_completed(action: dict, completed: list[dict]) -> dict | None:
     normalized_summary = normalize_reminder_title(summary, scheduled_at)
     matches: list[tuple[timedelta, dict]] = []
     for reminder in completed:
+        due_at = str(reminder.get("due_at") or "")
+        if due_at and due_at[:16] != scheduled_at[:16]:
+            continue
         if str(reminder.get("due_time") or "") != action_time:
             continue
         reminder_name = str(reminder.get("name") or "")
@@ -427,3 +674,27 @@ def _emit(payload: dict, json_output: bool) -> None:
         click.echo(f"  ☾ auto-skipped after sleep: {item['id']} {item['scheduled_at']} {item['summary']} · {apple}")
     if payload.get("dry_run") and payload.get("candidates"):
         click.echo("  add --apply to write these candidates back to SQLite")
+
+
+def _emit_backfill(payload: dict, json_output: bool) -> None:
+    if json_output:
+        click.echo(json.dumps(payload, ensure_ascii=False))
+        return
+
+    status = "DRY-RUN" if payload.get("dry_run") else "APPLY"
+    click.echo(f"{status} Reminders ID backfill · {payload.get('list')}")
+    if not payload.get("ok"):
+        for error in payload.get("errors", []):
+            click.echo(f"  error: {error.get('message')}", err=True)
+    click.echo(
+        "  checked: "
+        f"{payload.get('checked')} · candidates: {payload.get('would_update')} · updated: {payload.get('updated')}"
+    )
+    if payload.get("missing"):
+        click.echo(f"  missing: {len(payload['missing'])}")
+    if payload.get("ambiguous"):
+        click.echo(f"  ambiguous: {len(payload['ambiguous'])}")
+    for candidate in payload.get("candidates", []):
+        click.echo(f"  - {candidate['id']} {candidate['scheduled_at']} {candidate['summary']}")
+    if payload.get("dry_run") and payload.get("candidates"):
+        click.echo("  add --apply to write IDs to Apple Reminders and SQLite")

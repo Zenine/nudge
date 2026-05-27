@@ -15,6 +15,7 @@ from nudge.json_contract import versioned_payload
 @click.group("docs")
 def docs_command():
     """Audit and maintain project documentation."""
+    pass
 
 
 @docs_command.command("audit")
