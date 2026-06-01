@@ -36,6 +36,21 @@ scripts/bootstrap_launchd.sh status
 
 `nudge docs audit` is read-only. `nudge daily sync --apply --json` can create a local maintenance action when documentation errors or warnings need attention; it does not move, delete, or rewrite documentation.
 
+## Testing and Verification
+
+Use the repository verification script before committing changes:
+
+```bash
+scripts/verify.sh
+```
+
+The verification script runs the public test suite, Python compile checks, CLI smoke checks, and the read-only documentation audit. For focused checks while developing, run:
+
+```bash
+python3 -m pytest tests/ -q
+bin/nudge docs audit --json
+```
+
 ## Using a Private Overlay
 
 Nudge can run this public runtime while reading private configuration and SQLite state from another directory. Keep personal plans, database files, API key paths, Health exports, and machine-specific settings in that private overlay.
@@ -50,7 +65,16 @@ bin/nudge mcp serve
 bin/nudge agent status --file /path/to/status.json
 ```
 
+You can also pass the private config at the top level for one command:
+
+```bash
+bin/nudge --config /path/to/private/config.toml doctor
+bin/nudge --config /path/to/private/config.toml --dry-run "Project sync tomorrow at 3pm"
+```
+
 If `NUDGE_CONFIG` points at a private config file, relative `[state].dir` values are resolved from that config file's directory. An explicit `--config /path/to/config.toml` takes priority over `NUDGE_CONFIG`.
+
+macOS privacy permissions are attached to the calling app and runtime path. For the least surprising Calendar / Reminders behavior, use one stable entrypoint such as the same terminal, IDE, or `bin/nudge` path when running diagnostics and automation. Missing the `Nudge Create Alarm` shortcut only disables the optional Clock alarm bridge; Calendar and Reminders can still be used for reminders.
 
 ## Private Data
 

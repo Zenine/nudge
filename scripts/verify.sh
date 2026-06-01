@@ -20,6 +20,8 @@ run python3 -m compileall -q nudge
 echo
 echo "== CLI smoke checks =="
 run bin/nudge --help >/dev/null
+run bin/nudge --config config.example.toml --help >/dev/null
+run bin/nudge --config config.example.toml doctor --help >/dev/null
 run bin/nudge do --help >/dev/null
 run bin/nudge doctor --help >/dev/null
 run bin/nudge daemon --help >/dev/null

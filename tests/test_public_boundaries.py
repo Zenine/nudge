@@ -47,8 +47,12 @@ def test_public_readme_documents_private_overlay_without_private_values():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
     assert "Using a Private Overlay" in readme
+    assert "Testing and Verification" in readme
+    assert "scripts/verify.sh" in readme
+    assert "bin/nudge docs audit --json" in readme
     assert "NUDGE_CONFIG=/path/to/private/config.toml" in readme
     assert "NUDGE_STATE_DIR=/path/to/private/state" in readme
+    assert "bin/nudge --config /path/to/private/config.toml doctor" in readme
     assert "bin/nudge doctor" in readme
     assert "bin/nudge mcp serve" in readme
     assert "bin/nudge agent status" in readme

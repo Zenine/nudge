@@ -19,7 +19,7 @@ PUBLIC_CONFIG = {
 
 
 def _run_mcp(messages, monkeypatch):
-    monkeypatch.setattr("nudge.cli.load_config", lambda: PUBLIC_CONFIG)
+    monkeypatch.setattr("nudge.cli.load_config", lambda p=None: PUBLIC_CONFIG)
     monkeypatch.setattr("nudge.commands.mcp.load_config", lambda p=None: PUBLIC_CONFIG)
     input_text = "\n".join(json.dumps(message) for message in messages) + "\n"
     result = CliRunner().invoke(cli, ["mcp", "serve"], input=input_text, prog_name="nudge")
