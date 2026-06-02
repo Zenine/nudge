@@ -126,13 +126,63 @@ body,
 .vp-doc div[class*='language-'],
 .vp-doc pre,
 .vp-doc table {
-  background: var(--vp-c-bg-alt) !important;
+  background: #05080d !important;
   border-color: var(--vp-c-border) !important;
 }
 
 .vp-doc code {
   color: var(--vp-code-color);
   background: var(--vp-code-bg);
+}
+
+.vp-doc div[class*='language-'] {
+  border: 1px solid var(--vp-c-border);
+  box-shadow:
+    inset 0 1px 0 rgba(103, 232, 249, 0.08),
+    0 12px 32px rgba(0, 0, 0, 0.28);
+}
+
+.vp-doc div[class*='language-']::before {
+  content: '$';
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  z-index: 1;
+  color: #10b981;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.vp-doc [class*='language-'] pre,
+.vp-doc [class*='language-'] code {
+  background: transparent !important;
+}
+
+.vp-doc [class*='language-'] pre {
+  padding-left: 28px;
+}
+
+.vp-doc [class*='language-'] code {
+  color: #dff8ff !important;
+}
+
+.vp-doc .vp-code span {
+  color: var(--shiki-dark, #dff8ff) !important;
+}
+
+.vp-doc [class*='language-'] > span.lang {
+  color: #67e8f9 !important;
+  opacity: 1;
+}
+
+.vp-doc [class*='language-'] > button.copy {
+  border-color: #2a3646 !important;
+  background-color: #0f1419 !important;
+}
+
+.vp-doc [class*='language-'] > button.copy:hover {
+  border-color: var(--vp-c-brand-1) !important;
+  background-color: #141b22 !important;
 }
 
 .VPNavBarTitle .title,

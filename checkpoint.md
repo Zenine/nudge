@@ -95,3 +95,12 @@
   - `python3 scripts/check-i18n-drift.py`
   - `cd docs && npm run docs:build`
 - 状态：✅
+
+## [视觉修复] Quick Start 代码块完成
+- 时间：2026-06-02T16:55:00+08:00
+- 产出：`docs/.vitepress/theme/style.css`
+- 说明：Quick Start 的 Shiki 代码块强制使用 dark token，补终端背景、边框、copy 按钮、语言标签和提示符样式
+- 验证：
+  - `python3 scripts/check-i18n-drift.py`
+  - `cd docs && npm run docs:build`
+- 状态：✅
