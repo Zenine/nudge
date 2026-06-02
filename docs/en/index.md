@@ -44,7 +44,7 @@ features:
 <!--
   Translation status:
   Source file : docs/index.md
-  Source commit: 8a9b525
+  Source commit: 0cb38bb
   Translated  : 2026-06-02
   Status      : up-to-date
 -->

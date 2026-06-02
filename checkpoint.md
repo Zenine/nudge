@@ -86,3 +86,12 @@
   - `scripts/verify.sh`
 - 结果：全部通过；`npm install` 报告 3 个 moderate audit warnings，未阻塞 VitePress 构建和项目完整验证
 - 状态：✅
+
+## [视觉修复] 字体颜色对比度完成
+- 时间：2026-06-02T16:45:00+08:00
+- 产出：`docs/.vitepress/theme/style.css`
+- 说明：补齐文档正文、侧栏、导航、菜单、搜索、代码块和 blockquote 的暗色变量与文字颜色覆盖；移除等宽字体负字距
+- 验证：
+  - `python3 scripts/check-i18n-drift.py`
+  - `cd docs && npm run docs:build`
+- 状态：✅

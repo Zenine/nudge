@@ -2,6 +2,7 @@
 
 ## 2026-06-02
 
+- Improved VitePress dev-native theme contrast across document pages, sidebars, menus, search, code blocks, and navigation.
 - Added Meridian dev-native visual identity for Nudge, including SVG logo, OG image, two-tone Lucide icon assets, and VitePress theme overrides.
 - Added multilingual README files for Simplified Chinese, English, Japanese, and Traditional Chinese.
 - Added VitePress documentation site with four-language home, Quick Start, and FAQ pages.
