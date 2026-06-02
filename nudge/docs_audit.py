@@ -10,6 +10,7 @@ from urllib.parse import unquote, urlparse
 
 ENTRYPOINTS = ("README.md", "README_CN.md")
 JUNK_FILENAMES = {".DS_Store", "Thumbs.db"}
+IGNORED_DOCS_DIRS = {"node_modules", ".vitepress"}
 TODO_HISTORY_MARKERS = ("[x]", "✅", "Done", "已完成")
 DUPLICATE_HEADING_EXEMPT_FILES = {Path("CHANGELOG.md")}
 MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
@@ -69,6 +70,8 @@ def _check_junk_files(root: Path, report: dict) -> None:
     if not docs.exists():
         return
     for path in docs.rglob("*"):
+        if _is_ignored_docs_path(root, path):
+            continue
         if path.name in JUNK_FILENAMES:
             _add(
                 report,
@@ -268,8 +271,21 @@ def _markdown_files(root: Path) -> list[Path]:
     candidates = [path for path in root.glob("*.md")]
     docs = root / "docs"
     if docs.exists():
-        candidates.extend(docs.rglob("*.md"))
+        candidates.extend(
+            path for path in docs.rglob("*.md")
+            if not _is_ignored_docs_path(root, path)
+        )
     return sorted(set(candidates))
+
+
+def _is_ignored_docs_path(root: Path, path: Path) -> bool:
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        return False
+    return relative.parts[:1] == ("docs",) and any(
+        part in IGNORED_DOCS_DIRS for part in relative.parts[1:]
+    )
 
 
 def _is_in_archive(root: Path, path: Path) -> bool:

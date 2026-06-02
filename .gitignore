@@ -15,3 +15,7 @@ config.toml
 *.sqlite
 *.sqlite3
 *.zip
+docs/.vitepress/dist
+docs/.vitepress/cache
+docs/.vitepress/.temp
+docs/node_modules

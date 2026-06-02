@@ -1,0 +1,552 @@
+<!-- source: README.md -->
+> **语言 / Language**: **简体中文** · [English](README.en.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
+
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=flat-square)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/Zenine/nudge?style=flat-square&color=gold)](https://github.com/Zenine/nudge/stargazers)
+[![Last Commit](https://img.shields.io/github/last-commit/Zenine/nudge?style=flat-square)](https://github.com/Zenine/nudge/commits/main)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/Zenine/nudge/pulls)
+[![Docs](https://img.shields.io/badge/Docs-online-22d3ee?style=flat-square&logo=vitepress&logoColor=white)](https://zenine.github.io/nudge/)
+[![Powered by Meridian](https://img.shields.io/badge/Powered%20by-Meridian-8b5cf6?style=flat-square)](https://github.com/lordmos/meridian)
+
+<div align="center">
+  <img src=".github/assets/hero.svg" alt="Nudge" width="120" />
+</div>
+
+# Nudge
+
+Nudge 是一个 local-first 的 macOS CLI 运行时，用来把结构化计划或自然语言计划转换为 Apple Calendar、Reminders、Notes 和 Clock 动作。
+
+这个公开仓库只包含可复用运行时、CLI、Apple 适配器、daemon、MCP wrapper 和安装脚本。个人计划、本地配置、私有状态、API key、Health 导出和用户专属文档都应留在私有 overlay 中。
+
+## Quick Start
+
+> 完整文档 → [在线阅读](https://zenine.github.io/nudge/quick-start)
+
+**Step 1** — 获取项目：
+
+```bash
+git clone https://github.com/Zenine/nudge.git
+cd nudge
+```
+
+**Step 2** — 安装并检查本机环境：
+
+```bash
+scripts/bootstrap_mac.sh
+nudge doctor
+```
+
+**Step 3** — 先 dry-run，再写入 Apple 应用：
+
+```bash
+nudge --dry-run "Project sync tomorrow at 3pm"
+nudge "Project sync tomorrow at 3pm"
+```
+
+`scripts/bootstrap_mac.sh` 会创建项目内 `.venv`；使用者不需要手动管理 Python virtual environment。
+
+## Features
+
+- Local-first macOS CLI：在本机解析计划并写入 Calendar、Reminders、Notes 和可选 Clock shortcut。
+- Dry-run first：`nudge --dry-run "..."` 先展示解析结果，确认后再实际写入。
+- Private overlay：公开 runtime 可以读取私有配置和 SQLite 状态，避免把个人数据放进公开仓库。
+- MCP wrapper：`nudge mcp serve` 让 agent 可以通过统一入口访问 Nudge 能力。
+- Daily sync：`nudge daily sync --json` 对齐 Reminders 完成状态、HealthExport 数据和文档维护债。
+- Review loop：`nudge review weekly --adapt --dry-run` 把一周记录转成安全的调整建议。
+- Verification script：`scripts/verify.sh` 覆盖测试、compile、CLI smoke 和只读文档审计。
+
+## Recommended Flow
+
+1. `nudge doctor` 检查配置、LLM key 和 Apple 权限。
+2. `nudge --dry-run "..."` 在写入前检查解析结果。
+3. `nudge "..."` 写入确认过的 Calendar / Reminders / Notes / Clock 动作。
+4. `nudge log ...` 记录实际发生的事。
+5. `nudge daily sync --json` 只读同步 Reminders、HealthExport 和文档审计信号。
+6. `nudge review weekly --adapt --dry-run` 生成一周复盘和调整建议。
+7. `scripts/bootstrap_launchd.sh` 可选安装 morning brief、daily sync、evening brief 和 daemon 自动化。
+
+## Private Overlay
+
+Nudge 可以运行公开 runtime，同时从另一个目录读取私有配置和 SQLite 状态。个人计划、数据库文件、API key 路径、Health 导出和机器专属设置都应放在私有 overlay。
+
+```bash
+export NUDGE_CONFIG=/path/to/private/config.toml
+export NUDGE_STATE_DIR=/path/to/private/state
+
+bin/nudge doctor
+bin/nudge mcp serve
+bin/nudge agent status --file /path/to/status.json
+```
+
+也可以用顶层 `--config` 为单次命令指定私有配置：
+
+```bash
+bin/nudge --config /path/to/private/config.toml doctor
+bin/nudge --config /path/to/private/config.toml --dry-run "Project sync tomorrow at 3pm"
+```
+
+如果 `NUDGE_CONFIG` 指向私有配置文件，相对的 `[state].dir` 会以该配置文件所在目录为基准解析。显式 `--config /path/to/config.toml` 优先级高于 `NUDGE_CONFIG`。
+
+## Maintenance
+
+```bash
+nudge docs audit
+nudge docs audit --json
+scripts/bootstrap_launchd.sh status
+```
+
+`nudge docs audit` 是只读命令。`nudge daily sync --apply --json` 在发现文档错误或 warning 需要处理时，可以创建本地 maintenance action；它不会移动、删除或重写文档。
+
+## Testing
+
+提交变更前运行仓库验证脚本：
+
+```bash
+scripts/verify.sh
+```
+
+该脚本会运行公开测试套件、Python compile 检查、CLI smoke checks 和只读文档审计。开发时也可以运行聚焦检查：
+
+```bash
+python3 -m pytest tests/ -q
+bin/nudge docs audit --json
+```
+
+## Private Data
+
+这些内容必须留在公开仓库之外：
+
+- `config.toml`
+- local SQLite state
+- API keys and OAuth tokens
+- personal plans and health documents
+- Apple Health exports
+- app-specific local database snapshots
+
+密钥优先使用环境变量或 `config.toml [llm].secrets_path` 指向私有文件。不要把密钥、token、数据库或个人机器绝对路径提交到公开仓库。
+
+## License
+
+Nudge 使用 [AGPL-3.0-only](LICENSE) 许可证。
+
+---
+
+<sub>Built with [Meridian](https://github.com/lordmos/meridian) · open-source ops toolkit for Agent projects</sub>
+
+---
+
+<!-- source: docs/faq.md -->
+# FAQ
+
+Nudge 的 FAQ 解释这个 local-first macOS CLI runtime 如何把计划转成 Apple 应用动作，并说明它如何保护私有数据。
+
+### Nudge 是做什么的？
+
+Nudge 是一个 local-first macOS CLI runtime，用来把结构化计划或自然语言计划转换为 Apple Calendar、Reminders、Notes 和 Clock 动作。它面向希望用命令行和 AI agent 管理日程、提醒、记录和复盘的人。
+
+### Nudge 解决了什么具体问题？
+
+Nudge 解决的是“计划写在一处，执行工具散在多处”的问题。它把计划解析、Apple 应用写入、执行记录、daily sync 和 weekly review 放在同一套本地 CLI 流程里。
+
+### Nudge 适合谁用？
+
+Nudge 适合使用 macOS、愿意用 CLI 或 agent 自动化个人计划的人。它尤其适合需要把公开 runtime 和私有配置/状态分离的开发者、研究者和重度日程使用者。
+
+### Nudge 和普通日程/提醒工具相比有什么优势？
+
+Nudge 的优势是 public runtime + private state 的边界、dry-run first 的安全模型，以及 MCP wrapper 带来的 agent 可操作性。普通日程工具通常只提供 UI 输入；Nudge 更适合自动化、审计和可复用工作流。
+
+### 怎么快速开始？
+
+最快开始方式是克隆仓库，运行 `scripts/bootstrap_mac.sh` 和 `nudge doctor`，再用 `nudge --dry-run "Project sync tomorrow at 3pm"` 检查解析结果。确认无误后，运行不带 `--dry-run` 的命令写入 Apple 应用。
+
+---
+
+<!-- source: docs/index.md -->
+
+
+---
+
+<!-- source: docs/quick-start.md -->
+# Quick Start
+
+Nudge 是一个 local-first macOS CLI runtime，用来把结构化计划或自然语言计划转换为 Apple Calendar、Reminders、Notes 和 Clock 动作。
+
+## 三步上手
+
+### 1. 获取项目
+
+```bash
+git clone https://github.com/Zenine/nudge.git
+cd nudge
+```
+
+### 2. 安装并检查环境
+
+```bash
+scripts/bootstrap_mac.sh
+nudge doctor
+```
+
+`scripts/bootstrap_mac.sh` 会创建项目内 `.venv`，所以不需要手动管理 Python virtual environment。
+
+### 3. 先 dry-run，再执行
+
+```bash
+nudge --dry-run "Project sync tomorrow at 3pm"
+nudge "Project sync tomorrow at 3pm"
+```
+
+dry-run 会展示解析结果；确认无误后再运行不带 `--dry-run` 的命令。
+
+## 使用 private overlay
+
+Nudge 的推荐边界是“公开 runtime，私有状态”。把个人计划、本地配置、SQLite 状态、API key、Health export 和机器专属路径放在 private overlay。
+
+```bash
+export NUDGE_CONFIG=/path/to/private/config.toml
+export NUDGE_STATE_DIR=/path/to/private/state
+
+bin/nudge doctor
+bin/nudge mcp serve
+```
+
+单次命令也可以直接指定配置：
+
+```bash
+bin/nudge --config /path/to/private/config.toml doctor
+```
+
+## 你只需要做三件事
+
+1. 先运行 `nudge doctor`，确认 Apple 权限和配置可用。
+2. 对任何真实写入先运行 `--dry-run`。
+3. 提交代码变更前运行 `scripts/verify.sh`。
+
+## 中断后恢复
+
+如果你让 AI 助手维护这个仓库，中断后告诉它：
+
+```text
+请读 checkpoint.md，继续上次未完成的工作。
+```
+
+## 深入了解
+
+- [README](https://github.com/Zenine/nudge#readme)
+- [FAQ](./faq.md)
+- [GitHub](https://github.com/Zenine/nudge)
+
+---
+
+<!-- source: docs/en/faq.md -->
+# FAQ
+
+Nudge's FAQ explains how this local-first macOS CLI runtime turns plans into Apple app actions while keeping private data out of the public repository.
+
+### What does Nudge do?
+
+Nudge is a local-first macOS CLI runtime for turning structured or natural-language plans into Apple Calendar, Reminders, Notes, and Clock actions. It is built for people who want to manage schedules, reminders, notes, and reviews through a command line or AI agent.
+
+### What concrete problem does Nudge solve?
+
+Nudge solves the problem of plans living in one place while execution tools live somewhere else. It puts plan parsing, Apple app writes, activity logging, daily sync, and weekly review into one local CLI workflow.
+
+### Who is Nudge for?
+
+Nudge is for macOS users who are comfortable with CLI or agent-based automation for personal planning. It is especially useful for developers, researchers, and heavy schedule users who need a clean split between public runtime and private configuration or state.
+
+### How is Nudge different from regular calendar or reminder tools?
+
+Nudge's advantage is the boundary between public runtime and private state, the safety of dry-run first, and the agent-friendly MCP wrapper. Regular calendar tools usually focus on UI entry; Nudge is built for automation, auditability, and reusable workflows.
+
+### How do I start quickly?
+
+The fastest path is to clone the repository, run `scripts/bootstrap_mac.sh` and `nudge doctor`, then inspect a command with `nudge --dry-run "Project sync tomorrow at 3pm"`. After the result looks right, run the same command without `--dry-run` to write to Apple apps.
+
+---
+
+<!-- source: docs/en/index.md -->
+
+
+---
+
+<!-- source: docs/en/quick-start.md -->
+# Quick Start
+
+Nudge is a local-first macOS CLI runtime for turning structured or natural-language plans into Apple Calendar, Reminders, Notes, and Clock actions.
+
+## Three Steps
+
+### 1. Clone the project
+
+```bash
+git clone https://github.com/Zenine/nudge.git
+cd nudge
+```
+
+### 2. Install and check the environment
+
+```bash
+scripts/bootstrap_mac.sh
+nudge doctor
+```
+
+`scripts/bootstrap_mac.sh` creates a project-local `.venv`, so you do not need to manage Python virtual environments manually.
+
+### 3. Dry-run first, then run
+
+```bash
+nudge --dry-run "Project sync tomorrow at 3pm"
+nudge "Project sync tomorrow at 3pm"
+```
+
+Dry-run shows the parsed action. Run the command without `--dry-run` only after the result looks right.
+
+## Use a Private Overlay
+
+Nudge's recommended boundary is "public runtime, private state." Keep personal plans, local config, SQLite state, API keys, Health exports, and machine-specific paths in a private overlay.
+
+```bash
+export NUDGE_CONFIG=/path/to/private/config.toml
+export NUDGE_STATE_DIR=/path/to/private/state
+
+bin/nudge doctor
+bin/nudge mcp serve
+```
+
+You can also pass config for one command:
+
+```bash
+bin/nudge --config /path/to/private/config.toml doctor
+```
+
+## You Only Need To Do Three Things
+
+1. Run `nudge doctor` to confirm Apple permissions and config.
+2. Use `--dry-run` before any real write.
+3. Run `scripts/verify.sh` before committing code changes.
+
+## Resume After Interruption
+
+If an AI assistant is maintaining this repository, resume with:
+
+```text
+请读 checkpoint.md，继续上次未完成的工作。
+```
+
+## Learn More
+
+- [README](https://github.com/Zenine/nudge#readme)
+- [FAQ](./faq.md)
+- [GitHub](https://github.com/Zenine/nudge)
+
+---
+
+<!-- source: docs/ja/faq.md -->
+# FAQ
+
+Nudge の FAQ は、この local-first macOS CLI runtime が計画を Apple アプリの action に変換しつつ、private data を公開リポジトリの外に保つ方法を説明します。
+
+### Nudge は何をするものですか？
+
+Nudge は、構造化された計画や自然言語の計画を Apple Calendar、Reminders、Notes、Clock のアクションに変換する local-first macOS CLI runtime です。CLI や AI agent で予定、reminder、note、review を管理したい人向けに作られています。
+
+### Nudge はどんな具体的な問題を解決しますか？
+
+Nudge は「計画は一か所にあるのに、実行するツールは分散している」という問題を解決します。計画解析、Apple アプリへの書き込み、activity logging、daily sync、weekly review を一つの local CLI workflow にまとめます。
+
+### Nudge は誰に向いていますか？
+
+Nudge は、CLI や agent-based automation で個人計画を扱いたい macOS ユーザーに向いています。特に、公開 runtime と私的な設定・状態を分けたい開発者、研究者、予定管理の頻度が高いユーザーに適しています。
+
+### Nudge は通常のカレンダーや reminder tool と何が違いますか？
+
+Nudge の強みは、公開 runtime と private state の境界、dry-run first の安全性、agent から扱いやすい MCP wrapper です。通常のカレンダー tool は UI 入力が中心ですが、Nudge は automation、auditability、再利用可能な workflow を重視しています。
+
+### どうすればすぐ始められますか？
+
+最短手順は、リポジトリを clone し、`scripts/bootstrap_mac.sh` と `nudge doctor` を実行し、`nudge --dry-run "Project sync tomorrow at 3pm"` で結果を確認することです。結果が正しければ、同じ command を `--dry-run` なしで実行して Apple アプリに書き込みます。
+
+---
+
+<!-- source: docs/ja/index.md -->
+
+
+---
+
+<!-- source: docs/ja/quick-start.md -->
+# Quick Start
+
+Nudge は、構造化された計画や自然言語の計画を Apple Calendar、Reminders、Notes、Clock のアクションに変換する local-first な macOS CLI runtime です。
+
+## 3 ステップ
+
+### 1. プロジェクトを取得する
+
+```bash
+git clone https://github.com/Zenine/nudge.git
+cd nudge
+```
+
+### 2. インストールして環境を確認する
+
+```bash
+scripts/bootstrap_mac.sh
+nudge doctor
+```
+
+`scripts/bootstrap_mac.sh` はプロジェクト内に `.venv` を作成するため、Python virtual environment を手動で管理する必要はありません。
+
+### 3. 先に dry-run し、その後実行する
+
+```bash
+nudge --dry-run "Project sync tomorrow at 3pm"
+nudge "Project sync tomorrow at 3pm"
+```
+
+Dry-run は解析された action を表示します。結果が正しいことを確認してから、`--dry-run` なしで実行してください。
+
+## Private Overlay を使う
+
+Nudge の推奨境界は「公開 runtime、私的な状態」です。個人計画、ローカル設定、SQLite 状態、API key、Health export、マシン固有パスは private overlay に置きます。
+
+```bash
+export NUDGE_CONFIG=/path/to/private/config.toml
+export NUDGE_STATE_DIR=/path/to/private/state
+
+bin/nudge doctor
+bin/nudge mcp serve
+```
+
+一回だけ config を指定することもできます。
+
+```bash
+bin/nudge --config /path/to/private/config.toml doctor
+```
+
+## あなたがやるべき 3 つのこと
+
+1. `nudge doctor` で Apple 権限と設定を確認する。
+2. 実際に書き込む前に必ず `--dry-run` を使う。
+3. コード変更を commit する前に `scripts/verify.sh` を実行する。
+
+## 中断後の再開
+
+AI 助手にこのリポジトリを保守させている場合は、次のように再開します。
+
+```text
+请读 checkpoint.md，继续上次未完成的工作。
+```
+
+## 詳細
+
+- [README](https://github.com/Zenine/nudge#readme)
+- [FAQ](./faq.md)
+- [GitHub](https://github.com/Zenine/nudge)
+
+---
+
+<!-- source: docs/zh-TW/faq.md -->
+# FAQ
+
+Nudge 的 FAQ 說明這個 local-first macOS CLI runtime 如何把計畫轉成 Apple 應用程式動作，並讓 private data 留在公開儲存庫之外。
+
+### Nudge 是做什麼的？
+
+Nudge 是一個 local-first macOS CLI runtime，用來把結構化計畫或自然語言計畫轉換為 Apple Calendar、Reminders、Notes 和 Clock 動作。它適合想用 command line 或 AI agent 管理日程、提醒、筆記和回顧的人。
+
+### Nudge 解決了什麼具體問題？
+
+Nudge 解決的是「計畫寫在一處，執行工具散在多處」的問題。它把計畫解析、Apple 應用程式寫入、活動記錄、daily sync 和 weekly review 放在同一套本機 CLI workflow 裡。
+
+### Nudge 適合誰使用？
+
+Nudge 適合使用 macOS、願意用 CLI 或 agent-based automation 管理個人計畫的人。它尤其適合需要把公開 runtime 和私有設定/狀態分離的開發者、研究者和重度日程使用者。
+
+### Nudge 和一般日程或提醒工具相比有什麼優勢？
+
+Nudge 的優勢是 public runtime + private state 的邊界、dry-run first 的安全模型，以及 MCP wrapper 帶來的 agent 可操作性。一般日程工具通常只提供 UI 輸入；Nudge 更適合 automation、auditability 和可重用 workflow。
+
+### 怎麼快速開始？
+
+最快開始方式是 clone 儲存庫，執行 `scripts/bootstrap_mac.sh` 和 `nudge doctor`，再用 `nudge --dry-run "Project sync tomorrow at 3pm"` 檢查解析結果。確認無誤後，執行不帶 `--dry-run` 的命令寫入 Apple 應用程式。
+
+---
+
+<!-- source: docs/zh-TW/index.md -->
+
+
+---
+
+<!-- source: docs/zh-TW/quick-start.md -->
+# Quick Start
+
+Nudge 是一個 local-first 的 macOS CLI runtime，用來把結構化計畫或自然語言計畫轉換為 Apple Calendar、Reminders、Notes 和 Clock 動作。
+
+## 三步上手
+
+### 1. 取得專案
+
+```bash
+git clone https://github.com/Zenine/nudge.git
+cd nudge
+```
+
+### 2. 安裝並檢查環境
+
+```bash
+scripts/bootstrap_mac.sh
+nudge doctor
+```
+
+`scripts/bootstrap_mac.sh` 會建立專案內 `.venv`，所以不需要手動管理 Python virtual environment。
+
+### 3. 先 dry-run，再執行
+
+```bash
+nudge --dry-run "Project sync tomorrow at 3pm"
+nudge "Project sync tomorrow at 3pm"
+```
+
+Dry-run 會展示解析結果；確認無誤後再執行不帶 `--dry-run` 的命令。
+
+## 使用 Private Overlay
+
+Nudge 的推薦邊界是「公開 runtime，私有狀態」。把個人計畫、本機設定、SQLite 狀態、API key、Health export 和機器專屬路徑放在 private overlay。
+
+```bash
+export NUDGE_CONFIG=/path/to/private/config.toml
+export NUDGE_STATE_DIR=/path/to/private/state
+
+bin/nudge doctor
+bin/nudge mcp serve
+```
+
+單次命令也可以直接指定 config：
+
+```bash
+bin/nudge --config /path/to/private/config.toml doctor
+```
+
+## 你只需要做三件事
+
+1. 先執行 `nudge doctor`，確認 Apple 權限和設定可用。
+2. 對任何真實寫入先執行 `--dry-run`。
+3. 提交程式碼變更前執行 `scripts/verify.sh`。
+
+## 中斷後恢復
+
+如果你讓 AI 助手維護這個儲存庫，中斷後告訴它：
+
+```text
+请读 checkpoint.md，继续上次未完成的工作。
+```
+
+## 深入了解
+
+- [README](https://github.com/Zenine/nudge#readme)
+- [FAQ](./faq.md)
+- [GitHub](https://github.com/Zenine/nudge)
+
+---

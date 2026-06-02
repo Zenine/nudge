@@ -1,0 +1,35 @@
+# Nudge
+
+> Local-first macOS CLI runtime for turning structured or natural-language plans into Apple Calendar, Reminders, Notes, and Clock actions.
+
+Nudge keeps reusable automation code public while keeping personal plans, private configuration, SQLite state, API keys, Health exports, and machine-specific documents outside the public repository. It is designed for macOS users who want safe CLI and agent-driven planning automation with dry-run before real writes.
+
+## Docs
+
+- [Home](https://zenine.github.io/nudge/): overview of Nudge's public runtime and private-state model
+- [Quick Start](https://zenine.github.io/nudge/quick-start): three-step setup
+- [FAQ](https://zenine.github.io/nudge/faq): self-contained answers for discovery and citation
+- [README](https://github.com/Zenine/nudge#readme): source-of-truth overview
+
+## Source
+
+- GitHub: https://github.com/Zenine/nudge
+- License: AGPL-3.0-only
+- llms-full.txt: https://zenine.github.io/nudge/llms-full.txt
+
+## FAQ
+
+### What does Nudge do?
+Nudge is a local-first macOS CLI runtime for turning structured or natural-language plans into Apple Calendar, Reminders, Notes, and Clock actions.
+
+### What concrete problem does Nudge solve?
+Nudge solves the problem of plans living in one place while execution tools live somewhere else by unifying parsing, Apple app writes, logging, daily sync, and weekly review in one local CLI workflow.
+
+### Who is Nudge for?
+Nudge is for macOS users who are comfortable with CLI or agent-based automation and need a clean split between public runtime and private configuration or state.
+
+### How is Nudge different from regular calendar or reminder tools?
+Nudge differs from regular calendar or reminder tools by combining dry-run safety, public-runtime/private-state boundaries, and an MCP wrapper that lets agents operate local scheduling workflows.
+
+### How do I start quickly?
+Clone the repository, run `scripts/bootstrap_mac.sh` and `nudge doctor`, then inspect a command with `nudge --dry-run "Project sync tomorrow at 3pm"` before writing to Apple apps.

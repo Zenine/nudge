@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Dev-native style · Meridian
+       Terminal aesthetic: rounded dark frame, 4 L-bracket compass ticks, mono letter, cursor underscore -->
+
+  <!-- Terminal window background -->
+  <rect x="4" y="4" width="192" height="192" rx="16" fill="#0a0e14"/>
+
+  <!-- 4 L-corner brackets as meridian motif (compass ticks reinterpreted as terminal corners) -->
+  <g stroke="#22d3ee" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="22,36 22,22 36,22"/>
+    <polyline points="164,22 178,22 178,36"/>
+    <polyline points="22,164 22,178 36,178"/>
+    <polyline points="164,178 178,178 178,164"/>
+  </g>
+
+  <!-- Mono letter, slightly above center to leave room for cursor -->
+  <text x="100" y="94" text-anchor="middle" dominant-baseline="central"
+        font-family="'JetBrains Mono', 'SF Mono', Menlo, 'Fira Code', Consolas, monospace"
+        font-size="80" font-weight="500" fill="#22d3ee">N</text>
+
+  <!-- Cursor block beneath letter -->
+  <rect x="92" y="140" width="16" height="4" fill="#22d3ee" opacity="0.85"/>
+</svg>

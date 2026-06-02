@@ -1,0 +1,154 @@
+/* Dev-native · VitePress theme override
+   Aesthetic: mono everywhere, terminal prompts on key elements, dark cards */
+
+:root {
+  --vp-c-brand-1: #22d3ee;
+  --vp-c-brand-2: #06b6d4;
+  --vp-c-brand-3: #0891b2;
+  --vp-c-brand-soft: rgba(34, 211, 238, 0.14);
+
+  --vp-c-bg: #0a0e14;
+  --vp-c-bg-alt: #0f1419;
+  --vp-c-bg-elv: #141b22;
+  --vp-c-bg-soft: #1a2028;
+
+  --vp-c-text-1: #e5f7ff;
+  --vp-c-text-2: #a8c3d4;
+  --vp-c-text-3: #7a8a99;
+
+  --vp-c-divider: #1e2a36;
+  --vp-c-border: #2a3646;
+
+  --vp-font-family-base: 'JetBrains Mono', 'SF Mono', Menlo, 'Fira Code', Consolas, monospace;
+  --vp-font-family-mono: 'JetBrains Mono', 'SF Mono', Menlo, 'Fira Code', Consolas, monospace;
+}
+
+/* Force mono on every text element */
+body, .VPHero .name, .VPHero .text, .VPHero .tagline,
+.VPFeature .title, .VPFeature .details,
+.VPNavBar .title, .VPNavBarMenuLink, .VPButton {
+  font-family: var(--vp-font-family-mono) !important;
+  letter-spacing: -0.4px;
+}
+
+/* Hero name: prepend shell prompt */
+.VPHero .name {
+  color: var(--vp-c-brand-1) !important;
+  font-weight: 500;
+}
+.VPHero .name::before {
+  content: '$ ';
+  color: #10b981;
+  margin-right: 4px;
+}
+
+.VPHero .text {
+  color: var(--vp-c-text-1);
+  font-weight: 500;
+}
+.VPHero .tagline {
+  color: var(--vp-c-text-2);
+}
+
+/* Feature cards: dark elevated bg with thin brand-color top border */
+.VPFeature {
+  background: var(--vp-c-bg-elv) !important;
+  border: 1px solid var(--vp-c-border) !important;
+  border-top: 2px solid var(--vp-c-brand-1) !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+.VPFeature .title {
+  color: var(--vp-c-brand-1) !important;
+  font-weight: 500 !important;
+}
+.VPFeature .details {
+  color: var(--vp-c-text-2);
+}
+
+/* Buttons: prompt-like brackets */
+.VPButton.brand {
+  border-radius: 2px !important;
+  background: transparent !important;
+  border: 1px solid var(--vp-c-brand-1) !important;
+  color: var(--vp-c-brand-1) !important;
+  font-weight: 500 !important;
+}
+.VPButton.brand::before {
+  content: '> ';
+  color: #10b981;
+}
+.VPButton.alt {
+  border-radius: 2px !important;
+  background: transparent !important;
+  border: 1px solid var(--vp-c-border) !important;
+  color: var(--vp-c-text-2) !important;
+  font-weight: 500 !important;
+}
+
+/* Navbar: subtle, same mono */
+.VPNavBar {
+  background: var(--vp-c-bg-alt) !important;
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   ICON PALETTE — inline-SVG two-tone (dev-native: cyan + rose)
+   ────────────────────────────────────────────────────────────
+   REQUIRES: templates/vitepress-inline-svg.ts copied into
+   `docs/.vitepress/theme/inline-svg.ts` + wired via
+   `theme/index.ts` enhanceApp (see task-11 Step 2).
+   Terminal-neon vibe — main stroke cyan, decorative accent
+   rose/magenta. Glow is the point of this style, so it's on.
+   ════════════════════════════════════════════════════════════ */
+:root {
+  --icon-stroke: var(--vp-c-brand-1);   /* cyan neon — main */
+  --icon-accent: #f43f5e;               /* rose — terminal error red, eye-catch */
+  --icon-glow:   rgba(34, 211, 238, 0.30);
+}
+.dark {
+  --icon-stroke: #67e8f9;               /* cyan-300 */
+  --icon-accent: #fda4af;               /* rose-300 */
+  --icon-glow:   rgba(34, 211, 238, 0.55);
+}
+
+.md-icon, svg.md-icon {
+  display: inline-block;
+  width: 1.1em; height: 1.1em;
+  vertical-align: -0.18em;
+  fill: none;
+  stroke: var(--icon-stroke);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+svg.md-icon .accent { stroke: var(--icon-accent); }
+h1 .md-icon, h2 .md-icon, h3 .md-icon {
+  width: 0.95em; height: 0.95em;
+  vertical-align: -0.12em;
+  margin-right: 0.15em;
+}
+svg.md-icon.is-success { stroke: var(--vp-c-success-1, #10b981); }
+svg.md-icon.is-danger  { stroke: var(--vp-c-danger-1,  #ef4444); }
+svg.md-icon.is-warning { stroke: var(--vp-c-warning-1, #f59e0b); }
+
+.VPFeature img.VPImage,
+.VPFeature svg.VPImage {
+  width: 48px; height: 48px;
+  fill: none;
+  stroke: var(--icon-stroke);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px var(--icon-glow));
+  transition: filter .2s, stroke .2s;
+}
+.VPFeature svg.VPImage .accent { stroke: var(--icon-accent); }
+.dark .VPFeature svg.VPImage {
+  filter:
+    drop-shadow(0 0 12px var(--icon-glow))
+    drop-shadow(0 0 4px  var(--icon-glow));
+}
+.VPFeature:hover svg.VPImage        { stroke: var(--icon-accent); }
+.VPFeature:hover svg.VPImage .accent { stroke: var(--icon-stroke); }

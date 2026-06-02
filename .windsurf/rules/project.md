@@ -1,0 +1,27 @@
+# Nudge — Windsurf Rules
+
+Nudge is a local-first macOS CLI runtime for turning plans into Apple Calendar, Reminders, Notes, and Clock actions.
+
+## Quick Start
+
+一句话启动：
+> Nudge 的源码在 /path/to/nudge-public。请读 QUICK_START.md，然后向我提问。没有问题就开始工作。
+
+中断后恢复：
+> 请读 checkpoint.md，继续上次未完成的工作。
+
+## Key Files
+
+- `QUICK_START.md` — AI 编排入口
+- `checkpoint.md` — Meridian 运营配套进度追踪
+- `scripts/verify.sh` — 完整验证入口
+- `nudge/commands/` — CLI 子命令
+- `nudge/apple/` — Apple 应用适配器
+- `docs/` — VitePress 多语言文档站
+
+## Rules
+
+1. 提交前运行 `scripts/verify.sh`。
+2. 不提交 private overlay、API key、token、SQLite state、Health export 或个人机器路径。
+3. 运行时代码改动先写或更新测试。
+4. 文档改动同步检查 README、docs、llms、TODO、CHANGELOG 和 checkpoint。
