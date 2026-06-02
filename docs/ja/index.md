@@ -4,7 +4,7 @@ titleTemplate: ':title'
 hero:
   name: "Nudge"
   text: "計画を、その日に本当に起きる行動へ"
-  tagline: "Nudge は自然言語の計画を予定、reminder、note、review に落とし込みます。先に preview し、その後書き込むので、アイデアが chat の中で止まりません。"
+  tagline: "Nudge は Apple ecosystem に適配した tool です。AI の MCP tool としても日常 CLI としても使え、自然言語の計画を予定、reminder、note、review に落とし込みます。"
   image:
     src: /hero.svg
     alt: Nudge
@@ -30,8 +30,8 @@ features:
     details: "Reminders の完了状態、HealthExport signals、文書メンテナンスを local state として同期します。"
   - icon:
       src: /icons/bot.svg
-    title: agent のためのローカル実行口
-    details: "AI assistant は MCP 経由で Nudge を呼び出し、schedule、reminder、review、status query を扱えます。"
+    title: AI MCP + CLI の 2 つの入口
+    details: "AI assistant は MCP 経由で Nudge を呼び出せます。人も CLI から同じ planning、reminder、review、status workflow を実行できます。"
   - icon:
       src: /icons/lightbulb.svg
     title: 実行記録から調整
@@ -44,7 +44,7 @@ features:
 <!--
   Translation status:
   Source file : docs/index.md
-  Source commit: 9d535b3
+  Source commit: 72a97fd
   Translated  : 2026-06-02
   Status      : up-to-date
 -->
@@ -53,9 +53,10 @@ features:
 
 - 計画は chat や note に書くが、calendar や reminder まで届かない。
 - AI assistant に schedule を手伝わせたいが、Apple Reminders へ無確認で書き込ませたくない。
+- AI からは MCP で呼び出し、人は terminal の CLI から手動実行できる同じ tool がほしい。
 - 毎日、何が完了し、何がずれ、何を調整すべきかを local record として残したい。
 - 公開 automation runtime を保守しつつ、個人データ、secrets、health records は private に分離したい。
 
 ## 一文でいうと
 
-Nudge は単なる todo-list UI ではありません。計画を解析し、確認のために表示し、Apple apps に書き込み、その後の sync と review で継続的に補正する local execution pipeline です。
+Nudge は単なる todo-list UI ではありません。Apple ecosystem に適配した local execution pipeline です。AI は MCP 経由で呼び出せ、人は CLI で操作でき、計画は確認のために表示されてから Apple apps に書き込まれ、その後の sync と review で継続的に補正されます。

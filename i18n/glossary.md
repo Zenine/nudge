@@ -23,6 +23,7 @@
 | Apple Reminders | Apple Reminders | Apple Reminders | Apple Reminders | Apple 应用名，保持英文 |
 | Apple Notes | Apple Notes | Apple Notes | Apple Notes | Apple 应用名，保持英文 |
 | Apple Clock | Apple Clock | Apple Clock | Apple Clock | Apple 应用名，保持英文 |
+| Apple 生态 | Apple ecosystem | Apple ecosystem | Apple 生態 | 指 Apple Calendar / Reminders / Notes / Clock 等应用集成 |
 
 ## B. 技术术语（Technical Terms）
 

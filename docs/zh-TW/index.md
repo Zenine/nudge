@@ -4,7 +4,7 @@ titleTemplate: ':title'
 hero:
   name: "Nudge"
   text: "把計畫變成當天真的會發生的事"
-  tagline: "Nudge 幫你把一句自然語言計畫落到日程、提醒、筆記和回顧裡：先預覽，再寫入，不讓想法停在聊天視窗。"
+  tagline: "Nudge 已適配 Apple 生態：可作為 AI 的 MCP 工具，也可作為日常 CLI，把自然語言計畫落到日程、提醒、筆記和回顧裡。"
   image:
     src: /hero.svg
     alt: Nudge
@@ -30,8 +30,8 @@ features:
     details: "把 Reminders 完成狀態、HealthExport signals 和文件維護債同步成可追蹤的本機狀態。"
   - icon:
       src: /icons/bot.svg
-    title: 給 agent 一個本機執行口
-    details: "AI assistant 可以透過 MCP 呼叫 Nudge，把計畫、提醒、回顧和狀態查詢接進你的日常 workflow。"
+    title: AI MCP + CLI 雙入口
+    details: "AI assistant 可以透過 MCP 呼叫 Nudge；你也可以直接用 CLI 執行同一套計畫、提醒、回顧和狀態查詢。"
   - icon:
       src: /icons/lightbulb.svg
     title: 從記錄裡調整節奏
@@ -44,7 +44,7 @@ features:
 <!--
   Translation status:
   Source file : docs/index.md
-  Source commit: 9d535b3
+  Source commit: 72a97fd
   Translated  : 2026-06-02
   Status      : up-to-date
 -->
@@ -53,9 +53,10 @@ features:
 
 - 你在 chat 或 note 裡定了計畫，但經常沒有進入 calendar 和 reminder。
 - 你想讓 AI assistant 幫忙安排事項，但不希望它直接亂寫 Apple Reminders。
+- 你希望同一個工具既能被 AI 作為 MCP 呼叫，也能在 terminal 裡作為 CLI 手動執行。
 - 你需要每天同步完成狀態，把「做了什麼、漏了什麼、該調整什麼」留成本機記錄。
 - 你希望公開維護一套 automation runtime，同時把個人資料、secrets 和 health records 隔離在私有目錄。
 
 ## 一句話理解
 
-Nudge 不是另一個 todo-list UI。它是一條本機執行 pipeline：把計畫解析出來，先展示給你確認，再寫入 Apple apps，並在後續 sync 和 review 裡持續校正。
+Nudge 不是另一個 todo-list UI。它是一條適配 Apple 生態的本機執行 pipeline：AI 可透過 MCP 呼叫，人也可用 CLI 操作；計畫會先展示給你確認，再寫入 Apple apps，並在後續 sync 和 review 裡持續校正。

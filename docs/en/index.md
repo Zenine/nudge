@@ -4,7 +4,7 @@ titleTemplate: ':title'
 hero:
   name: "Nudge"
   text: "Turn plans into things that actually happen"
-  tagline: "Nudge turns a natural-language plan into calendar events, reminders, notes, and reviews: preview first, then write, so ideas do not stay trapped in chat."
+  tagline: "Nudge is adapted for the Apple ecosystem: use it as an AI MCP tool or a daily CLI to turn natural-language plans into calendar events, reminders, notes, and reviews."
   image:
     src: /hero.svg
     alt: Nudge
@@ -30,8 +30,8 @@ features:
     details: "Sync Reminders completions, HealthExport signals, and documentation maintenance into local state you can review."
   - icon:
       src: /icons/bot.svg
-    title: A local execution lane for agents
-    details: "AI assistants can call Nudge through MCP to schedule, remind, review, and query local status."
+    title: AI MCP + CLI entry points
+    details: "AI assistants can call Nudge through MCP, while you can run the same planning, reminder, review, and status workflows from the CLI."
   - icon:
       src: /icons/lightbulb.svg
     title: Adjust from real records
@@ -44,7 +44,7 @@ features:
 <!--
   Translation status:
   Source file : docs/index.md
-  Source commit: 9d535b3
+  Source commit: 72a97fd
   Translated  : 2026-06-02
   Status      : up-to-date
 -->
@@ -53,9 +53,10 @@ features:
 
 - Your plans start in chat or notes but never make it into calendar and reminders.
 - You want an AI assistant to help schedule work without giving it unchecked write access to Apple Reminders.
+- You want one tool that AI can call through MCP and humans can run manually from the terminal.
 - You need daily sync to preserve what was done, what slipped, and what should change.
 - You want to maintain a public automation runtime while keeping personal data, secrets, and health records private.
 
 ## One-sentence model
 
-Nudge is not another todo-list UI. It is a local execution pipeline: parse the plan, show it for confirmation, write to Apple apps, then keep correcting the loop through sync and review.
+Nudge is not another todo-list UI. It is a local execution pipeline adapted for the Apple ecosystem: AI can call it through MCP, humans can operate it through the CLI, and every plan is shown for confirmation before it writes to Apple apps and keeps the loop aligned through sync and review.

@@ -2,6 +2,7 @@
 
 ## 2026-06-02
 
+- Clarified the documentation homepage positioning: Nudge is adapted for the Apple ecosystem and can be used both as an AI MCP tool and as a CLI.
 - Reworked the VitePress homepage around user-facing scenarios and value propositions instead of leading with runtime architecture.
 - Improved VitePress dev-native theme contrast across document pages, sidebars, menus, search, terminal-style code blocks, and navigation.
 - Added Meridian dev-native visual identity for Nudge, including SVG logo, OG image, two-tone Lucide icon assets, and VitePress theme overrides.
