@@ -3,8 +3,8 @@ layout: home
 titleTemplate: ':title'
 hero:
   name: "Nudge"
-  text: "公开 runtime，私有状态"
-  tagline: "把自然语言计划安全地转换为 Apple Calendar、Reminders、Notes 和 Clock 动作；先 dry-run，再写入。"
+  text: "把计划变成当天真的会发生的事"
+  tagline: "Nudge 帮你把一句自然语言计划落到日程、提醒、笔记和复盘里：先预览，再写入，不让想法停在聊天窗口。"
   image:
     src: /hero.svg
     alt: Nudge
@@ -17,27 +17,38 @@ hero:
       link: https://github.com/Zenine/nudge
 features:
   - icon:
-      src: /icons/terminal.svg
-    title: macOS CLI runtime
-    details: "面向本机自动化的 CLI，用统一入口驱动 Calendar、Reminders、Notes 和可选 Clock shortcut。"
+      src: /icons/target.svg
+    title: 从想法到日程
+    details: "把“明天下午三点项目同步”这类自然语言直接变成 Calendar 和 Reminders 里的具体安排。"
   - icon:
       src: /icons/check-circle.svg
-    title: Dry-run first
-    details: "先检查解析结果，再执行真实写入，降低误写日程和提醒的风险。"
-  - icon:
-      src: /icons/lock.svg
-    title: Private overlay
-    details: "公开仓库只放 runtime；个人配置、SQLite 状态、密钥和 Health export 留在私有目录。"
-  - icon:
-      src: /icons/bot.svg
-    title: MCP wrapper
-    details: "通过 `nudge mcp serve` 为 agent 提供稳定、可审计的本地工具入口。"
+    title: 写入前先确认
+    details: "所有真实动作都可以先 dry-run，确认时间、标题、列表和目标应用，再写入 Apple 应用。"
   - icon:
       src: /icons/refresh.svg
-    title: Daily sync
-    details: "对齐 Reminders 完成状态、HealthExport 数据和文档维护信号。"
+    title: 每天自动对齐
+    details: "把 Reminders 完成状态、HealthExport 信号和文档维护债同步成可追踪的本地状态。"
   - icon:
-      src: /icons/wrench.svg
-    title: Verified workflow
-    details: "`scripts/verify.sh` 覆盖测试、compile、CLI smoke 和只读文档审计。"
+      src: /icons/bot.svg
+    title: 给 agent 一个本地执行口
+    details: "AI 助手可以通过 MCP 调用 Nudge，把计划、提醒、复盘和状态查询接进你的日常工作流。"
+  - icon:
+      src: /icons/lightbulb.svg
+    title: 从记录里调整节奏
+    details: "weekly review 可以把一周执行记录转成安全的调整建议，而不是只生成一份漂亮总结。"
+  - icon:
+      src: /icons/lock.svg
+    title: 公开工具，私有生活
+    details: "公开仓库只放可复用 runtime；个人计划、密钥、SQLite 状态和健康数据留在 private overlay。"
 ---
+
+## 适合这些场景
+
+- 你在聊天或笔记里定了计划，但经常没有进入日历和提醒。
+- 你想让 AI 助手帮忙安排事项，但不希望它直接乱写 Apple Reminders。
+- 你需要每天同步完成状态，把“做了什么、漏了什么、该调整什么”留成本地记录。
+- 你希望公开维护一套自动化 runtime，同时把个人数据、密钥和健康资料隔离在私有目录。
+
+## 一句话理解
+
+Nudge 不是另一个待办清单 UI。它是一条本地执行管道：把计划解析出来，先展示给你确认，再写入 Apple 应用，并在后续同步和复盘里持续校正。

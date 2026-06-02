@@ -104,3 +104,13 @@
   - `python3 scripts/check-i18n-drift.py`
   - `cd docs && npm run docs:build`
 - 状态：✅
+
+## [文案修复] 首页卖点重写完成
+- 时间：2026-06-02T17:05:00+08:00
+- 产出：`docs/index.md`、`docs/en/index.md`、`docs/ja/index.md`、`docs/zh-TW/index.md`、`i18n/glossary.md`、`llms-full.txt`、`docs/public/llms-full.txt`
+- 说明：首页从技术架构介绍改为场景和收益优先，突出计划落地、写入前确认、每日同步、agent 本地执行、复盘调整和隐私边界
+- 验证：
+  - `python3 scripts/generate-llms-full.py --all-langs`
+  - `python3 scripts/check-i18n-drift.py`
+  - `cd docs && npm run docs:build`
+- 状态：✅

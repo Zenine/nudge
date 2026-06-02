@@ -3,8 +3,8 @@ layout: home
 titleTemplate: ':title'
 hero:
   name: "Nudge"
-  text: "公開 runtime，私有狀態"
-  tagline: "把自然語言計畫安全地轉換為 Apple Calendar、Reminders、Notes 和 Clock 動作；先 dry-run，再寫入。"
+  text: "把計畫變成當天真的會發生的事"
+  tagline: "Nudge 幫你把一句自然語言計畫落到日程、提醒、筆記和回顧裡：先預覽，再寫入，不讓想法停在聊天視窗。"
   image:
     src: /hero.svg
     alt: Nudge
@@ -17,34 +17,45 @@ hero:
       link: https://github.com/Zenine/nudge
 features:
   - icon:
-      src: /icons/terminal.svg
-    title: macOS CLI runtime
-    details: "面向本機自動化的 CLI，用統一入口驅動 Calendar、Reminders、Notes 和可選 Clock shortcut。"
+      src: /icons/target.svg
+    title: 從想法到日程
+    details: "把「明天下午三點專案同步」這類自然語言直接變成 Calendar 和 Reminders 裡的具體安排。"
   - icon:
       src: /icons/check-circle.svg
-    title: Dry-run first
-    details: "先檢查解析結果，再執行真實寫入，降低誤寫日程和提醒的風險。"
-  - icon:
-      src: /icons/lock.svg
-    title: Private overlay
-    details: "公開儲存庫只放 runtime；個人設定、SQLite 狀態、secrets 和 Health export 留在私有目錄。"
-  - icon:
-      src: /icons/bot.svg
-    title: MCP wrapper
-    details: "透過 `nudge mcp serve` 為 agent 提供穩定、可審計的本機工具入口。"
+    title: 寫入前先確認
+    details: "所有真實動作都可以先 dry-run，確認時間、標題、列表和目標 Apple app，再寫入。"
   - icon:
       src: /icons/refresh.svg
-    title: Daily sync
-    details: "對齊 Reminders 完成狀態、HealthExport 資料和文件維護訊號。"
+    title: 每天自動對齊
+    details: "把 Reminders 完成狀態、HealthExport signals 和文件維護債同步成可追蹤的本機狀態。"
   - icon:
-      src: /icons/wrench.svg
-    title: Verified workflow
-    details: "`scripts/verify.sh` 覆蓋測試、compile、CLI smoke 和唯讀文件審計。"
+      src: /icons/bot.svg
+    title: 給 agent 一個本機執行口
+    details: "AI assistant 可以透過 MCP 呼叫 Nudge，把計畫、提醒、回顧和狀態查詢接進你的日常 workflow。"
+  - icon:
+      src: /icons/lightbulb.svg
+    title: 從記錄裡調整節奏
+    details: "weekly review 可以把一週執行記錄轉成安全的調整建議，而不是只產生一份漂亮摘要。"
+  - icon:
+      src: /icons/lock.svg
+    title: 公開工具，私有生活
+    details: "公開儲存庫只放可重用 runtime；個人計畫、secrets、SQLite 狀態和 health data 留在 private overlay。"
 ---
 <!--
   Translation status:
   Source file : docs/index.md
-  Source commit: 0cb38bb
+  Source commit: 9d535b3
   Translated  : 2026-06-02
   Status      : up-to-date
 -->
+
+## 適合這些場景
+
+- 你在 chat 或 note 裡定了計畫，但經常沒有進入 calendar 和 reminder。
+- 你想讓 AI assistant 幫忙安排事項，但不希望它直接亂寫 Apple Reminders。
+- 你需要每天同步完成狀態，把「做了什麼、漏了什麼、該調整什麼」留成本機記錄。
+- 你希望公開維護一套 automation runtime，同時把個人資料、secrets 和 health records 隔離在私有目錄。
+
+## 一句話理解
+
+Nudge 不是另一個 todo-list UI。它是一條本機執行 pipeline：把計畫解析出來，先展示給你確認，再寫入 Apple apps，並在後續 sync 和 review 裡持續校正。

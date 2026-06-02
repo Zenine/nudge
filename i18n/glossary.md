@@ -59,6 +59,8 @@
 | 三步上手 | Three Steps | 3 ステップ | 三步上手 |
 | 使用 private overlay | Use a Private Overlay | Private Overlay を使う | 使用 Private Overlay |
 | 深入了解 | Learn More | 詳細 | 深入了解 |
+| 适合这些场景 | Best-fit scenarios | 向いている場面 | 適合這些場景 |
+| 一句话理解 | One-sentence model | 一文でいうと | 一句話理解 |
 
 ## D. 惯用短语 / 营销文案（Idiomatic Phrases）
 
