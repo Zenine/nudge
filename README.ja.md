@@ -60,7 +60,7 @@ nudge "Project sync tomorrow at 3pm"
 - MCP wrapper: `nudge mcp serve` は agent に安定した接続口を提供します。
 - Daily sync は Reminders の完了状態、HealthExport データ、文書メンテナンス信号を照合します。
 - Review loop は一週間の活動を安全な調整提案に変換します。
-- `scripts/verify.sh` はテスト、compile check、CLI smoke check、読み取り専用の文書監査を実行します。
+- `scripts/verify.sh` はテスト、compile check、CLI smoke check、i18n drift check、VitePress docs build、読み取り専用の文書監査を実行します。
 
 ## Recommended Flow
 
@@ -111,6 +111,8 @@ scripts/bootstrap_launchd.sh status
 ```bash
 scripts/verify.sh
 ```
+
+このスクリプトは公開テスト、Python compile check、CLI smoke check、i18n drift check、VitePress docs build、読み取り専用の文書監査を実行します。
 
 開発中の重点チェックには次を使えます。
 

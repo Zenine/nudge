@@ -60,7 +60,7 @@ nudge "Project sync tomorrow at 3pm"
 - MCP wrapper: `nudge mcp serve` gives agents a stable access point.
 - Daily sync reconciles Reminders completions, HealthExport data, and documentation maintenance signals.
 - Review loop turns weekly activity into safe adjustment suggestions.
-- `scripts/verify.sh` covers tests, compile checks, CLI smoke checks, and read-only documentation audit.
+- `scripts/verify.sh` covers tests, compile checks, CLI smoke checks, i18n drift checks, VitePress docs build, and read-only documentation audit.
 
 ## Recommended Flow
 
@@ -111,6 +111,8 @@ Use the repository verification script before committing changes:
 ```bash
 scripts/verify.sh
 ```
+
+It runs the public test suite, Python compile checks, CLI smoke checks, i18n drift checks, VitePress docs build, and read-only documentation audit.
 
 For focused checks while developing, run:
 

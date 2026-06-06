@@ -53,7 +53,7 @@ nudge "Project sync tomorrow at 3pm"
 - MCP wrapper：`nudge mcp serve` 让 agent 可以通过统一入口访问 Nudge 能力。
 - Daily sync：`nudge daily sync --json` 对齐 Reminders 完成状态、HealthExport 数据和文档维护债。
 - Review loop：`nudge review weekly --adapt --dry-run` 把一周记录转成安全的调整建议。
-- Verification script：`scripts/verify.sh` 覆盖测试、compile、CLI smoke 和只读文档审计。
+- Verification script：`scripts/verify.sh` 覆盖测试、compile、CLI smoke、i18n drift、VitePress build 和只读文档审计。
 
 ## Recommended Flow
 
@@ -105,7 +105,7 @@ scripts/bootstrap_launchd.sh status
 scripts/verify.sh
 ```
 
-该脚本会运行公开测试套件、Python compile 检查、CLI smoke checks 和只读文档审计。开发时也可以运行聚焦检查：
+该脚本会运行公开测试套件、Python compile 检查、CLI smoke checks、i18n drift 检查、VitePress 文档构建和只读文档审计。开发时也可以运行聚焦检查：
 
 ```bash
 python3 -m pytest tests/ -q
