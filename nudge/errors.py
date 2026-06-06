@@ -93,19 +93,6 @@ def classify_llm_error(raw_error: str) -> ErrorReport:
     """Classify LLM failures into actionable buckets."""
     raw = str(raw_error or "").strip()
     lower = raw.lower()
-    if "invalid json" in lower or "json" in lower:
-        return ErrorReport(
-            code="LLM_INVALID_JSON",
-            title="LLM 返回了无效 JSON",
-            detail="模型返回内容不是 Nudge action JSON，无法安全写入 Calendar / Reminders。",
-            next_steps=(
-                "重新运行一次；如果仍失败，收窄输入或切换更强模型。",
-                "检查 `docs/PROMPT_PLAYBOOK.md` 中 parse action 的输出契约。",
-                "脚本调用时先用 `nudge --dry-run \"...\"` 复现，确认不会产生真实写入。",
-            ),
-            raw_error=raw,
-        )
-
     if "api key" in lower:
         return ErrorReport(
             code="LLM_API_KEY_ERROR",
@@ -115,6 +102,19 @@ def classify_llm_error(raw_error: str) -> ErrorReport:
                 "运行 `nudge doctor` 检查 provider、模型和密钥状态。",
                 f"确认密钥在环境变量、config.toml [llm].secrets_path 或 `{DEFAULT_SECRETS_PATH}` 中。",
                 "不要把 API key 写入仓库。",
+            ),
+            raw_error=raw,
+        )
+
+    if _looks_like_llm_json_error(lower):
+        return ErrorReport(
+            code="LLM_INVALID_JSON",
+            title="LLM 返回了无效 JSON",
+            detail="模型返回内容不是 Nudge action JSON，无法安全写入 Calendar / Reminders。",
+            next_steps=(
+                "重新运行一次；如果仍失败，收窄输入或切换更强模型。",
+                "检查 `docs/PROMPT_PLAYBOOK.md` 中 parse action 的输出契约。",
+                "脚本调用时先用 `nudge --dry-run \"...\"` 复现，确认不会产生真实写入。",
             ),
             raw_error=raw,
         )
@@ -130,6 +130,22 @@ def classify_llm_error(raw_error: str) -> ErrorReport:
         ),
         raw_error=raw,
     )
+
+
+def _looks_like_llm_json_error(lower: str) -> bool:
+    """Return True only for explicit JSON parse/schema failures."""
+    json_parse_markers = (
+        "invalid json",
+        "jsondecodeerror",
+        "json decode",
+        "json parse",
+        "json parsing",
+        "parse json",
+        "json 解析失败",
+    )
+    if any(marker in lower for marker in json_parse_markers):
+        return True
+    return "schema" in lower and ("json" in lower or "validation" in lower)
 
 
 def classify_clock_error(raw_error: str, shortcut_name: str = DEFAULT_CLOCK_SHORTCUT_NAME) -> ErrorReport:

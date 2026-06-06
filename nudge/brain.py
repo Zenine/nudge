@@ -231,10 +231,36 @@ def _call(system: str, user_message: str, task: str = "default",
 
 def _parse_json(raw: str) -> list | dict:
     """Parse JSON from LLM output, stripping markdown fences if present."""
-    if raw.startswith("```"):
-        lines = raw.split("\n")
-        raw = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
-    return json.loads(raw)
+    text = str(raw or "").strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as original_error:
+        fenced = _extract_json_fence(text)
+        if fenced is None:
+            raise original_error
+        return json.loads(fenced.strip())
+
+
+def _extract_json_fence(text: str) -> str | None:
+    """Extract the first markdown JSON code fence from text."""
+    lines = text.splitlines()
+    in_json_fence = False
+    content: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not in_json_fence:
+            if stripped.startswith("```"):
+                language = stripped[3:].strip().lower()
+                if language in ("", "json"):
+                    in_json_fence = True
+                    content = []
+            continue
+        if stripped.startswith("```"):
+            return "\n".join(content)
+        content.append(line)
+    if in_json_fence:
+        return "\n".join(content)
+    return None
 
 
 def call_llm(system: str, user_message: str, task: str = "default") -> str:

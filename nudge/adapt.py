@@ -51,7 +51,7 @@ def apply_adaptation_plan(plan: list[dict]) -> list[dict]:
                 end=item.get("end"),
             )
             if ok:
-                _mark_replaced_and_log_new_action(item, status="adapted")
+                _mark_adapted_action(item, status="adapted")
             results.append({"ok": ok, "action_id": item.get("action_id"), "operation": operation, "message": message})
         elif operation == "delete":
             ok, message = delete_event_by_uid(item["external_id"])
@@ -306,6 +306,7 @@ def _apply_split_item(item: dict) -> tuple[bool, str]:
         return False, message
 
     external_ids = [item["external_id"]]
+    created_parts = []
     for part in parts[1:]:
         ok, message = create_calendar_event(
             summary=part["summary"],
@@ -315,15 +316,34 @@ def _apply_split_item(item: dict) -> tuple[bool, str]:
             notes=f"Nudge split adaptation: {item.get('reason', '')}",
         )
         if not ok:
-            return False, message
+            _log_created_split_parts(created_parts)
+            update_action_status(
+                item["action_id"],
+                "blocked",
+                feedback=_adapt_feedback(
+                    item,
+                    partial_external_mutation=True,
+                    mutated_external_ids=external_ids,
+                    failed_part=part,
+                    error=message,
+                    parts=_split_feedback_parts(parts, external_ids),
+                ),
+            )
+            return False, f"partial Calendar mutation: {message}"
         external_ids.append(make_calendar_external_id(item["calendar_name"], message))
+        created_parts.append((part, external_ids[-1]))
 
     update_action_status(
         item["action_id"],
         "adapted",
-        feedback={"source": "review weekly --adapt", "type": "split", "reason": item.get("reason", "")},
+        feedback=_adapt_feedback(item, parts=_split_feedback_parts(parts, external_ids)),
     )
-    for part, external_id in zip(parts, external_ids, strict=True):
+    _log_created_split_parts(created_parts)
+    return True, f"split into {len(parts)} parts"
+
+
+def _log_created_split_parts(created_parts: list[tuple[dict, str]]) -> None:
+    for part, external_id in created_parts:
         log_action(
             action_type="calendar_event",
             summary=part["summary"],
@@ -331,7 +351,18 @@ def _apply_split_item(item: dict) -> tuple[bool, str]:
             external_id=external_id,
             status="created",
         )
-    return True, f"split into {len(parts)} parts"
+
+
+def _split_feedback_parts(parts: list[dict], external_ids: list[str]) -> list[dict]:
+    return [
+        {
+            "summary": part["summary"],
+            "start": part["start"],
+            "end": part["end"],
+            "external_id": external_ids[index] if index < len(external_ids) else None,
+        }
+        for index, part in enumerate(parts)
+    ]
 
 
 def _parse_time(value: str) -> datetime:
@@ -365,16 +396,26 @@ def _create_plan_event(item: dict) -> tuple[bool, str]:
     return ok, message
 
 
-def _mark_replaced_and_log_new_action(item: dict, status: str) -> None:
+def _adapt_feedback(item: dict, **extra) -> dict:
+    feedback = {
+        "source": "review weekly --adapt",
+        "type": item.get("type"),
+        "reason": item.get("reason", ""),
+        "external_id": item.get("external_id"),
+    }
+    if item.get("summary") or item.get("start") or item.get("end"):
+        feedback["adapted_to"] = {
+            "summary": item.get("summary", ""),
+            "start": item.get("start", ""),
+            "end": item.get("end", ""),
+        }
+    feedback.update(extra)
+    return feedback
+
+
+def _mark_adapted_action(item: dict, status: str) -> None:
     update_action_status(
         item["action_id"],
         status,
-        feedback={"source": "review weekly --adapt", "type": item.get("type"), "reason": item.get("reason", "")},
-    )
-    log_action(
-        action_type="calendar_event",
-        summary=item["summary"],
-        scheduled_at=item["start"],
-        external_id=item["external_id"],
-        status="created",
+        feedback=_adapt_feedback(item),
     )

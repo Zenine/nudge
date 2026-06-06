@@ -300,7 +300,7 @@ def create_reminder(
     ]
     fallback_body = _body_with_external_id(body, external_id)
     if fallback_body:
-        props.append(f'body:"{escape(fallback_body)}"')
+        props.append(f'body:"{escape(fallback_body, preserve_newlines=True)}"')
     if priority > 0:
         props.append(f"priority:{priority}")
     if remind_date:

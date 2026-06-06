@@ -1007,7 +1007,7 @@ def run_command(config_path, run_once, sleep_ms, max_empty_cycles, recover_stale
         _configure_agent_state(daemon_config)
 
     if sleep_ms is None:
-        sleep_ms = int(os.environ.get("NUDGE_DAEMON_SLEEP_MS", "3000"))
+        sleep_ms = _int_from_env("NUDGE_DAEMON_SLEEP_MS", 3000)
     if sleep_ms < 250:
         sleep_ms = 250
     should_stop = {"value": False}

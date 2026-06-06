@@ -127,7 +127,7 @@ def create_note(
         set targetFolder to folder "{safe_folder}"
     end tell
     tell targetFolder
-        set newNote to make new note with properties {{name:"{safe_title}", body:"{escape(note_body)}"}}
+        set newNote to make new note with properties {{name:"{safe_title}", body:"{escape(note_body, preserve_newlines=True)}"}}
         name of newNote
     end tell
 end tell"""
@@ -329,7 +329,7 @@ def _note_body_html(body: str) -> str:
     close_list()
     flush_table()
     parts.extend(["</body>", "</html>"])
-    return "".join(parts)
+    return "\n".join(parts)
 
 
 def _is_markdown_table_row(line: str) -> bool:
