@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from nudge.apple.common import date_block, escape, run_applescript
+from nudge.apple.tsv import parse_tsv_rows
 
 
 # Swift startup plus EventKit's own 15s access/fetch waits can exceed a short CLI timeout.
@@ -188,23 +189,11 @@ def query_completed_on_date(
 
 def _parse_due_today_rows(raw: str) -> list[dict]:
     """Parse tab-separated due-today rows from Swift/EventKit or AppleScript."""
-    reminders = []
-    for line in raw.strip().split("\n"):
-        if not line.strip():
-            continue
-        parts = line.split("\t")
-        if len(parts) >= 3:
-            reminder = {
-                "name": parts[0],
-                "due_time": parts[1],
-                "list": parts[2],
-            }
-            if len(parts) >= 4 and parts[3]:
-                reminder["completed_at"] = parts[3]
-            if len(parts) >= 5 and parts[4]:
-                reminder["due_at"] = parts[4]
-            reminders.append(reminder)
-    return reminders
+    return parse_tsv_rows(
+        raw,
+        required_columns=("name", "due_time", "list"),
+        optional_columns=("completed_at", "due_at"),
+    )
 
 
 def _run_eventkit_mutation(

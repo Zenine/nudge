@@ -49,10 +49,12 @@ def build_feedback(
 
     if note is not None:
         feedback["note"] = str(note)
-    if reason:
-        feedback["reason"] = str(reason)
-    if next_action:
-        feedback["next_action"] = str(next_action)
+    normalized_reason = _normalize_choice(reason, STATUS_REASONS)
+    if normalized_reason:
+        feedback["reason"] = normalized_reason
+    normalized_next_action = _normalize_choice(next_action, STATUS_NEXT_ACTIONS)
+    if normalized_next_action:
+        feedback["next_action"] = normalized_next_action
     if metrics:
         feedback["metrics"] = metrics
     if raw_text is not None:
@@ -76,6 +78,16 @@ def normalize_feedback(raw_feedback: object) -> dict[str, Any]:
     if channel:
         normalized["channel"] = channel
     normalized["source_type"] = source_type
+    reason = _normalize_choice(normalized.get("reason"), STATUS_REASONS)
+    if reason:
+        normalized["reason"] = reason
+    else:
+        normalized.pop("reason", None)
+    next_action = _normalize_choice(normalized.get("next_action"), STATUS_NEXT_ACTIONS)
+    if next_action:
+        normalized["next_action"] = next_action
+    else:
+        normalized.pop("next_action", None)
     if not isinstance(normalized.get("metrics"), dict):
         normalized.pop("metrics", None)
     return normalized
@@ -178,6 +190,14 @@ def _normalize_source_type(value: object) -> str | None:
         return None
     text = text.lower()
     return text if text in KNOWN_SOURCE_TYPES else "unknown"
+
+
+def _normalize_choice(value: object, allowed: set[str]) -> str | None:
+    text = _clean_string(value)
+    if not text:
+        return None
+    text = text.lower()
+    return text if text in allowed else None
 
 
 def _clean_string(value: object) -> str | None:

@@ -50,6 +50,7 @@ from nudge.state import (
     skip_action,
     update_action_status,
 )
+from nudge.version import get_version
 
 
 SUPPORTED_AGENT_ACTIONS = {
@@ -734,6 +735,7 @@ def _agent_payload(
     failed = set(failed_indices)
     payload = {
         "ok": not errors and not failed_indices,
+        "package_version": get_version(),
         "request_id": normalized.request_id,
         "source": normalized.source,
         "dry_run": dry_run,
@@ -825,6 +827,7 @@ def _agent_error_payload(
     """Build stable JSON response for request-level agent errors."""
     payload = {
         "ok": False,
+        "package_version": get_version(),
         "request_id": request_id,
         "source": source,
         "dry_run": dry_run,

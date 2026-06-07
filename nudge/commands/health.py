@@ -7,9 +7,10 @@ from datetime import date, timedelta
 
 import click
 
+from nudge.config import load_config
 from nudge.health import apply_health_import, parse_apple_health_export
 from nudge.json_contract import versioned_payload
-from nudge.state import get_health_daily_summaries, get_health_workouts
+from nudge.state import configure_state, get_health_daily_summaries, get_health_workouts
 
 
 @click.group("health")
@@ -22,14 +23,24 @@ def health_command():
 @click.option("--from", "date_from", default=None, help="Import dates from YYYY-MM-DD, inclusive")
 @click.option("--to", "date_to", default=None, help="Import dates before YYYY-MM-DD, exclusive")
 @click.option("--apply", "apply_changes", is_flag=True, help="Write parsed summaries to SQLite")
+@click.option("--config", "-c", "config_path", default=None, help="Config file path")
 @click.option("--json", "json_output", is_flag=True, help="Output machine-readable JSON")
-def import_command(path: str, date_from: str | None, date_to: str | None, apply_changes: bool, json_output: bool):
+def import_command(
+    path: str,
+    date_from: str | None,
+    date_to: str | None,
+    apply_changes: bool,
+    config_path: str | None,
+    json_output: bool,
+):
     """Parse an Apple Health export (ZIP or HealthExport JSON file).
 
     Dry-run is the default: Nudge parses the export and reports aggregate counts
     without writing SQLite. Use --apply after reviewing the result.
     """
     try:
+        if config_path:
+            configure_state(load_config(config_path))
         _validate_date_filter(date_from, date_to)
         result = parse_apple_health_export(path, date_from=date_from, date_to=date_to)
         updated = (

@@ -114,7 +114,7 @@ def test_top_level_config_option_loads_config_for_subcommand(monkeypatch, tmp_pa
 
     assert result.exit_code == 0, result.output
     assert observed == {
-        "config_path": None,
+        "config_path": str(config_path),
         "default_calendar": "CLI Top Level",
     }
     assert state_module.STATE_DIR == tmp_path / "state"

@@ -54,6 +54,7 @@
 | Testing and Verification | Testing and Verification | Testing and Verification | Testing and Verification |
 | Private Data | Private Data | Private Data | Private Data |
 | License | License | License | License |
+| 平台边界 | Platform Boundary | プラットフォーム境界 | 平台邊界 |
 | FAQ | FAQ | FAQ | FAQ |
 | 中断后恢复 | Resume After Interruption | 中断後の再開 | 中斷後恢復 |
 | 你只需要做三件事 | You Only Need To Do Three Things | あなたがやるべき 3 つのこと | 你只需要做三件事 |
@@ -62,6 +63,13 @@
 | 深入了解 | Learn More | 詳細 | 深入了解 |
 | 适合这些场景 | Best-fit scenarios | 向いている場面 | 適合這些場景 |
 | 一句话理解 | One-sentence model | 一文でいうと | 一句話理解 |
+| 命令参考 | Command Reference | コマンドリファレンス | 命令參考 |
+| 安全边界 | Safety Boundaries | 安全境界 | 安全邊界 |
+| 核心命令 | Core Commands | 主要コマンド | 核心命令 |
+| Skills 端到端示例 | Skills End-to-End Example | Skills エンドツーエンド例 | Skills 端到端範例 |
+| Runtime log 截断和密钥边界 | Runtime Log Truncation and Secret Boundaries | Runtime log の切り詰めと secrets 境界 | Runtime log 截斷和密鑰邊界 |
+| Daemon 平台边界 | Daemon Platform Boundary | Daemon プラットフォーム境界 | Daemon 平台邊界 |
+| 发布和站长验证 | Publishing and Webmaster Verification | 公開と Webmaster 検証 | 發布和 Webmaster 驗證 |
 
 ## D. 惯用短语 / 营销文案（Idiomatic Phrases）
 

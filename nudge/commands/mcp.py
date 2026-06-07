@@ -29,10 +29,10 @@ from nudge.commands.doctor import doctor_payload, run_checks
 from nudge.config import load_config
 from nudge.errors import ErrorReport, classify_apple_error
 from nudge.json_contract import versioned_payload
+from nudge.version import get_version
 
 
 MCP_PROTOCOL_VERSION = "2025-11-25"
-SERVER_INFO = {"name": "nudge", "version": "0.5.1"}
 JSONRPC_VERSION = "2.0"
 _configure_agent_state = configure_agent_state
 
@@ -87,8 +87,14 @@ def _handle_message(message: dict, config: dict) -> dict | None:
         return _result_response(request_id, {
             "protocolVersion": MCP_PROTOCOL_VERSION,
             "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": SERVER_INFO,
+            "serverInfo": _server_info(),
         })
+    if method == "ping":
+        return _result_response(request_id, {})
+    if method == "prompts/list":
+        return _unsupported_capability_response(request_id, "prompts")
+    if method == "resources/list":
+        return _unsupported_capability_response(request_id, "resources")
     if method == "tools/list":
         return _result_response(request_id, {
             "tools": [
@@ -101,6 +107,10 @@ def _handle_message(message: dict, config: dict) -> dict | None:
     if method == "tools/call":
         return _handle_tools_call(request_id, message.get("params"), config)
     return _error_response(request_id, -32601, f"Method not found: {method}")
+
+
+def _server_info() -> dict:
+    return {"name": "nudge", "version": get_version()}
 
 
 def _handle_tools_call(request_id: Any, params: object, config: dict) -> dict:
@@ -351,7 +361,7 @@ def _handle_doctor_status_call(request_id: Any, arguments: dict, config: dict) -
         )
         return _result_response(request_id, _tool_result(payload, is_error=True))
 
-    payload = doctor_payload(run_checks(config=config), include_pass=include_pass)
+    payload = doctor_payload(run_checks(config=config, llm_ping=False), include_pass=include_pass)
     payload["tool"] = "doctor_status"
     return _result_response(request_id, _tool_result(payload, is_error=not bool(payload.get("ok"))))
 
@@ -544,9 +554,21 @@ def _result_response(request_id: Any, result: dict) -> dict:
     return {"jsonrpc": JSONRPC_VERSION, "id": request_id, "result": result}
 
 
-def _error_response(request_id: Any, code: int, message: str) -> dict:
+def _unsupported_capability_response(request_id: Any, capability: str) -> dict:
+    return _error_response(
+        request_id,
+        -32000,
+        f"Unsupported MCP capability: {capability}/list",
+        data={"capability": capability, "supported": False},
+    )
+
+
+def _error_response(request_id: Any, code: int, message: str, data: dict | None = None) -> dict:
+    error = {"code": code, "message": message}
+    if data is not None:
+        error["data"] = data
     return {
         "jsonrpc": JSONRPC_VERSION,
         "id": request_id,
-        "error": {"code": code, "message": message},
+        "error": error,
     }

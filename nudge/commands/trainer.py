@@ -4,7 +4,8 @@ from datetime import datetime, timedelta
 
 import click
 
-from nudge.apple.calendar import create_calendar_event, get_week_events, make_calendar_external_id
+from nudge.apple.adapters import resolve_apple_backends
+from nudge.apple.calendar import get_week_events
 from nudge.brain import NudgeBrainError, generate_workout_plan, parse_workout_log
 from nudge.config import (
     DEFAULT_CALENDAR_NAME,
@@ -16,6 +17,7 @@ from nudge.config import (
 from nudge.errors import classify_apple_error
 from nudge.sleep_reminders import SLEEP_AFTER_SKIP_STATUS, is_neutral_sleep_skip
 from nudge.state import (
+    configure_state,
     complete_action,
     create_plan,
     get_actions,
@@ -39,6 +41,8 @@ def trainer_command():
 def plan(dry_run, config_path):
     """Generate a weekly workout plan and write to calendar."""
     config = load_config(config_path)
+    if config_path:
+        configure_state(config)
     profile = get_user_profile(config)
     cal_map = get_calendar_map(config)
     workout_calendar = cal_map.get("workout", DEFAULT_CALENDAR_NAME)
@@ -82,6 +86,7 @@ def plan(dry_run, config_path):
 
     # Confirm
     click.confirm("写入日历？", default=True, abort=True)
+    apple_backends = resolve_apple_backends(config)
 
     # Create plan in DB
     plan_id = create_plan(
@@ -97,22 +102,30 @@ def plan(dry_run, config_path):
             duration = s.get("duration_minutes", 45)
             end = start + timedelta(minutes=duration)
 
-            ok, msg = create_calendar_event(
+            result = apple_backends.calendar.create_event(
                 summary=s["summary"],
                 start=start,
                 end=end,
                 calendar_name=workout_calendar,
                 notes=_format_exercises(s.get("exercises", [])),
             )
-            if ok:
+            if result.ok:
                 success += 1
                 log_action(
                     action_type="workout",
                     summary=s["summary"],
                     scheduled_at=f"{s['day']} {s['time']}",
-                    external_id=make_calendar_external_id(workout_calendar, msg),
+                    external_id=result.external_id,
                     plan_id=plan_id,
                 )
+            else:
+                error = classify_apple_error(
+                    "Calendar",
+                    "Calendar",
+                    workout_calendar,
+                    result.message,
+                )
+                click.echo(error.render(indent="  "), err=True)
         except (ValueError, KeyError) as e:
             click.echo(f"  跳过无效 session: {e}", err=True)
 
@@ -124,6 +137,10 @@ def plan(dry_run, config_path):
 @click.option("--config", "-c", "config_path", default=None)
 def log(message, config_path):
     """Log workout completion (e.g., 'trainer log "跑了5公里，感觉不错"')."""
+    if config_path:
+        config = load_config(config_path)
+        configure_state(config)
+
     # Find the most recent pending workout action
     actions = get_actions(status="created")
     workout_actions = [a for a in actions if a["type"] == "workout"]
@@ -158,8 +175,13 @@ def log(message, config_path):
 
 
 @trainer_command.command("status")
-def status():
+@click.option("--config", "-c", "config_path", default=None)
+def status(config_path):
     """Show current workout plan progress."""
+    if config_path:
+        config = load_config(config_path)
+        configure_state(config)
+
     plans = get_plans(status="active")
     workout_plans = [p for p in plans if p["goal"] == "weekly_workout"]
 

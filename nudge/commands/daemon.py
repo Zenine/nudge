@@ -34,6 +34,7 @@ from nudge.runtime_log import append_runtime_log
 from nudge.state import (
     DEFAULT_COMMAND_QUEUE_MAX_DEPTH,
     claim_next_queued_command,
+    configure_state,
     enqueue_agent_command,
     get_daemon_runtime_status,
     list_queued_commands,
@@ -79,6 +80,15 @@ DAEMON_ALERT_POLICY = {
 
 def _now_iso() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _configure_daemon_state(config_path: Path | str | None) -> dict | None:
+    if config_path is None:
+        return None
+    config = load_config(str(config_path))
+    configure_state(config)
+    _configure_agent_state(config)
+    return config
 
 
 def _parse_iso8601(text: str | None) -> datetime | None:
@@ -447,9 +457,11 @@ def daemon_command():
     type=click.IntRange(1, 100_000),
     help="Reject enqueue when queued/running depth reaches this limit",
 )
+@click.option("--config", "-c", "config_path", default=None, type=click.Path(path_type=Path), help="Config file path")
 @click.option("--json", "json_output", is_flag=True, help="Output machine-readable JSON")
-def enqueue_command(request_type, file_path, request_id, source, max_queue_depth, json_output):
+def enqueue_command(request_type, file_path, request_id, source, max_queue_depth, config_path, json_output):
     """Enqueue a structured request for daemon execution."""
+    _configure_daemon_state(config_path)
     try:
         raw_request = _read_request_text(file_path)
         request_payload = json.loads(raw_request)
@@ -505,9 +517,11 @@ def enqueue_command(request_type, file_path, request_id, source, max_queue_depth
 @daemon_command.command("queue")
 @click.option("--status", "-s", "status_filter", default=None, help="Filter by queue status")
 @click.option("--limit", "-n", default=50, type=click.IntRange(1, 500))
+@click.option("--config", "-c", "config_path", default=None, type=click.Path(path_type=Path), help="Config file path")
 @click.option("--json", "json_output", is_flag=True, help="Output machine-readable JSON")
-def queue_command(status_filter, limit, json_output):
+def queue_command(status_filter, limit, config_path, json_output):
     """List queue rows for quick troubleshooting."""
+    _configure_daemon_state(config_path)
     rows = list_queued_commands(status=status_filter, limit=limit)
     payload = {
         "ok": True,
@@ -525,9 +539,11 @@ def queue_command(status_filter, limit, json_output):
 
 
 @daemon_command.command("status")
+@click.option("--config", "-c", "config_path", default=None, type=click.Path(path_type=Path), help="Config file path")
 @click.option("--json", "json_output", is_flag=True, help="Output machine-readable JSON")
-def status_command(json_output):
+def status_command(config_path, json_output):
     """Show queue depth and last successful command metrics."""
+    _configure_daemon_state(config_path)
     payload = get_daemon_runtime_status()
     payload["ok"] = True
     if json_output:
@@ -557,9 +573,11 @@ def status_command(json_output):
     type=click.IntRange(1, 100),
     help="Move stale running commands to dead_letter after this many attempts",
 )
+@click.option("--config", "-c", "config_path", default=None, type=click.Path(path_type=Path), help="Config file path")
 @click.option("--json", "json_output", is_flag=True, help="Output machine-readable JSON")
-def recover_command(stale_minutes, max_attempts, json_output):
+def recover_command(stale_minutes, max_attempts, config_path, json_output):
     """Recover stale running queue rows after crash, sleep, or daemon restart."""
+    _configure_daemon_state(config_path)
     resolved_stale_minutes = stale_minutes
     if resolved_stale_minutes is None:
         resolved_stale_minutes = _int_from_env("NUDGE_DAEMON_STALE_MINUTES", DEFAULT_DAEMON_STALE_MINUTES)
@@ -586,9 +604,11 @@ def recover_command(stale_minutes, max_attempts, json_output):
 
 @daemon_command.command("retry")
 @click.option("--request-id", required=True, help="Failed/dead-letter request id to requeue")
+@click.option("--config", "-c", "config_path", default=None, type=click.Path(path_type=Path), help="Config file path")
 @click.option("--json", "json_output", is_flag=True, help="Output machine-readable JSON")
-def retry_command(request_id, json_output):
+def retry_command(request_id, config_path, json_output):
     """Explicitly requeue one failed or dead-letter command."""
+    _configure_daemon_state(config_path)
     item = retry_queued_command(request_id)
     if item is None:
         payload = {
@@ -903,9 +923,11 @@ def _log_daemon_start(
 @click.option("--stale-minutes", default=None, type=click.IntRange(1, 10_080))
 @click.option("--max-attempts", default=None, type=click.IntRange(1, 100))
 @click.option("--notify", "send_notification", is_flag=True, help="Send a macOS notification when health is not ok")
+@click.option("--config", "-c", "config_path", default=None, type=click.Path(path_type=Path), help="Config file path")
 @click.option("--json", "json_output", is_flag=True, help="Output machine-readable JSON")
-def health_command(stale_minutes, max_attempts, send_notification, json_output):
+def health_command(stale_minutes, max_attempts, send_notification, config_path, json_output):
     """Inspect daemon launchd state, queue depth, stale running rows, and dead letters."""
+    _configure_daemon_state(config_path)
     payload = build_daemon_health_report(stale_minutes=stale_minutes, max_attempts=max_attempts)
     if send_notification:
         payload["notification"] = _send_daemon_health_notification(payload)
@@ -1001,10 +1023,7 @@ def app_uninstall_command(json_output):
 @click.option("--verbose", is_flag=True, help="Print per-command trace")
 def run_command(config_path, run_once, sleep_ms, max_empty_cycles, recover_stale_minutes, max_attempts, verbose):
     """Process queued commands in a daemon-style loop."""
-    daemon_config = None
-    if config_path is not None:
-        daemon_config = load_config(str(config_path))
-        _configure_agent_state(daemon_config)
+    daemon_config = _configure_daemon_state(config_path)
 
     if sleep_ms is None:
         sleep_ms = _int_from_env("NUDGE_DAEMON_SLEEP_MS", 3000)

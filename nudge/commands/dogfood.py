@@ -7,13 +7,14 @@ from pathlib import Path
 import click
 
 from nudge.commands.doctor import run_checks
+from nudge.config import load_config
 from nudge.dogfood import (
     build_weekly_dogfood_report,
     render_weekly_dogfood_report,
     save_weekly_dogfood_report,
 )
 from nudge.json_contract import versioned_payload
-from nudge.state import STATE_DIR, get_actions
+from nudge.state import STATE_DIR, configure_state, get_actions
 
 
 @click.group("dogfood")
@@ -24,10 +25,15 @@ def dogfood_command():
 @dogfood_command.command("weekly")
 @click.option("--save", is_flag=True, help="Save report to the Nudge state dogfood/YYYY-WW.md path")
 @click.option("--note", default="", help="Append a short subjective note to the report")
+@click.option("--config", "-c", "config_path", default=None, help="Config file path")
 @click.option("--json", "json_output", is_flag=True, help="Output machine-readable JSON")
 @click.option("--export-json", type=click.Path(dir_okay=False), help="Write machine-readable JSON to this file")
-def weekly_command(save: bool, note: str, json_output: bool, export_json: str | None):
+def weekly_command(save: bool, note: str, config_path: str | None, json_output: bool, export_json: str | None):
     """Print a read-only weekly dogfood report."""
+    global STATE_DIR
+
+    if config_path:
+        STATE_DIR = configure_state(load_config(config_path))
     today = date.today()
     week_start = today - timedelta(days=today.weekday())
     period_end = (today + timedelta(days=1)).isoformat()

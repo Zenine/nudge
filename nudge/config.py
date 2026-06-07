@@ -15,11 +15,15 @@ DEFAULT_SECRETS_PATH = Path.home() / ".config" / "nudge" / "secrets.yaml"
 DEFAULT_LLM_CONFIG = {
     "provider": "qwen",
     "model": "qwen-plus",
+    "max_tokens": 1024,
+    "retries": 1,
+    "retry_backoff_seconds": 1,
     "models": {
         "default": "qwen-plus",
         "fast": "qwen-plus",
         "strong": "qwen-plus",
     },
+    "tasks": {},
 }
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR_KEY = "__nudge_config_dir"

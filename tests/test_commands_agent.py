@@ -29,6 +29,7 @@ def isolate_agent_state(monkeypatch, tmp_path):
 
 
 def test_agent_apply_dry_run_outputs_contract_without_writes(monkeypatch):
+    monkeypatch.setattr("nudge.commands.agent.get_version", lambda: "9.8.7", raising=False)
     monkeypatch.setattr(
         "nudge.apple.adapters.create_calendar_event",
         lambda **kwargs: (_ for _ in ()).throw(AssertionError("dry-run must not write Calendar")),
@@ -51,6 +52,7 @@ def test_agent_apply_dry_run_outputs_contract_without_writes(monkeypatch):
 
     assert exit_code == 0
     assert payload["schema_version"] == "nudge.cli.v1"
+    assert payload["package_version"] == "9.8.7"
     assert payload["ok"] is True
     assert payload["dry_run"] is True
     assert payload["actions"][0]["status"] == "dry_run"

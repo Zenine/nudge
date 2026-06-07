@@ -8,6 +8,7 @@ Nudge keeps reusable automation code public while keeping personal plans, privat
 
 - [Home](https://zenine.github.io/nudge/): overview of Nudge's public runtime and private-state model
 - [Quick Start](https://zenine.github.io/nudge/quick-start): three-step setup
+- [Command Reference](https://zenine.github.io/nudge/reference): common runtime commands, safety boundaries, Skills dry-run examples, runtime log truncation rules, daemon platform boundaries, and publishing checks
 - [FAQ](https://zenine.github.io/nudge/faq): self-contained answers for discovery and citation
 - [README](https://github.com/Zenine/nudge#readme): source-of-truth overview
 
@@ -33,3 +34,12 @@ Nudge differs from regular calendar or reminder tools by combining dry-run safet
 
 ### How do I start quickly?
 Clone the repository, run `scripts/bootstrap_mac.sh` and `nudge doctor`, then inspect a command with `nudge --dry-run "Project sync tomorrow at 3pm"` before writing to Apple apps.
+
+### Can Skills examples run without private config?
+Yes. Builtin and custom Skill examples can run from the public repository with a temporary `HOME`, `nudge skills apply`, and `nudge skills dry-run`; they do not require private configuration or real Apple writes.
+
+### What are the runtime log boundaries?
+Runtime logs live under the configured state directory at `logs/nudge-runtime.jsonl`; entries are sanitized and truncated, but secrets must still stay in private overlays, environment variables, or uncommitted local config.
+
+### Does the daemon support non-macOS Apple writes?
+No. Queue inspection and dry-run-style previews can run cross-platform, but real Apple app writes, `launchd`, and the graphical daemon control app are macOS-first.

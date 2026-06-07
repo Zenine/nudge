@@ -42,5 +42,5 @@ def _due_suffixes(due_date: str) -> list[str]:
 
 def _strip_trailing_suffix(title: str, suffix: str) -> str:
     escaped = re.escape(suffix)
-    pattern = rf"(?:[\s,，、-]+{escaped})$"
+    pattern = rf"(?:[\s,，、-]+{escaped}|[（(]\s*{escaped}\s*[）)])$"
     return re.sub(pattern, "", title).strip()

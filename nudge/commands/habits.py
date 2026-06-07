@@ -2,19 +2,24 @@
 
 import click
 
-from nudge.state import get_habit_streaks, update_habit
+from nudge.config import load_config
+from nudge.state import configure_state, get_habit_streaks, update_habit
 
 
 @click.command("habits")
+@click.option("--config", "-c", "config_path", default=None, help="Config file path")
 @click.argument("action", required=False, type=click.Choice(["log"]))
 @click.argument("habit_name", required=False)
-def habits_command(action, habit_name):
+def habits_command(config_path, action, habit_name):
     """View habit streaks or log a habit.
 
     Examples:
         nudge.py habits              # show all streaks
         nudge.py habits log reading  # mark 'reading' as done today
     """
+    if config_path:
+        configure_state(load_config(config_path))
+
     if action == "log":
         if not habit_name:
             click.echo("请指定习惯名称: nudge.py habits log <name>")

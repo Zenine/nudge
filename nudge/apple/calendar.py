@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from nudge.apple.common import date_block, escape, run_applescript
+from nudge.apple.tsv import parse_tsv_rows
 
 
 DEFAULT_READ_TIMEOUT = 10
@@ -59,19 +60,7 @@ def _unique_names(names: list[str] | None) -> list[str]:
 
 def _parse_event_rows(raw: str) -> list[dict]:
     """Parse tab-separated calendar event rows from Swift/EventKit or AppleScript."""
-    events = []
-    for line in raw.strip().split("\n"):
-        if not line.strip():
-            continue
-        parts = line.split("\t")
-        if len(parts) >= 4:
-            events.append({
-                "summary": parts[0],
-                "start": parts[1],
-                "end": parts[2],
-                "calendar": parts[3],
-            })
-    return events
+    return parse_tsv_rows(raw, required_columns=("summary", "start", "end", "calendar"))
 
 
 def query_events_eventkit(

@@ -5,6 +5,7 @@ import json
 from click.testing import CliRunner
 
 from nudge.cli import cli
+from nudge.commands.doctor import CheckResult
 
 
 PUBLIC_CONFIG = {
@@ -28,6 +29,7 @@ def _run_mcp(messages, monkeypatch):
 
 
 def test_mcp_serve_initialize_and_tools_list(monkeypatch):
+    monkeypatch.setattr("nudge.commands.mcp.get_version", lambda: "9.8.7", raising=False)
     messages = [
         {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-11-25"}},
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
@@ -37,6 +39,7 @@ def test_mcp_serve_initialize_and_tools_list(monkeypatch):
 
     assert result.exit_code == 0, result.output
     assert responses[0]["result"]["serverInfo"]["name"] == "nudge"
+    assert responses[0]["result"]["serverInfo"]["version"] == "9.8.7"
     tools = responses[1]["result"]["tools"]
     assert [tool["name"] for tool in tools] == [
         "apply_apple_actions",
@@ -64,3 +67,106 @@ def test_mcp_validation_error_is_tool_error(monkeypatch):
     assert result.exit_code == 0, result.output
     assert responses[1]["result"]["isError"] is True
     assert responses[1]["result"]["structuredContent"]["ok"] is False
+
+
+def test_mcp_ping_returns_success(monkeypatch):
+    messages = [{"jsonrpc": "2.0", "id": "ping-1", "method": "ping", "params": {}}]
+
+    result, responses = _run_mcp(messages, monkeypatch)
+
+    assert result.exit_code == 0, result.output
+    assert responses == [{"jsonrpc": "2.0", "id": "ping-1", "result": {}}]
+
+
+def test_mcp_unsupported_probe_methods_return_stable_errors(monkeypatch):
+    messages = [
+        {"jsonrpc": "2.0", "id": "prompts", "method": "prompts/list", "params": {}},
+        {"jsonrpc": "2.0", "id": "resources", "method": "resources/list", "params": {}},
+        {"jsonrpc": "2.0", "id": "unknown", "method": "nudge/unknown", "params": {}},
+    ]
+
+    result, responses = _run_mcp(messages, monkeypatch)
+
+    assert result.exit_code == 0, result.output
+    assert responses[0]["error"] == {
+        "code": -32000,
+        "message": "Unsupported MCP capability: prompts/list",
+        "data": {"capability": "prompts", "supported": False},
+    }
+    assert responses[1]["error"] == {
+        "code": -32000,
+        "message": "Unsupported MCP capability: resources/list",
+        "data": {"capability": "resources", "supported": False},
+    }
+    assert responses[2]["error"]["code"] == -32601
+
+
+def test_mcp_doctor_status_returns_checks_and_keeps_llm_ping_disabled(monkeypatch):
+    observed = {}
+
+    def fake_run_checks(*, config, llm_ping):
+        observed["config"] = config
+        observed["llm_ping"] = llm_ping
+        return [
+            CheckResult("PASS", "Config", "config ok"),
+            CheckResult("WARN", "SQLite", "state database not found"),
+            CheckResult("FAIL", "Daemon", "dead_letter=1"),
+        ]
+
+    monkeypatch.setattr("nudge.commands.mcp.run_checks", fake_run_checks)
+    messages = [
+        {
+            "jsonrpc": "2.0",
+            "id": "doctor",
+            "method": "tools/call",
+            "params": {"name": "doctor_status", "arguments": {"include_pass": False}},
+        }
+    ]
+
+    result, responses = _run_mcp(messages, monkeypatch)
+
+    assert result.exit_code == 0, result.output
+    assert observed == {"config": PUBLIC_CONFIG, "llm_ping": False}
+    tool_result = responses[0]["result"]
+    payload = tool_result["structuredContent"]
+    assert tool_result["isError"] is True
+    assert payload["tool"] == "doctor_status"
+    assert payload["summary"] == {"PASS": 1, "WARN": 1, "FAIL": 1}
+    assert [check["name"] for check in payload["checks"]] == ["SQLite", "Daemon"]
+    assert json.loads(tool_result["content"][0]["text"]) == payload
+
+
+def test_mcp_doctor_status_rejects_path_and_llm_ping_arguments_without_running_doctor(monkeypatch):
+    def fail_run_checks(**kwargs):
+        raise AssertionError(f"run_checks must not be called for rejected arguments: {kwargs}")
+
+    monkeypatch.setattr("nudge.commands.mcp.run_checks", fail_run_checks)
+    messages = [
+        {
+            "jsonrpc": "2.0",
+            "id": "doctor",
+            "method": "tools/call",
+            "params": {
+                "name": "doctor_status",
+                "arguments": {
+                    "config_path": "/tmp/private.toml",
+                    "file": "/tmp/nudge.db",
+                    "llm_ping": True,
+                },
+            },
+        }
+    ]
+
+    result, responses = _run_mcp(messages, monkeypatch)
+
+    assert result.exit_code == 0, result.output
+    tool_result = responses[0]["result"]
+    payload = tool_result["structuredContent"]
+    assert tool_result["isError"] is True
+    assert payload["ok"] is False
+    assert payload["tool"] == "doctor_status"
+    assert payload["checks"] == []
+    assert payload["errors"][0]["code"] == "MCP_REQUEST_INVALID"
+    assert "config_path" in payload["errors"][0]["detail"]
+    assert "file" in payload["errors"][0]["detail"]
+    assert "llm_ping" in payload["errors"][0]["detail"]

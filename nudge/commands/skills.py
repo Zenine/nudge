@@ -232,12 +232,7 @@ def dry_run_command(skill_source, context_file, weeks, json_output):
         click.echo(f"  - W{action['week']} {action['start']} → {action['end']}  {action['summary']}")
 
 
-@skills_command.command("create")
-@click.argument("skill_source", type=click.Path(exists=True, dir_okay=False))
-@click.option("--bump-version", "bump_version", is_flag=True, help="Auto bump patch version before writing")
-@click.option("--json", "json_output", is_flag=True, help="Output machine-readable JSON")
-def create_command(skill_source, bump_version, json_output):
-    """Create a custom Skill from file into `~/.nudge/skills/<skill-id>.yaml`."""
+def _create_or_import_custom_skill(skill_source, bump_version, json_output, action):
     try:
         skill = validate_skill(load_custom_skill_text(Path(skill_source).expanduser()))
         skill = _stamp_skill_metadata(skill, bump_version=bump_version)
@@ -251,18 +246,37 @@ def create_command(skill_source, bump_version, json_output):
         if json_output:
             click.echo(json.dumps(versioned_payload({"ok": False, "error": str(exc)}), ensure_ascii=False))
             raise click.exceptions.Exit(1)
-        raise click.ClickException(f"Cannot create custom Skill: {exc}")
+        raise click.ClickException(f"Cannot {action} custom Skill: {exc}")
 
     payload = {
         "ok": True,
-        "action": "create",
+        "action": action,
         "skill": skill,
     }
     if json_output:
         click.echo(json.dumps(versioned_payload(payload), ensure_ascii=False))
         return
 
-    click.echo(f"PASS Skill created: {_metadata_label(skill)}")
+    verb = {"create": "created", "import": "imported"}.get(action, action)
+    click.echo(f"PASS Skill {verb}: {_metadata_label(skill)}")
+
+
+@skills_command.command("create")
+@click.argument("skill_source", type=click.Path(exists=True, dir_okay=False))
+@click.option("--bump-version", "bump_version", is_flag=True, help="Auto bump patch version before writing")
+@click.option("--json", "json_output", is_flag=True, help="Output machine-readable JSON")
+def create_command(skill_source, bump_version, json_output):
+    """Create a custom Skill from file into `~/.nudge/skills/<skill-id>.yaml`."""
+    _create_or_import_custom_skill(skill_source, bump_version, json_output, "create")
+
+
+@skills_command.command("import")
+@click.argument("skill_source", type=click.Path(exists=True, dir_okay=False))
+@click.option("--bump-version", "bump_version", is_flag=True, help="Auto bump patch version before writing")
+@click.option("--json", "json_output", is_flag=True, help="Output machine-readable JSON")
+def import_command(skill_source, bump_version, json_output):
+    """Import a custom Skill from file into `~/.nudge/skills/<skill-id>.yaml`."""
+    _create_or_import_custom_skill(skill_source, bump_version, json_output, "import")
 
 
 @skills_command.command("update")

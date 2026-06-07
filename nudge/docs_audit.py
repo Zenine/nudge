@@ -16,6 +16,24 @@ DUPLICATE_HEADING_EXEMPT_FILES = {Path("CHANGELOG.md")}
 MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
 MARKDOWN_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$", re.MULTILINE)
+PRIVATE_ABSOLUTE_PATH_RE = re.compile(
+    r"/Users/[^\s`\"')]+/(?:"
+    r"github/nudge-private(?:/[^\s`\"')]+)*|"
+    r"Desktop/[^\s`\"')]*DB_backup(?:/[^\s`\"')]+)*|"
+    r"\.nudge/[^\s`\"')]*nudge\.db|"
+    r"github/nudge-public/\.nudge/[^\s`\"')]*nudge\.db"
+    r")"
+)
+SECRET_VALUE_EXAMPLE_RE = re.compile(
+    r"(?i)\b(?:[a-z0-9]+_)*(?:api[_-]?key|token|secret|password|credential)\b"
+    r"\s*[:=]\s*(?:sk-[A-Za-z0-9_-]{12,}|[\"'](?:sk-[A-Za-z0-9_-]{12,}|[A-Za-z0-9_./+=-]{24,})[\"'])"
+)
+PUBLIC_BOUNDARY_TEXT_FILES = (
+    Path("llms.txt"),
+    Path("docs/public/llms.txt"),
+    Path("llms-full.txt"),
+    Path("docs/public/llms-full.txt"),
+)
 
 
 def audit_docs(
@@ -44,6 +62,7 @@ def audit_docs(
     _check_markdown_images(root_path, report)
     _check_duplicate_headings(root_path, report)
     _check_docs_index_alignment(root_path, report)
+    _check_public_boundaries(root_path, report)
     _check_todo_history(root_path, report)
     _check_long_entrypoints(root_path, report, max_entrypoint_lines)
     _finalize(report)
@@ -250,6 +269,28 @@ def _check_todo_history(root: Path, report: dict) -> None:
                 return
 
 
+def _check_public_boundaries(root: Path, report: dict) -> None:
+    for path in _public_boundary_files(root):
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        relative = path.relative_to(root)
+        if PRIVATE_ABSOLUTE_PATH_RE.search(text):
+            _add(
+                report,
+                "errors",
+                "DOCS_PRIVATE_ABSOLUTE_PATH",
+                "公开文档包含私有绝对路径或个人状态库路径。",
+                relative,
+            )
+        if SECRET_VALUE_EXAMPLE_RE.search(text):
+            _add(
+                report,
+                "errors",
+                "DOCS_SECRET_VALUE_EXAMPLE",
+                "公开文档包含真实形态的密钥、token 或密码示例。",
+                relative,
+            )
+
+
 def _check_long_entrypoints(root: Path, report: dict, max_lines: int) -> None:
     for entrypoint in ENTRYPOINTS:
         path = root / entrypoint
@@ -275,6 +316,15 @@ def _markdown_files(root: Path) -> list[Path]:
             path for path in docs.rglob("*.md")
             if not _is_ignored_docs_path(root, path)
         )
+    return sorted(set(candidates))
+
+
+def _public_boundary_files(root: Path) -> list[Path]:
+    candidates = _markdown_files(root)
+    for rel_path in PUBLIC_BOUNDARY_TEXT_FILES:
+        path = root / rel_path
+        if path.exists():
+            candidates.append(path)
     return sorted(set(candidates))
 
 

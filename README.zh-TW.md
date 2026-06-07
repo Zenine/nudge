@@ -1,8 +1,8 @@
 <!--
   Translation status:
   Source file : README.md
-  Source commit: 0cb38bb
-  Translated  : 2026-06-02
+  Source commit: 40b12c7
+  Translated  : 2026-06-07
   Status      : up-to-date
 -->
 
@@ -103,6 +103,10 @@ scripts/bootstrap_launchd.sh status
 ```
 
 `nudge docs audit` 是唯讀命令。`nudge daily sync --apply --json` 在發現文件錯誤或 warning 需要處理時，可以建立本機 maintenance action；它不會移動、刪除或重寫文件。
+
+## 平台邊界
+
+Nudge 是 macOS-first runtime。CLI 的 dry-run、Skill rules 驗證、文件審計和 JSON preview 可以在公開儲存庫中執行；真實 Apple Calendar / Reminders / Notes / Clock 寫入、`launchd` daemon 安裝和 graphical control app 只支援 macOS。非 macOS 環境預設用於閱讀文件、執行 tests 和預覽 JSON，不預設實作跨平台 Apple 寫入。
 
 ## Testing and Verification
 

@@ -5,10 +5,11 @@ import click
 
 from nudge.adapt import apply_adaptation_plan, build_adaptation_plan
 from nudge.brain import NudgeBrainError, suggest_adaptation
+from nudge.config import load_config
 from nudge.errors import classify_apple_error
 from nudge.feedback import feedback_source_summary, format_feedback_source_summary, normalize_feedback
 from nudge.sleep_reminders import SLEEP_AFTER_SKIP_STATUS, is_neutral_sleep_skip
-from nudge.state import get_actions, get_habit_streaks
+from nudge.state import configure_state, get_actions, get_habit_streaks
 
 
 @click.command("review")
@@ -16,10 +17,13 @@ from nudge.state import get_actions, get_habit_streaks
 @click.option("--adapt", is_flag=True, help="Generate AI adaptation suggestions")
 @click.option("--dry-run", "adapt_dry_run", is_flag=True, help="Preview adaptation plan without writing Calendar")
 @click.option("--apply", "adapt_apply", is_flag=True, help="Apply safe adaptation plan after confirmation")
-def review_command(period, adapt, adapt_dry_run, adapt_apply):
+@click.option("--config", "-c", "config_path", default=None, help="Config file path")
+def review_command(period, adapt, adapt_dry_run, adapt_apply, config_path):
     """Generate an evaluation report (daily or weekly)."""
     if (adapt_dry_run or adapt_apply) and not adapt:
         raise click.ClickException("--dry-run/--apply 需要和 --adapt 一起使用")
+    if config_path:
+        configure_state(load_config(config_path))
     if period == "daily":
         _daily_review()
     else:

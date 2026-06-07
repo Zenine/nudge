@@ -130,9 +130,7 @@ def parse_apple_health_export(
 
     with ZipFile(export_path) as zf:
         export_xml = _find_health_export_xml(zf)
-        ignored_route_files = sum(
-            1 for name in zf.namelist() if "/workout-routes/" in name and name.lower().endswith(".gpx")
-        )
+        ignored_route_files = sum(1 for name in zf.namelist() if _is_workout_route_gpx(name))
         with zf.open(export_xml) as xml_file:
             for _event, elem in ET.iterparse(xml_file, events=("end",)):
                 if elem.tag == "Record":
@@ -502,6 +500,11 @@ def _find_health_export_xml(zf: ZipFile) -> str:
         if "HealthData" in sample:
             return info.filename
     raise ValueError("Apple Health export XML not found in zip")
+
+
+def _is_workout_route_gpx(name: str) -> bool:
+    parts = Path(name).parts
+    return "workout-routes" in parts and name.lower().endswith(".gpx")
 
 
 def _record_summary_date(attrs: dict[str, str]) -> str | None:

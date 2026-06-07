@@ -11,6 +11,33 @@ _PROVIDERS = {}  # provider_name -> class
 class LLMError(Exception):
     """Raised when an LLM call fails."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        retryable: bool = False,
+        auth_error: bool = False,
+        status_code: int | None = None,
+    ):
+        super().__init__(message)
+        self.retryable = retryable
+        self.auth_error = auth_error
+        self.status_code = status_code
+
+
+class LLMTransientError(LLMError):
+    """Raised when an LLM call failed for a retryable transient reason."""
+
+    def __init__(self, message: str, *, status_code: int | None = None):
+        super().__init__(message, retryable=True, status_code=status_code)
+
+
+class LLMAuthenticationError(LLMError):
+    """Raised when an LLM provider rejected credentials."""
+
+    def __init__(self, message: str, *, status_code: int | None = None):
+        super().__init__(message, retryable=False, auth_error=True, status_code=status_code)
+
 
 class LLMProvider:
     """Base class for LLM providers."""
@@ -47,14 +74,18 @@ class AnthropicProvider(LLMProvider, provider_name="anthropic"):
             if not response.content:
                 raise LLMError("LLM returned empty response")
             return response.content[0].text.strip()
+        except LLMError:
+            raise
         except anthropic.AuthenticationError:
-            raise LLMError(
+            raise LLMAuthenticationError(
                 "Invalid Anthropic API key. Set ANTHROPIC_API_KEY or configure in config.toml."
             )
         except anthropic.APIConnectionError:
-            raise LLMError("Cannot connect to Anthropic API. Check your network.")
+            raise LLMTransientError("Cannot connect to Anthropic API. Check your network.")
         except anthropic.RateLimitError:
-            raise LLMError("Anthropic API rate limit exceeded. Try again later.")
+            raise LLMTransientError("Anthropic API rate limit exceeded. Try again later.")
+        except Exception as exc:
+            raise _llm_error_from_exception(exc) from exc
 
 
 class OpenAICompatibleProvider(LLMProvider, provider_name="openai"):
@@ -77,14 +108,20 @@ class OpenAICompatibleProvider(LLMProvider, provider_name="openai"):
             if not content:
                 raise LLMError("LLM returned empty response")
             return content.strip()
+        except LLMError:
+            raise
         except AuthenticationError:
-            raise LLMError(
+            raise LLMAuthenticationError(
                 "Invalid API key. Check your config.toml [llm] section."
             )
         except APIConnectionError:
-            raise LLMError(f"Cannot connect to {self.base_url or 'OpenAI API'}. Check your network.")
+            raise LLMTransientError(
+                f"Cannot connect to {self.base_url or 'OpenAI API'}. Check your network."
+            )
         except RateLimitError:
-            raise LLMError("API rate limit exceeded. Try again later.")
+            raise LLMTransientError("API rate limit exceeded. Try again later.")
+        except Exception as exc:
+            raise _llm_error_from_exception(exc) from exc
 
 
 class OllamaProvider(LLMProvider, provider_name="ollama"):
@@ -111,10 +148,12 @@ class OllamaProvider(LLMProvider, provider_name="ollama"):
                 raise LLMError("LLM returned empty response")
             return content.strip()
         except APIConnectionError:
-            raise LLMError(
+            raise LLMTransientError(
                 f"Cannot connect to Ollama at {self.base_url}. "
                 "Is Ollama running? Try: ollama serve"
             )
+        except Exception as exc:
+            raise _llm_error_from_exception(exc) from exc
 
 
 class DeepSeekProvider(OpenAICompatibleProvider, provider_name="deepseek"):
@@ -283,6 +322,36 @@ def create_provider(config: dict | None = None) -> LLMProvider:
     return provider_cls(api_key=api_key, base_url=base_url)
 
 
+def _llm_error_from_exception(exc: Exception) -> LLMError:
+    """Convert SDK exceptions with HTTP status metadata into LLMError."""
+    status_code = _status_code_from_exception(exc)
+    message = str(exc) or exc.__class__.__name__
+    if status_code in (401, 403):
+        return LLMAuthenticationError(message, status_code=status_code)
+    if status_code is not None and status_code >= 500:
+        return LLMTransientError(message, status_code=status_code)
+    return LLMError(message, status_code=status_code)
+
+
+def _status_code_from_exception(exc: Exception) -> int | None:
+    for attr in ("status_code", "status"):
+        value = getattr(exc, attr, None)
+        if value is not None:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+    response = getattr(exc, "response", None)
+    if response is not None:
+        value = getattr(response, "status_code", None)
+        if value is not None:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
 def get_model_for_task(task: str, config: dict | None = None) -> str:
     """Get the model name for a specific task type.
 
@@ -295,3 +364,74 @@ def get_model_for_task(task: str, config: dict | None = None) -> str:
         config = {}
     models = config.get("models", DEFAULT_LLM_CONFIG["models"])
     return models.get(task, models.get("default", DEFAULT_LLM_CONFIG["models"]["default"]))
+
+
+def get_max_tokens_for_task(task: str, config: dict | None = None) -> int:
+    """Get max_tokens for a task, using task override before LLM default."""
+    if config is None:
+        config = {}
+
+    default = _positive_int_or_default(
+        config.get("max_tokens"),
+        DEFAULT_LLM_CONFIG["max_tokens"],
+    )
+    task_config = _get_task_config(task, config)
+    return _positive_int_or_default(task_config.get("max_tokens"), default)
+
+
+def get_retries_for_task(task: str, config: dict | None = None) -> int:
+    """Get retry count for a task."""
+    if config is None:
+        config = {}
+
+    default = _non_negative_int_or_default(
+        config.get("retries"),
+        DEFAULT_LLM_CONFIG["retries"],
+    )
+    task_config = _get_task_config(task, config)
+    return _non_negative_int_or_default(task_config.get("retries"), default)
+
+
+def get_retry_backoff_seconds_for_task(task: str, config: dict | None = None) -> float:
+    """Get initial retry backoff seconds for a task."""
+    if config is None:
+        config = {}
+
+    default = _positive_float_or_default(
+        config.get("retry_backoff_seconds"),
+        DEFAULT_LLM_CONFIG["retry_backoff_seconds"],
+    )
+    task_config = _get_task_config(task, config)
+    return _positive_float_or_default(task_config.get("retry_backoff_seconds"), default)
+
+
+def _get_task_config(task: str, config: dict) -> dict:
+    tasks = config.get("tasks", DEFAULT_LLM_CONFIG["tasks"])
+    if not isinstance(tasks, dict):
+        return {}
+    task_config = tasks.get(task, {})
+    return task_config if isinstance(task_config, dict) else {}
+
+
+def _positive_int_or_default(value: object, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _non_negative_int_or_default(value: object, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed >= 0 else default
+
+
+def _positive_float_or_default(value: object, default: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default

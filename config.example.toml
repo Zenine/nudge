@@ -7,15 +7,24 @@ locale = "en-US"
 dir = "~/.local/share/nudge"
 
 [llm]
-provider = "qwen"
-# api_key = ""            # Prefer environment variables or secrets_path.
-# secrets_path = "~/.config/nudge/secrets.yaml"
-# For fully local inference, use provider = "ollama" and an installed Ollama model.
+provider = "ollama"
+model = "llama3.2"
+max_tokens = 1024
+retries = 1
+retry_backoff_seconds = 1
+# For remote providers, prefer environment variables or a private secrets_path
+# in an uncommitted config.toml overlay.
 
 [llm.models]
-fast = "qwen-plus"
-default = "qwen-plus"
-strong = "qwen-plus"
+fast = "llama3.2"
+default = "llama3.2"
+strong = "llama3.2"
+
+[llm.tasks.fast]
+max_tokens = 1024
+
+[llm.tasks.strong]
+max_tokens = 2048
 
 [apple.calendar]
 backend = "native"
@@ -29,3 +38,9 @@ backend = "native"
 [apple.clock]
 backend = "shortcuts"
 shortcut_name = "Nudge Create Alarm"
+
+[daemon]
+sleep_ms = 3000
+stale_minutes = 30
+max_attempts = 3
+max_queue_depth = 100

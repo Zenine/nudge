@@ -90,6 +90,11 @@ def format_action(action: dict, idx: int, alias_map: dict, defaults: dict) -> st
     elif t == "alarm":
         lines.append(f'  {idx}. [ALARM] {action["time"]} - {action["label"]}')
 
+    elif t == "note":
+        folder = defaults.get("default_notes_folder", DEFAULT_NOTES_FOLDER)
+        lines.append(f'  {idx}. [NOTE] "{action["title"]}"' + (f" for {person}" if person else ""))
+        lines.append(f"     Folder: {folder}")
+
     return "\n".join(lines)
 
 

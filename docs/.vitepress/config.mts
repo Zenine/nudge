@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitepress'
+import { verificationHead } from './verification-meta.mts'
 
 const SITE_URL = 'https://zenine.github.io/nudge'
 const PROJECT_NAME = 'Nudge'
@@ -40,6 +41,7 @@ export default defineConfig({
 
   head: [
     ['link', { rel: 'icon', href: '/nudge/hero.svg', type: 'image/svg+xml' }],
+    ...verificationHead,
     ...seoHead,
   ],
 
@@ -86,6 +88,7 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: '快速开始', link: '/quick-start' },
+          { text: '命令参考', link: '/reference' },
           { text: 'FAQ', link: '/faq' },
           { text: 'GitHub', link: GITHUB_URL },
         ],
@@ -95,6 +98,7 @@ export default defineConfig({
               text: '指南',
               items: [
                 { text: '快速开始', link: '/quick-start' },
+                { text: '命令参考', link: '/reference' },
                 { text: 'FAQ', link: '/faq' },
               ],
             },
@@ -108,6 +112,7 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: 'Quick Start', link: '/en/quick-start' },
+          { text: 'Reference', link: '/en/reference' },
           { text: 'FAQ', link: '/en/faq' },
           { text: 'GitHub', link: GITHUB_URL },
         ],
@@ -117,6 +122,7 @@ export default defineConfig({
               text: 'Guide',
               items: [
                 { text: 'Quick Start', link: '/en/quick-start' },
+                { text: 'Reference', link: '/en/reference' },
                 { text: 'FAQ', link: '/en/faq' },
               ],
             },
@@ -130,6 +136,7 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: 'Quick Start', link: '/ja/quick-start' },
+          { text: 'Reference', link: '/ja/reference' },
           { text: 'FAQ', link: '/ja/faq' },
           { text: 'GitHub', link: GITHUB_URL },
         ],
@@ -139,6 +146,7 @@ export default defineConfig({
               text: 'ガイド',
               items: [
                 { text: 'Quick Start', link: '/ja/quick-start' },
+                { text: 'Reference', link: '/ja/reference' },
                 { text: 'FAQ', link: '/ja/faq' },
               ],
             },
@@ -152,6 +160,7 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: '快速開始', link: '/zh-TW/quick-start' },
+          { text: '命令參考', link: '/zh-TW/reference' },
           { text: 'FAQ', link: '/zh-TW/faq' },
           { text: 'GitHub', link: GITHUB_URL },
         ],
@@ -161,6 +170,7 @@ export default defineConfig({
               text: '指南',
               items: [
                 { text: '快速開始', link: '/zh-TW/quick-start' },
+                { text: '命令參考', link: '/zh-TW/reference' },
                 { text: 'FAQ', link: '/zh-TW/faq' },
               ],
             },

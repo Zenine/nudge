@@ -114,3 +114,51 @@
   - `python3 scripts/check-i18n-drift.py`
   - `cd docs && npm run docs:build`
 - 状态：✅
+
+## [发布与命令参考] 完成
+- 时间：2026-06-07T06:58:32+08:00
+- 产出：`docs/reference.md`、`docs/en/reference.md`、`docs/ja/reference.md`、`docs/zh-TW/reference.md`、`docs/.vitepress/verification-meta.mts`、`docs/.vitepress/config.mts`、`i18n/glossary.md`、`TODO.md`、`CHANGELOG.md`
+- 说明：GitHub Pages build source 已通过 GitHub Pages API 切换为 `workflow`；手动触发 docs workflow 时 GitHub API 返回默认分支尚无 `docs.yml`，需先把 workflow 合入或推送到 `main`；文档站新增命令参考入口；Google / Bing verification token 待用户从站长后台获取后写入 `docs/.vitepress/verification-meta.mts`；sitemap 待站长验证通过后提交。
+- 状态：✅
+
+## [P1 功能闭环首批切片] 完成
+- 时间：2026-06-07T07:00:00+08:00
+- 产出：`nudge/brain.py`、`nudge/commands/do.py`、`nudge/commands/chat.py`、`nudge/commands/trainer.py`、`nudge/commands/schedule.py`、`nudge/commands/mcp.py`、`nudge/commands/agent.py`、`nudge/llm.py`、`nudge/config.py`、`nudge/version.py`、`config.example.toml`、对应 P1 回归测试。
+- 说明：使用子代理并行完成 note、trainer、schedule、chat、LLM、MCP/version 六个独立切片；仍保留 state/config 横切统一和剩余 SQLite 写入命令 `--config` 重定向待办。
+- 验证：`scripts/verify.sh` 通过，68 项测试通过，i18n drift、VitePress build 和 docs audit 均通过。
+- 状态：✅
+
+## [P1 测试覆盖第二批] 完成
+- 时间：2026-06-07T07:20:00+08:00
+- 产出：`tests/test_commands_do.py`、`tests/test_state.py`、`tests/test_commands_daemon.py`、`tests/test_commands_health.py`、`tests/test_commands_skills.py`、`nudge/state.py`、`nudge/health.py`、`nudge/commands/skills.py`、四语言 `docs/reference.md`。
+- 说明：使用子代理并行补齐 `state.py`、daemon、Health import、skills engine 测试；本地补齐 `do` 命令核心测试。剩余 P1 测试覆盖只保留 routing/hygiene/sleep/feedback 工具函数测试。
+- 验证：`scripts/verify.sh` 通过，89 项测试通过，compile、CLI smoke、i18n drift、VitePress build 和 docs audit 均通过。
+- 状态：✅
+
+## [P1 收口第三批] 完成
+- 时间：2026-06-07T07:40:00+08:00
+- 产出：`nudge/runtime.py`、`nudge/cli.py`、`nudge/commands/habits.py`、`nudge/commands/health.py`、`nudge/commands/daemon.py`、`nudge/commands/dogfood.py`、`nudge/commands/review.py`、`nudge/action_hygiene.py`、`nudge/feedback.py`、`tests/test_runtime_config.py`、`tests/test_config_state_redirect.py`、`tests/test_family_routing.py`、`tests/test_action_hygiene.py`、`tests/test_sleep_reminders.py`、`tests/test_feedback.py`。
+- 说明：使用子代理完成 runtime config/state 公共 helper、剩余 SQLite 写入命令 `--config` 重定向、routing/hygiene/sleep/feedback 工具函数测试；`TODO.md` 已移除 P1 待办，只保留 P2。
+- 验证：`scripts/verify.sh` 通过，113 项测试通过，compile、CLI smoke、i18n drift、VitePress build 和 docs audit 均通过。
+- 状态：✅
+
+## [P2 维护性和文档增强] 完成
+- 时间：2026-06-07T08:05:00+08:00
+- 产出：`nudge/commands/doctor.py`、`tests/test_commands_doctor.py`、`nudge/apple/tsv.py`、`nudge/apple/calendar.py`、`nudge/apple/reminders.py`、`tests/test_apple_tsv.py`、四语言 README/reference、`i18n/glossary.md`、`llms.txt`、`llms-full.txt`。
+- 说明：使用子代理并行完成 doctor 本地健康检查增强、Apple TSV parser 统一、Skills 端到端示例、runtime log 截断策略说明和 macOS-first daemon 平台边界；`TODO.md` 已清空为暂无待办。
+- 验证：`scripts/verify.sh` 通过，119 项测试通过，compile、CLI smoke、i18n drift、VitePress build 和 docs audit 均通过。
+- 状态：✅
+
+## [发布前硬化] 完成
+- 时间：2026-06-07T08:25:00+08:00
+- 产出：`tests/test_cli_reference_surface.py`、`tests/test_docs_audit.py`、`tests/test_public_boundaries.py`、`tests/test_package_smoke.py`、`nudge/docs_audit.py`、四语言 `docs/reference.md`。
+- 说明：使用子代理并行补齐 CLI help/reference 一致性测试、公开边界和 llms 产物审计、安装态导入 smoke；`TODO.md` 保持暂无待办。
+- 验证：`scripts/verify.sh` 通过，127 项测试通过，compile、CLI smoke、i18n drift、VitePress build 和 docs audit 均通过。
+- 状态：✅
+
+## [发布质量门] 完成
+- 时间：2026-06-07T08:45:00+08:00
+- 产出：`config.example.toml`、`tests/test_config_example.py`、`tests/test_commands_mcp.py`、`tests/test_docs_command_examples.py`、四语言 `docs/reference.md`。
+- 说明：使用子代理并行补齐配置示例质量门、MCP `doctor_status` 契约和公开文档命令 smoke；`TODO.md` 保持暂无待办。
+- 验证：`scripts/verify.sh` 通过，135 项测试通过，compile、CLI smoke、i18n drift、VitePress build 和 docs audit 均通过。
+- 状态：✅

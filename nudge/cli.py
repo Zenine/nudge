@@ -1,8 +1,6 @@
 """Nudge CLI — Click-based entry point with subcommands."""
 
-import os
 import sys
-from pathlib import Path
 
 import click
 
@@ -27,8 +25,8 @@ from nudge.commands.review import review_command
 from nudge.commands.schedule import schedule_command
 from nudge.commands.skills import skills_command
 from nudge.commands.trainer import trainer_command
-from nudge.config import PROJECT_ROOT, load_config
-from nudge.state import configure_state
+from nudge.config import load_config
+from nudge.runtime import load_runtime_config, resolve_config_path
 
 
 class NudgeGroup(click.Group):
@@ -73,10 +71,9 @@ def cli(ctx, config_path):
     """Nudge — AI Life Coach that actually gets things done."""
     # Configure Brain with LLM settings from config
     try:
-        config = load_config(config_path)
+        config = load_runtime_config(config_path, loader=load_config)
         if config_path:
-            os.environ["NUDGE_CONFIG"] = str(_resolve_config_path(config_path))
-            configure_runtime_state(config)
+            _default_subcommand_config(ctx, config_path)
         configure_brain(config.get("llm"))
     except FileNotFoundError as exc:
         if config_path:
@@ -90,24 +87,15 @@ def cli(ctx, config_path):
             click.echo(ctx.get_help())
 
 
-def configure_runtime_state(config: dict) -> None:
-    """Point process-wide state globals at the loaded config."""
-    state_dir = configure_state(config)
-
-    from nudge.commands import agent as agent_command_module
-    from nudge.commands import dogfood as dogfood_command_module
-    import nudge.dogfood as dogfood_module
-
-    agent_command_module.configure_agent_state(config)
-    dogfood_command_module.STATE_DIR = state_dir
-    dogfood_module.STATE_DIR = state_dir
-
-
-def _resolve_config_path(config_path: str) -> Path:
-    path = Path(config_path).expanduser()
-    if path.is_absolute():
-        return path
-    return PROJECT_ROOT / path
+def _default_subcommand_config(ctx: click.Context, config_path: str) -> None:
+    """Pass top-level --config to subcommands without mutating os.environ."""
+    resolved = str(resolve_config_path(config_path))
+    default_map = dict(ctx.default_map or {})
+    for command_name in ctx.command.commands:
+        command_defaults = dict(default_map.get(command_name) or {})
+        command_defaults.setdefault("config_path", resolved)
+        default_map[command_name] = command_defaults
+    ctx.default_map = default_map
 
 
 cli.add_command(do_command)

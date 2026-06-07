@@ -772,14 +772,11 @@ def enqueue_agent_command(
     return resolved_id
 
 
-def _parse_json_payload(payload_text: str, request_id: str | None = None) -> dict:
+def _parse_json_payload(payload_text: str, request_id: str | None = None):
     try:
-        payload = json.loads(payload_text)
+        return json.loads(payload_text)
     except json.JSONDecodeError as exc:
         raise ValueError(f"invalid payload json: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"request payload must be object, request_id={request_id}")
-    return payload
 
 
 def list_queued_commands(
@@ -1008,6 +1005,8 @@ def mark_queued_command_complete(
     duration_ms: int | None = None,
 ) -> None:
     """Persist command completion state."""
+    if status not in _QUEUE_STATUS:
+        raise ValueError(f"invalid queue status: {status}")
     with _db() as conn:
         conn.execute(
             """

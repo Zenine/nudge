@@ -96,6 +96,10 @@ scripts/bootstrap_launchd.sh status
 
 `nudge docs audit` 是只读命令。`nudge daily sync --apply --json` 在发现文档错误或 warning 需要处理时，可以创建本地 maintenance action；它不会移动、删除或重写文档。
 
+## 平台边界
+
+Nudge 是 macOS-first runtime。CLI 的 dry-run、Skill 规则验证、文档审计和 JSON 预览可以在公开仓库中运行；真实 Apple Calendar / Reminders / Notes / Clock 写入、`launchd` daemon 安装和图形控制应用只支持 macOS。非 macOS 环境默认用于阅读文档、运行测试和预览 JSON，不默认实现跨平台 Apple 写入。
+
 ## Testing and Verification
 
 提交变更前运行仓库验证脚本：

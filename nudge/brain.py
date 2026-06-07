@@ -4,7 +4,14 @@ import json
 import math
 from datetime import datetime
 
-from nudge.llm import LLMError, create_provider, get_model_for_task
+from nudge.llm import (
+    LLMError,
+    create_provider,
+    get_max_tokens_for_task,
+    get_model_for_task,
+    get_retries_for_task,
+    get_retry_backoff_seconds_for_task,
+)
 from nudge.sleep_reminders import is_neutral_sleep_skip
 
 # Re-export for backward compat
@@ -45,6 +52,13 @@ Return a JSON array. Each item must be one of these types:
   "type": "alarm",
   "time": "HH:MM",
   "label": "What the alarm is for"
+}}
+
+4. Note:
+{{
+  "type": "note",
+  "title": "Note title",
+  "body": "Note body"
 }}
 
 Rules:
@@ -212,19 +226,35 @@ def configure(llm_config: dict | None = None):
     _provider = None  # reset, will be recreated on next call
 
 
-def _call(system: str, user_message: str, task: str = "default",
-          retries: int = 1) -> str:
+def _call(
+    system: str,
+    user_message: str,
+    task: str = "default",
+    retries: int | None = None,
+    sleeper=None,
+) -> str:
     """Make an LLM call with retry logic."""
     provider = _get_provider()
     model = get_model_for_task(task, _llm_config)
+    max_tokens = get_max_tokens_for_task(task, _llm_config)
+    if retries is None:
+        retries = get_retries_for_task(task, _llm_config)
+    backoff_seconds = get_retry_backoff_seconds_for_task(task, _llm_config)
+    if sleeper is None:
+        import time
+        sleeper = time.sleep
 
     for attempt in range(retries + 1):
         try:
-            return provider.call(system, user_message, model=model)
-        except LLMError:
-            if attempt < retries:
-                import time
-                time.sleep(2 ** attempt)
+            return provider.call(
+                system,
+                user_message,
+                model=model,
+                max_tokens=max_tokens,
+            )
+        except LLMError as exc:
+            if getattr(exc, "retryable", False) and attempt < retries:
+                sleeper(backoff_seconds * (2 ** attempt))
                 continue
             raise
 

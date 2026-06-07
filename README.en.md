@@ -1,8 +1,8 @@
 <!--
   Translation status:
   Source file : README.md
-  Source commit: 0cb38bb
-  Translated  : 2026-06-02
+  Source commit: 40b12c7
+  Translated  : 2026-06-07
   Status      : up-to-date
 -->
 
@@ -103,6 +103,10 @@ scripts/bootstrap_launchd.sh status
 ```
 
 `nudge docs audit` is read-only. `nudge daily sync --apply --json` can create a local maintenance action when documentation errors or warnings need attention; it does not move, delete, or rewrite documentation.
+
+## Platform Boundary
+
+Nudge is macOS-first. CLI dry-runs, Skill validation, documentation audit, and JSON previews can run from the public repository; real Apple Calendar / Reminders / Notes / Clock writes, `launchd` daemon installation, and the graphical control app are macOS-only. Non-macOS environments are intended for reading docs, running tests, and previewing JSON, and do not provide cross-platform Apple writes by default.
 
 ## Testing and Verification
 

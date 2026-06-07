@@ -3,6 +3,8 @@
 import subprocess
 from pathlib import Path
 
+from nudge.docs_audit import PRIVATE_ABSOLUTE_PATH_RE, SECRET_VALUE_EXAMPLE_RE
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,6 +43,8 @@ def test_public_tree_does_not_contain_private_values():
     ]
     for snippet in blocked:
         assert snippet not in text
+    assert PRIVATE_ABSOLUTE_PATH_RE.search(text) is None
+    assert SECRET_VALUE_EXAMPLE_RE.search(text) is None
 
 
 def test_public_readme_documents_private_overlay_without_private_values():
@@ -56,3 +60,12 @@ def test_public_readme_documents_private_overlay_without_private_values():
     assert "bin/nudge doctor" in readme
     assert "bin/nudge mcp serve" in readme
     assert "bin/nudge agent status" in readme
+
+
+def test_llms_generated_outputs_match_public_docs_copies():
+    assert (ROOT / "llms.txt").read_text(encoding="utf-8") == (
+        ROOT / "docs/public/llms.txt"
+    ).read_text(encoding="utf-8")
+    assert (ROOT / "llms-full.txt").read_text(encoding="utf-8") == (
+        ROOT / "docs/public/llms-full.txt"
+    ).read_text(encoding="utf-8")

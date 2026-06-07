@@ -1,8 +1,8 @@
 <!--
   Translation status:
   Source file : README.md
-  Source commit: 0cb38bb
-  Translated  : 2026-06-02
+  Source commit: 40b12c7
+  Translated  : 2026-06-07
   Status      : up-to-date
 -->
 
@@ -103,6 +103,10 @@ scripts/bootstrap_launchd.sh status
 ```
 
 `nudge docs audit` は読み取り専用です。`nudge daily sync --apply --json` は、文書エラーや warning に対応が必要な場合にローカル maintenance action を作成できますが、文書を移動、削除、書き換えません。
+
+## プラットフォーム境界
+
+Nudge は macOS-first です。CLI dry-run、Skill 検証、文書監査、JSON preview は公開リポジトリから実行できます。一方で、Apple Calendar / Reminders / Notes / Clock への実書き込み、`launchd` daemon installation、graphical control app は macOS のみ対応です。非 macOS 環境は docs の閲覧、tests の実行、JSON preview を主用途とし、cross-platform Apple writes はデフォルトでは提供しません。
 
 ## Testing and Verification
 
