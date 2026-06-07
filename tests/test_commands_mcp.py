@@ -28,6 +28,49 @@ def _run_mcp(messages, monkeypatch):
     return result, responses
 
 
+def test_mcp_serve_accepts_top_level_config(monkeypatch, tmp_path):
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "[state]",
+                'dir = "state"',
+                "",
+                "[general]",
+                'default_calendar = "Top Level Calendar"',
+                'default_reminder_list = "Top Level Tasks"',
+                "",
+                "[apple.calendar]",
+                'backend = "native"',
+                "",
+                "[apple.reminders]",
+                'backend = "native"',
+                "",
+                "[apple.notes]",
+                'backend = "native"',
+                "",
+                "[apple.clock]",
+                'backend = "shortcuts"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("NUDGE_CONFIG", raising=False)
+    monkeypatch.setattr("nudge.cli.configure_brain", lambda llm_config: None)
+    message = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
+
+    result = CliRunner().invoke(
+        cli,
+        ["--config", str(config_path), "mcp", "serve"],
+        input=json.dumps(message) + "\n",
+        prog_name="nudge",
+    )
+
+    assert result.exit_code == 0, result.output
+    responses = [json.loads(line) for line in result.output.splitlines() if line.strip()]
+    assert responses[0]["result"]["tools"][0]["name"] == "apply_apple_actions"
+
+
 def test_mcp_serve_initialize_and_tools_list(monkeypatch):
     monkeypatch.setattr("nudge.commands.mcp.get_version", lambda: "9.8.7", raising=False)
     messages = [

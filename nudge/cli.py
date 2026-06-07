@@ -94,8 +94,21 @@ def _default_subcommand_config(ctx: click.Context, config_path: str) -> None:
     for command_name in ctx.command.commands:
         command_defaults = dict(default_map.get(command_name) or {})
         command_defaults.setdefault("config_path", resolved)
+        command = ctx.command.commands[command_name]
+        if isinstance(command, click.Group):
+            _default_group_subcommand_config(command_defaults, command, resolved)
         default_map[command_name] = command_defaults
     ctx.default_map = default_map
+
+
+def _default_group_subcommand_config(default_map: dict, group: click.Group, config_path: str) -> None:
+    """Pass top-level --config through nested command groups."""
+    for command_name, command in group.commands.items():
+        command_defaults = dict(default_map.get(command_name) or {})
+        command_defaults.setdefault("config_path", config_path)
+        if isinstance(command, click.Group):
+            _default_group_subcommand_config(command_defaults, command, config_path)
+        default_map[command_name] = command_defaults
 
 
 cli.add_command(do_command)

@@ -24,4 +24,4 @@ def test_get_version_falls_back_to_pyproject_version(monkeypatch):
 
     monkeypatch.setattr(importlib.metadata, "version", missing_metadata)
 
-    assert get_version() == "0.5.1"
+    assert get_version() == "0.5.2"

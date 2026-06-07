@@ -2,6 +2,7 @@
 
 ## 2026-06-07
 
+- 修复顶层 `--config` 未传递到嵌套 group 子命令的问题，确保 `nudge --config /path/to/config.toml mcp serve` 与命令级 `nudge mcp serve --config /path/to/config.toml` 一致使用 private overlay 配置。
 - 增加发布质量门：`config.example.toml` 改为公开安全的本地默认配置，MCP `doctor_status` 明确禁用 LLM ping 并拒绝路径参数，文档公开 smoke 命令可在临时 HOME/STATE 下运行。
 - 增加发布前硬化测试：覆盖 CLI help 与四语言 reference 的新增命令一致性、公开文档/llms 边界审计、安装态导入 smoke 和 console script 元数据。
 - 完成 P2 维护性和文档增强：`doctor` 新增 SQLite integrity、daemon 队列、磁盘空间和可选 LLM ping 检查；Apple Calendar/Reminders 统一 TSV parser；文档补齐 Skills 端到端示例、runtime log 截断策略和 macOS-first daemon 平台边界。
