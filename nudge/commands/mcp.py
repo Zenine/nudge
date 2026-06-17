@@ -148,7 +148,10 @@ def _apply_apple_actions_tool() -> dict:
             "properties": {
                 "request_id": {
                     "type": "string",
-                    "description": "Optional caller-generated request id for tracing.",
+                    "description": (
+                        "Caller-generated idempotency key. Required for real writes so retries "
+                        "do not duplicate Apple Calendar / Reminders / Notes / Clock items."
+                    ),
                 },
                 "source": {
                     "type": "string",
@@ -217,7 +220,7 @@ def _apply_apple_actions_tool() -> dict:
                     },
                 },
             },
-            "required": ["actions"],
+            "required": ["request_id", "actions"],
         },
     }
 

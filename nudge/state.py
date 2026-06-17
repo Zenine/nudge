@@ -29,6 +29,7 @@ DB_PATH = STATE_DIR / "nudge.db"
 LEGACY_JSON = STATE_DIR / "state.json"
 _QUEUE_STATUS = {"queued", "running", "succeeded", "failed", "dead_letter"}
 DEFAULT_COMMAND_QUEUE_MAX_DEPTH = 1000
+DEFAULT_AGENT_REQUEST_STALE_MINUTES = 30
 _HEALTH_DAILY_MAX_FIELDS = {
     "steps",
     "distance_walking_running_m",
@@ -227,6 +228,16 @@ def _init_tables(conn: sqlite3.Connection):
 
         CREATE INDEX IF NOT EXISTS idx_daemon_runs_request
             ON daemon_runs (request_id, finished_at);
+
+        CREATE TABLE IF NOT EXISTS agent_request_runs (
+            request_id      TEXT PRIMARY KEY,
+            payload_hash    TEXT NOT NULL,
+            status          TEXT NOT NULL,
+            response_json   TEXT,
+            exit_code       INTEGER,
+            created_at      TEXT DEFAULT (datetime('now', 'localtime')),
+            finished_at     TEXT
+        );
     """)
     conn.commit()
 
@@ -782,6 +793,97 @@ def _parse_json_payload(payload_text: str, request_id: str | None = None) -> dic
     return payload
 
 
+def claim_agent_request_run(
+    request_id: str,
+    payload_hash: str,
+    *,
+    stale_minutes: int = DEFAULT_AGENT_REQUEST_STALE_MINUTES,
+) -> dict:
+    """Reserve a non-dry-run agent request id before external side effects."""
+    with _db() as conn:
+        try:
+            conn.execute(
+                """
+                INSERT INTO agent_request_runs (request_id, payload_hash, status)
+                VALUES (?, ?, 'running')
+                """,
+                (request_id, payload_hash),
+            )
+            return {"claimed": True, "existing": None, "conflict": False}
+        except sqlite3.IntegrityError:
+            row = conn.execute(
+                """
+                SELECT request_id, payload_hash, status, response_json, exit_code, created_at
+                FROM agent_request_runs
+                WHERE request_id = ?
+                """,
+                (request_id,),
+            ).fetchone()
+            if row:
+                existing = dict(row)
+                cutoff = (
+                    datetime.now() - timedelta(minutes=max(1, stale_minutes))
+                ).strftime("%Y-%m-%d %H:%M:%S")
+                if (
+                    existing.get("payload_hash") == payload_hash
+                    and existing.get("status") == "running"
+                    and not existing.get("response_json")
+                    and str(existing.get("created_at") or "") <= cutoff
+                ):
+                    conn.execute(
+                        """
+                        UPDATE agent_request_runs
+                        SET created_at = datetime('now', 'localtime')
+                        WHERE request_id = ? AND payload_hash = ? AND status = 'running'
+                        """,
+                        (request_id, payload_hash),
+                    )
+                    return {
+                        "claimed": True,
+                        "existing": existing,
+                        "conflict": False,
+                        "reclaimed_stale": True,
+                    }
+
+    if not row:
+        return {"claimed": False, "existing": None, "conflict": False}
+    existing = dict(row)
+    if existing.get("response_json"):
+        existing["response"] = _parse_json_payload(
+            existing["response_json"],
+            request_id=request_id,
+        )
+    return {
+        "claimed": False,
+        "existing": existing,
+        "conflict": existing.get("payload_hash") != payload_hash,
+    }
+
+
+def finish_agent_request_run(
+    request_id: str,
+    *,
+    payload_hash: str,
+    response: dict,
+    exit_code: int,
+) -> None:
+    """Persist the final response for a claimed non-dry-run agent request."""
+    status = "succeeded" if exit_code == 0 else "failed"
+    response_json = json.dumps(response, ensure_ascii=False, sort_keys=True)
+    with _db() as conn:
+        conn.execute(
+            """
+            UPDATE agent_request_runs
+            SET status = ?,
+                response_json = ?,
+                exit_code = ?,
+                finished_at = datetime('now', 'localtime')
+            WHERE request_id = ? AND payload_hash = ?
+            """,
+            (status, response_json, exit_code, request_id, payload_hash),
+        )
+
+
 def list_queued_commands(
     status: str | None = "queued",
     limit: int = 100,
@@ -821,14 +923,16 @@ def claim_next_queued_command() -> dict | None:
         if not row:
             return None
         request_id = row["request_id"]
-        conn.execute(
+        cursor = conn.execute(
             """
             UPDATE command_queue
             SET status = 'running', attempts = attempts + 1, started_at = datetime('now', 'localtime')
-            WHERE request_id = ?
+            WHERE request_id = ? AND status = 'queued'
             """,
             (request_id,),
         )
+        if cursor.rowcount == 0:
+            return None
         full_row = conn.execute(
             """
             SELECT request_id, source, request_type, payload, status,
