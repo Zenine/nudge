@@ -192,6 +192,8 @@ def _targeted_item(suggestion_type: str, title: str, reason: str, operation: str
     problems = []
     if not action.get("external_id"):
         problems.append("missing external_id")
+    if action.get("type") != "calendar_event":
+        problems.append(f"action type is {action.get('type')}")
     if action.get("status") not in ("created", "pending"):
         problems.append(f"action status is {action.get('status')}")
     return {

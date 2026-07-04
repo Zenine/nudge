@@ -13,25 +13,6 @@ func sanitize(_ value: String) -> String {
         .replacingOccurrences(of: "\r", with: " ")
 }
 
-if CommandLine.arguments.count < 3 {
-    fail("Usage: eventkit_calendar_events.swift <start: yyyy-MM-dd HH:mm> <end: yyyy-MM-dd HH:mm> [calendar names...]")
-}
-
-let startText = CommandLine.arguments[1]
-let endText = CommandLine.arguments[2]
-let requestedCalendarNames = Array(CommandLine.arguments.dropFirst(3))
-
-let formatter = DateFormatter()
-formatter.locale = Locale(identifier: "en_US_POSIX")
-formatter.dateFormat = "yyyy-MM-dd HH:mm"
-
-guard let startDate = formatter.date(from: startText) else {
-    fail("Invalid start date: \(startText)", code: 4)
-}
-guard let endDate = formatter.date(from: endText) else {
-    fail("Invalid end date: \(endText)", code: 4)
-}
-
 let store = EKEventStore()
 
 func hasReadableEventAccess(_ status: EKAuthorizationStatus) -> Bool {
@@ -78,6 +59,37 @@ func requestEventAccessIfNeeded() -> Bool {
         fail("EventKit Calendar access request failed: \(requestError)", code: 2)
     }
     return granted
+}
+
+if CommandLine.arguments.count >= 2 && CommandLine.arguments[1] == "--lists" {
+    if !requestEventAccessIfNeeded() {
+        fail("EventKit Calendar full access denied or not readable", code: 2)
+    }
+
+    let names = store.calendars(for: .event)
+        .map { sanitize($0.title) }
+        .sorted()
+    print(names.joined(separator: "\n"))
+    exit(0)
+}
+
+if CommandLine.arguments.count < 3 {
+    fail("Usage: eventkit_calendar_events.swift [--lists] | <start: yyyy-MM-dd HH:mm> <end: yyyy-MM-dd HH:mm> [calendar names...]")
+}
+
+let startText = CommandLine.arguments[1]
+let endText = CommandLine.arguments[2]
+let requestedCalendarNames = Array(CommandLine.arguments.dropFirst(3))
+
+let formatter = DateFormatter()
+formatter.locale = Locale(identifier: "en_US_POSIX")
+formatter.dateFormat = "yyyy-MM-dd HH:mm"
+
+guard let startDate = formatter.date(from: startText) else {
+    fail("Invalid start date: \(startText)", code: 4)
+}
+guard let endDate = formatter.date(from: endText) else {
+    fail("Invalid end date: \(endText)", code: 4)
 }
 
 if !requestEventAccessIfNeeded() {

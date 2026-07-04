@@ -36,12 +36,6 @@ scripts/bootstrap_launchd.sh status
 
 `nudge docs audit` is read-only. `nudge daily sync --apply --json` can create a local maintenance action when documentation errors or warnings need attention; it does not move, delete, or rewrite documentation.
 
-## Agent / MCP Safety
-
-Structured `agent apply` and MCP `apply_apple_actions` real writes require a caller-generated `request_id`. Nudge treats that id as an idempotency key: retrying the exact same request returns the stored result instead of writing duplicate Apple items, while reusing the same id with different actions is rejected.
-
-Use `dry_run=true` first when generating multi-action plans. For real writes, keep the same `request_id` and payload that the user approved. If a process exits after reserving a request but before storing the final response, the same request can be retried after the stale-running window instead of being permanently stuck.
-
 ## Private Data
 
 Keep these outside the public repository:

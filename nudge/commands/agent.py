@@ -42,10 +42,8 @@ from nudge.feedback import STATUS_ALLOWED, STATUS_NEXT_ACTIONS, STATUS_REASONS, 
 from nudge.json_contract import versioned_payload
 from nudge.state import (
     STATE_DIR,
-    claim_agent_request_run,
     complete_action,
     configure_state,
-    finish_agent_request_run,
     get_action,
     log_action,
     partial_action,
@@ -117,7 +115,7 @@ def apply_command(file_path, dry_run, config_path, json_output):
         )
         raise click.exceptions.Exit(1)
     if config_path:
-        configure_agent_state(config)
+        _configure_agent_state(config)
     payload, exit_code = apply_agent_request(
         request=request,
         config=config,
@@ -128,7 +126,7 @@ def apply_command(file_path, dry_run, config_path, json_output):
         raise click.exceptions.Exit(exit_code)
 
 
-def configure_agent_state(config: dict) -> None:
+def _configure_agent_state(config: dict) -> None:
     """Point agent state and confirmation token storage at a loaded config."""
     global STATE_DIR, CONFIRMATION_SECRET_PATH
 
@@ -136,15 +134,11 @@ def configure_agent_state(config: dict) -> None:
     CONFIRMATION_SECRET_PATH = STATE_DIR / "agent_confirm_secret"
 
 
-_configure_agent_state = configure_agent_state
-
-
 @agent_command.command("status")
 @click.option("--file", "-f", "request_file", default=None, help="Read status JSON from file")
 @click.option("--dry-run", "-n", is_flag=True, help="Preview only, do not write SQLite")
-@click.option("--config", "-c", "config_path", default=None, help="Config file path")
 @click.option("--json", "json_output", is_flag=True, help="Print stable JSON for scripts")
-def status_command(request_file, dry_run, config_path, json_output):
+def status_command(request_file, dry_run, json_output):
     """Update local action status from another local agent or automation tool."""
     del json_output  # agent status always emits JSON.
 
@@ -169,19 +163,6 @@ def status_command(request_file, dry_run, config_path, json_output):
             error=agent_status_request_error_report(f"invalid JSON: {e}"),
         )
         raise click.exceptions.Exit(1)
-
-    if config_path:
-        try:
-            config = load_config(config_path)
-        except Exception as e:
-            _emit_agent_error(
-                request_id=None,
-                source="agent.status",
-                dry_run=dry_run,
-                error=agent_status_request_error_report(f"cannot load config: {e}"),
-            )
-            raise click.exceptions.Exit(1)
-        configure_agent_state(config)
 
     payload, exit_code = apply_action_status(
         request=request,
@@ -674,52 +655,6 @@ def _apply_normalized_request(
                 text_plan_ref=normalized.text_plan_ref,
             ), 1
 
-    if not normalized.request_id:
-        return _agent_error_payload(
-            request_id=None,
-            source=normalized.source,
-            dry_run=False,
-            error=agent_request_error_report("request_id is required for real writes"),
-            confirmation_required=normalized.require_confirmation,
-            plan_driven=normalized.plan_driven,
-            text_plan_confirmed=normalized.text_plan_confirmed,
-            text_plan_ref=normalized.text_plan_ref,
-        ), 1
-
-    payload_hash = _agent_write_payload_hash(normalized)
-    claimed_request = claim_agent_request_run(normalized.request_id, payload_hash)
-    if claimed_request["conflict"]:
-        return _agent_error_payload(
-            request_id=normalized.request_id,
-            source=normalized.source,
-            dry_run=False,
-            error=agent_request_error_report(
-                f"request_id `{normalized.request_id}` already used with a different payload"
-            ),
-            confirmation_required=normalized.require_confirmation,
-            plan_driven=normalized.plan_driven,
-            text_plan_confirmed=normalized.text_plan_confirmed,
-            text_plan_ref=normalized.text_plan_ref,
-        ), 1
-    if not claimed_request["claimed"]:
-        existing = claimed_request.get("existing") or {}
-        if existing.get("response"):
-            payload = dict(existing["response"])
-            payload["request_replay"] = True
-            return payload, int(existing.get("exit_code") or 0)
-        return _agent_error_payload(
-            request_id=normalized.request_id,
-            source=normalized.source,
-            dry_run=False,
-            error=agent_request_error_report(
-                f"request_id `{normalized.request_id}` is already running"
-            ),
-            confirmation_required=normalized.require_confirmation,
-            plan_driven=normalized.plan_driven,
-            text_plan_confirmed=normalized.text_plan_confirmed,
-            text_plan_ref=normalized.text_plan_ref,
-        ), 1
-
     success = 0
     failed_indices = []
     statuses = {}
@@ -758,15 +693,7 @@ def _apply_normalized_request(
         statuses=statuses,
         dry_run_token=None,
     )
-    exit_code = 1 if failed_indices else 0
-    if normalized.request_id and claimed_request and claimed_request["claimed"]:
-        finish_agent_request_run(
-            normalized.request_id,
-            payload_hash=payload_hash,
-            response=payload,
-            exit_code=exit_code,
-        )
-    return payload, exit_code
+    return payload, 1 if failed_indices else 0
 
 
 def _fill_backend_targets(actions: list[dict], apple_backends) -> None:
@@ -813,21 +740,6 @@ def _agent_payload(
     if dry_run_token:
         payload["dry_run_token"] = dry_run_token
     return versioned_payload(payload)
-
-
-def _agent_write_payload_hash(normalized: _NormalizedRequest) -> str:
-    """Return a stable hash for one real agent write request."""
-    material = {
-        "request_id": normalized.request_id,
-        "source": normalized.source,
-        "require_confirmation": normalized.require_confirmation,
-        "plan_driven": normalized.plan_driven,
-        "text_plan_confirmed": normalized.text_plan_confirmed,
-        "text_plan_ref": normalized.text_plan_ref,
-        "actions": normalized.actions,
-    }
-    raw = json.dumps(material, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def _action_to_json(item: dict, index: int, status: str) -> dict:

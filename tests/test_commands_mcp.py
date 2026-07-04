@@ -45,7 +45,6 @@ def test_mcp_serve_initialize_and_tools_list(monkeypatch):
         "list_nudge_notes",
     ]
     assert tools[0]["inputSchema"]["type"] == "object"
-    assert tools[0]["inputSchema"]["required"] == ["request_id", "actions"]
     assert tools[2]["annotations"]["readOnlyHint"] is True
 
 

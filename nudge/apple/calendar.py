@@ -12,6 +12,19 @@ EVENTKIT_CALENDAR_EVENTS_SCRIPT = Path(__file__).with_name("eventkit_calendar_ev
 EXTERNAL_ID_SEPARATOR = "::"
 
 
+def open_calendar_app(timeout: int = 5) -> None:
+    """Best-effort launch for AppleScript fallback paths."""
+    try:
+        subprocess.run(
+            ["open", "-gj", "-a", "Calendar"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return
+
+
 def make_calendar_external_id(calendar_name: str, uid: str) -> str:
     """Encode calendar name with Calendar UID for fast scoped mutations."""
     return f"{calendar_name}{EXTERNAL_ID_SEPARATOR}{uid}"
@@ -31,8 +44,15 @@ def list_calendars(timeout: int = 5) -> tuple[bool, list[str] | str]:
     This is read-only and intended for diagnostics. Returns (False, error) when
     Calendar or macOS permissions are unavailable.
     """
+    ok, result = list_calendars_eventkit(timeout=timeout)
+    if ok:
+        return True, result
+    eventkit_error = str(result)
+    open_calendar_app(timeout=timeout)
+
     script = """set previousDelimiters to AppleScript's text item delimiters
 tell application "Calendar"
+    launch
     set calendarNames to name of calendars
 end tell
 set AppleScript's text item delimiters to "\\n"
@@ -41,8 +61,30 @@ set AppleScript's text item delimiters to previousDelimiters
 output"""
     ok, raw = run_applescript(script, timeout=timeout)
     if not ok:
-        return False, raw
+        return False, f"EventKit failed: {eventkit_error}; AppleScript failed: {raw}"
     return True, [line.strip() for line in raw.splitlines() if line.strip()]
+
+
+def list_calendars_eventkit(timeout: int = 5) -> tuple[bool, list[str] | str]:
+    """Return Calendar names through EventKit without scripting Calendar.app."""
+    cmd = ["/usr/bin/swift", str(EVENTKIT_CALENDAR_EVENTS_SCRIPT), "--lists"]
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except FileNotFoundError:
+        return False, "swift executable not found"
+    except subprocess.TimeoutExpired:
+        return False, "EventKit Calendar-list query timed out"
+
+    if result.returncode != 0:
+        error = result.stderr.strip() or result.stdout.strip() or f"swift exited with code {result.returncode}"
+        return False, error
+
+    return True, [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
 def _unique_names(names: list[str] | None) -> list[str]:

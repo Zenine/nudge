@@ -30,7 +30,6 @@ from nudge.commands.agent import (
 from nudge.config import load_config
 from nudge.daemon_control_app import control_app_status, install_control_app, open_control_app, uninstall_control_app
 from nudge.json_contract import versioned_payload
-from nudge.runtime_log import append_runtime_log
 from nudge.state import (
     DEFAULT_COMMAND_QUEUE_MAX_DEPTH,
     claim_next_queued_command,
@@ -192,39 +191,6 @@ def _format_row(row: dict) -> str:
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
-
-
-def _repo_code_state() -> dict[str, object]:
-    """Best-effort code revision metadata for runtime logs."""
-    root = _repo_root()
-    state: dict[str, object] = {
-        "repo_root": str(root),
-        "revision": "unknown",
-        "dirty": False,
-    }
-    try:
-        revision = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if revision.returncode == 0:
-            state["revision"] = revision.stdout.strip() or "unknown"
-
-        dirty = subprocess.run(
-            ["git", "status", "--short"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if dirty.returncode == 0:
-            state["dirty"] = bool(dirty.stdout.strip())
-    except OSError:
-        pass
-    return state
 
 
 def _default_nudge_cmd() -> Path:
@@ -868,37 +834,6 @@ def _send_daemon_health_notification(report: dict[str, object]) -> dict[str, obj
     }
 
 
-def _log_daemon_start(
-    *,
-    config: dict | None,
-    config_path: Path | None,
-    run_once: bool,
-    sleep_ms: int,
-    recover_stale_minutes: int,
-    max_attempts: int,
-) -> None:
-    try:
-        code_state = _repo_code_state()
-        append_runtime_log(
-            {
-                "level": "INFO",
-                "source": "daemon.run",
-                "message": "daemon started",
-                "repo_root": code_state.get("repo_root"),
-                "revision": code_state.get("revision"),
-                "dirty": code_state.get("dirty"),
-                "config_path": str(config_path) if config_path is not None else "",
-                "run_once": run_once,
-                "sleep_ms": sleep_ms,
-                "recover_stale_minutes": recover_stale_minutes,
-                "max_attempts": max_attempts,
-            },
-            config=config,
-        )
-    except Exception:
-        pass
-
-
 @daemon_command.command("health")
 @click.option("--stale-minutes", default=None, type=click.IntRange(1, 10_080))
 @click.option("--max-attempts", default=None, type=click.IntRange(1, 100))
@@ -1028,16 +963,6 @@ def run_command(config_path, run_once, sleep_ms, max_empty_cycles, recover_stale
     resolved_max_attempts = max_attempts
     if resolved_max_attempts is None:
         resolved_max_attempts = _int_from_env("NUDGE_DAEMON_MAX_ATTEMPTS", DEFAULT_DAEMON_MAX_ATTEMPTS)
-
-    _log_daemon_start(
-        config=daemon_config,
-        config_path=config_path,
-        run_once=run_once,
-        sleep_ms=sleep_ms,
-        recover_stale_minutes=resolved_recover_stale_minutes,
-        max_attempts=resolved_max_attempts,
-    )
-
     if resolved_recover_stale_minutes > 0:
         recovery = recover_stale_running_commands(
             stale_minutes=resolved_recover_stale_minutes,

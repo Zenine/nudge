@@ -1,5 +1,6 @@
 """Morning/evening briefing command."""
 
+import json
 from datetime import date, timedelta
 
 import click
@@ -121,6 +122,7 @@ def _feedback_pullback(actions: list[dict]) -> str:
     if not pending:
         return ""
     lines = ["待反馈 action:"]
+    updates = []
     for action in pending:
         scheduled = f" · {action.get('scheduled_at')}" if action.get("scheduled_at") else ""
         lines.append(f"- {action.get('summary')}{scheduled}")
@@ -130,6 +132,21 @@ def _feedback_pullback(actions: list[dict]) -> str:
             f"nudge log partial --id {action_id} | "
             f"nudge log skipped --id {action_id}"
         )
+        updates.append({
+            "id": action_id,
+            "status": "done",
+            "note": "按晚报批量回执确认完成",
+        })
+    lines.extend([
+        "",
+        "批量回执模板:",
+        "```bash",
+        "nudge feedback apply --json <<'JSON'",
+        json.dumps({"updates": updates}, ensure_ascii=False, indent=2),
+        "JSON",
+        "```",
+        "提示：把未完成项的 status 改为 partial/skipped/deferred/blocked，并补 reason/next_action 后再执行。",
+    ])
     return "\n".join(lines)
 
 
