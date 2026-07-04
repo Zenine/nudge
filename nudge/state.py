@@ -554,6 +554,28 @@ def get_plans(status: str = "active") -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def get_plan(plan_id: str) -> dict | None:
+    """Return one plan by id."""
+    if not plan_id:
+        return None
+    with _db() as conn:
+        row = conn.execute("SELECT * FROM plans WHERE id = ?", (plan_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def update_plan_config(plan_id: str, config: dict) -> None:
+    """Replace a plan's config JSON."""
+    config_json = json.dumps(config, ensure_ascii=False)
+    with _db() as conn:
+        conn.execute("UPDATE plans SET config = ? WHERE id = ?", (config_json, plan_id))
+
+
+def update_plan_status(plan_id: str, status: str) -> None:
+    """Update a plan status so inactive/failed plans leave active queries."""
+    with _db() as conn:
+        conn.execute("UPDATE plans SET status = ? WHERE id = ?", (status, plan_id))
+
+
 # ── Health summaries ────────────────────────────────────────────
 
 

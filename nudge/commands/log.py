@@ -42,6 +42,7 @@ _STATUS_LABELS = {
 @click.option("--next-action", type=click.Choice(sorted(_NEXT_ACTIONS)), help="Suggested next action")
 @click.option("--dry-run", is_flag=True, help="Preview parsed check-in without updating SQLite")
 @click.option("--json", "json_output", is_flag=True, help="Output machine-readable JSON")
+@click.option("--metric", "metric_pairs", multiple=True, help="Numeric metric as key=value; repeat for multiple metrics")
 def log_command(
     status: str,
     note_words: tuple[str, ...],
@@ -51,9 +52,12 @@ def log_command(
     next_action: str | None,
     dry_run: bool,
     json_output: bool,
+    metric_pairs: tuple[str, ...],
 ):
     """Quickly mark the latest pending action as done/skipped/partial."""
     if status == "parse":
+        if metric_pairs:
+            _handle_json_click_error(click.ClickException("parse 不支持 --metric"), json_output=json_output)
         _run_parse_check_in(
             " ".join(note_words),
             action_id=action_id,
@@ -65,6 +69,10 @@ def log_command(
             source="nudge log parse",
         )
         return
+    try:
+        metrics = _parse_metric_pairs(metric_pairs)
+    except click.ClickException as exc:
+        _handle_json_click_error(exc, json_output=json_output)
     _run_check_in(
         status,
         " ".join(note_words),
@@ -75,6 +83,7 @@ def log_command(
         source="nudge log",
         dry_run=dry_run,
         json_output=json_output,
+        metrics=metrics,
     )
 
 
@@ -87,6 +96,7 @@ def log_command(
 @click.option("--next-action", type=click.Choice(sorted(_NEXT_ACTIONS)), help="Suggested next action")
 @click.option("--dry-run", is_flag=True, help="Preview parsed check-in without updating SQLite")
 @click.option("--json", "json_output", is_flag=True, help="Output machine-readable JSON")
+@click.option("--metric", "metric_pairs", multiple=True, help="Numeric metric as key=value; repeat for multiple metrics")
 def check_in_command(
     status: str,
     note_words: tuple[str, ...],
@@ -96,9 +106,12 @@ def check_in_command(
     next_action: str | None,
     dry_run: bool,
     json_output: bool,
+    metric_pairs: tuple[str, ...],
 ):
     """Alias for `nudge log`."""
     if status == "parse":
+        if metric_pairs:
+            _handle_json_click_error(click.ClickException("parse 不支持 --metric"), json_output=json_output)
         _run_parse_check_in(
             " ".join(note_words),
             action_id=action_id,
@@ -110,6 +123,10 @@ def check_in_command(
             source="nudge check-in parse",
         )
         return
+    try:
+        metrics = _parse_metric_pairs(metric_pairs)
+    except click.ClickException as exc:
+        _handle_json_click_error(exc, json_output=json_output)
     _run_check_in(
         status,
         " ".join(note_words),
@@ -120,7 +137,38 @@ def check_in_command(
         source="nudge check-in",
         dry_run=dry_run,
         json_output=json_output,
+        metrics=metrics,
     )
+
+
+def _echo_json_error(message: str) -> None:
+    _emit_json(versioned_payload({"ok": False, "error": message}))
+
+
+def _handle_json_click_error(exc: click.ClickException, *, json_output: bool) -> None:
+    if json_output:
+        _echo_json_error(exc.message)
+        raise click.exceptions.Exit(1)
+    raise exc
+
+
+def _parse_metric_pairs(pairs: tuple[str, ...]) -> dict[str, float] | None:
+    if not pairs:
+        return None
+
+    metrics: dict[str, float] = {}
+    for pair in pairs:
+        key, separator, value = pair.partition("=")
+        key = key.strip()
+        if separator != "=" or not key:
+            raise click.ClickException("--metric 必须使用非空 key=value 格式")
+        if key in metrics:
+            raise click.ClickException(f"--metric 重复 key: {key}")
+        try:
+            metrics[key] = float(value.strip())
+        except ValueError as exc:
+            raise click.ClickException("--metric 的 value 必须是数字") from exc
+    return metrics
 
 
 def _run_parse_check_in(

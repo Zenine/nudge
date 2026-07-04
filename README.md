@@ -25,6 +25,33 @@ nudge --dry-run "Project sync tomorrow at 3pm"
 5. `nudge daily sync --json` reconciles Reminders completions, HealthExport data, and documentation audit results.
 6. `nudge review weekly --adapt --dry-run` turns the week into safe adjustment suggestions.
 7. `scripts/bootstrap_launchd.sh` optionally automates morning brief, daily sync, evening brief, and the daemon.
+8. `nudge skills start <skill-id>` runs the skill assessment, personalizes the plan, and writes the first week into Calendar/Reminders; `nudge skills adapt <plan-id> --apply` materializes the next week using your real check-in data.
+
+## Skills Lifecycle
+
+```bash
+nudge skills list
+nudge skills start strength-basics-12w
+nudge log done --metric effort=8
+nudge skills status
+nudge skills adapt <plan-id>            # preview next week with data-driven adaptation
+nudge skills adapt <plan-id> --apply    # write next week
+```
+
+Skill instances are stored locally (plans/actions in SQLite). `skills start --dry-run` and `skills adapt` without `--apply` never write to Apple apps.
+
+## Trainer Compatibility
+
+`nudge trainer plan` is the fitness-focused entry point for the built-in `strength-basics-12w` Skill. It reads `[user.fitness]`, creates a local Skill instance, and writes the first week through the same Apple-safe runtime used by `nudge skills start`.
+
+```bash
+nudge trainer plan --dry-run
+nudge trainer plan --yes
+nudge log done --metric effort=8
+nudge trainer status
+```
+
+The previous LLM-generated weekly workout planner is still available as an explicit compatibility path: `nudge trainer plan --legacy-llm`.
 
 ## Maintenance
 

@@ -160,3 +160,50 @@
 - **[P2] 缺 LLM provider 选择指南**:`config.example.toml` 默认 qwen,提到 ollama 本地推理,但无"如何选 provider / 各自隐私与成本权衡"说明。建议 `docs/llm.md`。价值中、成本低。
 - **[P2] 缺截图/演示/快速演示 GIF**:README 无任何可视化,降低"发现"转化。建议加一段终端录屏 GIF 或 asciinema。价值中、成本低。
 - **[P2] 配置项无文档**:`config.example.toml` 各字段(默认日历/列表、state.dir、apple backend=native/shortcuts)无解释。建议 `docs/configuration.md`。价值中、成本低。
+
+## 架构与产品审阅补充(2026-07-04:接线缺口/隐藏能力/商业闭环)
+
+> 来源:全库架构梳理 + 21 个顶层命令逐一盘点(只读,含子代理并行勘查)。与 2026-06-20 两节不重复;有关联处做交叉引用。
+
+### 已建成但未接线 / 未曝光(本次核心发现)
+
+- **[高] Skills 引擎完整建成但与主链路零集成**
+  - 位置:`nudge/skills/`(schema/jsonlogic/patch/engine/dryrun 五模块 + 3 个内置 skill + `commands/skills.py` 9 个子命令)。
+  - 事实:除 `commands/skills.py` 外,`do`/`agent`/`chat`/`brain`/`trainer` 没有任何一处 import 或调用 skills;`dry_run_skill` 只预览、不写 Apple、不落库。它是自成体系的孤岛。
+  - 建议:设计"skill → plan 实例化 → actions 落库"的桥,优先让 `trainer` 跑在 skill 引擎之上(内置已有 `strength-basics-12w`)。这是差异化与 open-core 的核心资产,不接线则价值为零。
+  - 状态:2026-07-04 已完成 runtime 接线(start/status/adapt + log --metric + dry-run reminder 类型),见 docs/superpowers/plans/2026-07-04-skills-runtime-wiring.md;剩余:trainer 统一(见下一条)。
+- **[中] `trainer` 与 `skills` 双轨计划机制重叠**
+  - 位置:`nudge/brain.py`(`generate_workout_plan`,LLM 生成)vs `nudge/skills/dryrun.py`(确定性模板)。
+  - 建议:统一为"skill 模板打底 + LLM 个性化微调",消除并行机制。
+  - 状态:2026-07-04 已完成默认路径统一:`trainer plan/status` 默认走 `strength-basics-12w` Skill runtime,旧 LLM 周计划保留为 `trainer plan --legacy-llm`;剩余:评估是否删除旧 LLM planner 与 `trainer log` 自然语言解析。
+- **[中] `schedule` 命令是半成品**
+  - 位置:`nudge/commands/schedule.py:104-107`。`request` 参数只被回显;`:105` 注释"按时长过滤"未实现;找到空闲时段后不闭环创建,只提示用户手动再敲 `nudge "..."`。
+  - 建议:实现时长过滤,并加 `--book`/交互确认直接落日历。
+- **[中] 四个配置区块被代码读取但示例配置完全缺失**
+  - 位置:`[family]`(`config.py:61/99/119`,家庭组路由)、`[user]`(`config.py:161`,trainer/schedule/habits 依赖)、`[calendars]`(`config.py:166`)、`[reminders]`(`config.py:199`,定义后几乎无消费方)。
+  - 影响:家庭路由这一差异化功能对外部用户不可发现。与 2026-06-20 D4"[P2] 配置项无文档"相关,本条指出具体缺失区块;`config.example.toml` 补脱敏示例即可。
+- **[低] launchd 双管理入口重叠**
+  - 位置:`scripts/bootstrap_launchd.sh`(管 4 个 LaunchAgent)与 `nudge daemon launchd install`(只管 `com.nudge.agent`)各自生成/加载 plist。
+  - 影响:两处安装同名 agent 可能状态不一致。建议收敛为单一入口(脚本调用 CLI 或反之)。
+- **[低] README 只覆盖约 1/3 能力(具体清单)**
+  - 未提及:`chat`、`trainer`、`habits`、`health`、`schedule`、`briefing`、`failures`、`dogfood`、`skills` 全套、`db`、`reminders`、`check-in`、`daemon app`/`daemon launchd`,以及 MCP 的 `report_action_status`/`doctor_status`/`list_nudge_notes` 三个 tool;`nudge <裸文本>` 自动路由到 `do`(`cli.py:37`)的隐式行为也未说明。
+  - 归属:落地时并入 2026-06-20 D4 的 [P0] 命令参考文档,本条作为具体清单。
+
+### 架构债务(补充 2026-06-20 代码审查,不重复)
+
+- **[中] `agent.py` 复用 `do.py` 下划线私有函数,形成隐式紧耦合深链**
+  - 位置:`nudge/commands/agent.py:21`(import `_action_schema_problems`/`execute_action`);依赖链 `mcp/daemon → agent → do → brain/apple/state`。
+  - 建议:把两个函数提升为正式公共 API(如挪到独立 `actions_core` 模块),再动 `do.py` 重构。
+- **[中] 三个超大模块职责过载**
+  - `nudge/state.py` 1277 行(动作/习惯/健康/队列/幂等键等 7 个领域一个文件)、`nudge/commands/daemon.py` 1139 行(队列循环+launchd+图形 app+告警)、`nudge/commands/do.py` 807 行(家庭路由逻辑未下沉到已有的 `family_routing.py`)。
+  - 建议:按领域拆分;与 2026-06-20 性能①(连接复用)一起动 state 层最划算。
+- **[低] 模块级可变全局状态非线程安全**
+  - 位置:`brain._provider/_llm_config`、`state.STATE_DIR/DB_PATH`、`agent.STATE_DIR` 等,靠 `configure_*` 重绑定。
+  - 影响:daemon 常驻 + 未来多配置场景有隐患;与"每次操作重连重建表"同根,宜一并修。
+
+### 商业闭环缺口(按漏斗排序,补充 2026-06-20 D3)
+
+1. **第一优先:可发现、可试用**——PyPI/Homebrew 分发、截图/演示、非 Mac 的 dry-run 评估路径(与 D4 P1 重叠;提级理由:用户基数为零时其余环节全部空转)。
+2. **第二优先:skills 接线激活**——它同时是产品差异化与唯一现实的 open-core 变现载体(skills 市场/教练内容包);先接进主链路自用证明,再谈作者指南与生态。
+3. **前提项:MCP 调用方认证**(2026-06-20 安全①)——"Apple 生态的 agent 写入网关"是比 life-coach 更清晰的定位,但无认证就无法超出单机自用,该安全项是这条路的硬前提。
+4. **留存基础**:没有升级通道(未发 PyPI = 用户装完即冻结版本)、没有反馈入口(无 issue 模板/CI)——归属 D4 P0/P1,此处点明其"留存"属性。

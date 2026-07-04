@@ -41,6 +41,7 @@ _DAY_INDEX = {
     "星期日": 6,
     "星期天": 6,
 }
+_SUPPORTED_ACTION_TYPES = {"calendar_event", "reminder"}
 
 
 @dataclass(frozen=True)
@@ -100,8 +101,17 @@ def _generate_actions(skill: dict, context: dict, weeks: int) -> list[dict]:
                 "%Y-%m-%d %H:%M",
             )
             end_dt = start_dt + timedelta(minutes=duration)
-            actions.append({
-                "type": "calendar_event",
+            summary = _summary(metadata, session)
+            if "action_type" in session:
+                action_type = session["action_type"]
+            elif "action_type" in defaults:
+                action_type = defaults["action_type"]
+            else:
+                action_type = "calendar_event"
+            if not isinstance(action_type, str) or action_type not in _SUPPORTED_ACTION_TYPES:
+                raise ValueError(f"unsupported plan_template action_type: {action_type}")
+            action = {
+                "type": action_type,
                 "source": "skill_dry_run",
                 "skill_id": metadata.get("id", "unknown"),
                 "skill_title": metadata.get("title", "Untitled Skill"),
@@ -109,12 +119,16 @@ def _generate_actions(skill: dict, context: dict, weeks: int) -> list[dict]:
                 "phase_id": phase.get("id"),
                 "phase_title": phase.get("title"),
                 "session_id": session.get("id"),
-                "summary": _summary(metadata, session),
+                "summary": summary,
                 "scheduled_date": scheduled_date.isoformat(),
                 "start": start_dt.strftime("%Y-%m-%d %H:%M"),
                 "end": end_dt.strftime("%Y-%m-%d %H:%M"),
                 "duration_minutes": duration,
-            })
+            }
+            if action_type == "reminder":
+                action["name"] = summary
+                action["due_date"] = action["start"]
+            actions.append(action)
     return actions
 
 
