@@ -111,6 +111,38 @@ def test_parse_health_json_skips_negative_and_outlier_accumulators(tmp_path: Pat
     assert summary["source_counts"] == {"synthetic-json": 2}
 
 
+def test_parse_health_json_skips_out_of_range_weight_and_body_fat(tmp_path: Path) -> None:
+    # JSON import must apply the same range guards as the XML path
+    # (weight 1..500 kg, body fat 0..100 %) so bad values are dropped, not stored.
+    export_json = tmp_path / "health.json"
+    export_json.write_text(
+        json.dumps(
+            {
+                "metrics": {
+                    "steps": [
+                        {"date": "2026-07-01", "source": "synthetic-json", "value": 1200},
+                    ],
+                    "weight": [
+                        {"date": "2026-07-01", "source": "synthetic-json", "value_kg": 600},
+                        {"date": "2026-07-01", "source": "synthetic-json", "value_kg": 0.2},
+                    ],
+                    "body_fat": [
+                        {"date": "2026-07-01", "source": "synthetic-json", "value": 150},
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = health.parse_apple_health_export(export_json)
+    summary = result.daily_summaries[0]
+
+    assert summary["steps"] == 1200
+    assert summary["body_weight_kg"] is None
+    assert summary["body_fat_percent"] is None
+
+
 def test_parse_health_xml_omits_day_when_all_records_are_invalid(tmp_path: Path) -> None:
     export_zip = _write_health_zip(
         tmp_path / "all-invalid.zip",

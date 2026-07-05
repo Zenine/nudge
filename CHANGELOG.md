@@ -33,6 +33,7 @@
 ### Fixed
 
 - 修复 MCP 可选本地认证在收到非 ASCII `auth_token` 时抛 `TypeError` 打崩 stdio 服务的问题(`hmac.compare_digest` 改按 bytes 比较,仍恒定时间);MCP 主循环现对单条请求的意外异常做隔离,返回 JSON-RPC internal error 而非中断整个服务。
+- Health JSON 导入路径对 weight/body_fat 补上与 XML 路径一致的范围校验(体重 1.0–500.0 kg、体脂 0.0–100.0 %),越界值丢弃而非写入 `health_daily_summary`,消除 JSON 与 XML 导入的数据质量差异。
 - `docs/non-macos.md` 的 `skills dry-run` 示例补上必需的 `--context`,并新增 `examples/skills/context.example.json`,使非 macOS/CI 用户照抄即可跑通。
 - 修复 `test_verify_script` 在存在 `.venv` 时递归自调用导致超时的缺陷:显式经 `NUDGE_PYTHON` 指定测试解释器。
 

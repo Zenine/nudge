@@ -286,10 +286,10 @@
   - 位置:`agent.py` `_confirmation_secret`(`O_CREAT|O_EXCL`,0o600)。创建成功、`write` 之前进程被杀会残留空文件;后续读到空串直接以 `b""` 当 HMAC 密钥,dry-run→apply 确认 token 可离线复算。
   - 定级:本地信任模型下能读该文件者本有等价能力,故低;仍建议修。
   - 修:读取后校验非空,为空视同缺失并重建;或先写临时文件再 `os.rename` 原子替换。
-- **[低] Health JSON 导入路径 weight/body_fat 无范围校验,与 XML 路径不一致**
+- ~~**[低] Health JSON 导入路径 weight/body_fat 无范围校验,与 XML 路径不一致**~~
   - 位置:`health.py` JSON 体重 277-279、体脂 290-292 无 `_valid_range`;XML 路径体重 427(1.0–500.0)、体脂 434(0.0–100.0)有。
   - 影响:异常值(0/99999/体脂>100)经 JSON 导入原样写入 `health_daily_summary`,同值经 XML 会被丢弃;数据质量不一致,不崩溃。
-  - 修:JSON 路径复用同阈值 `_valid_range`。
+  - 状态:2026-07-05 已完成:JSON 路径复用 XML 同阈值 `_valid_range`(体重 1.0–500.0、体脂 `_percent_value` 后 0.0–100.0),越界值丢弃;新增回归 `tests/test_health_validation.py::test_parse_health_json_skips_out_of_range_weight_and_body_fat`。
 - **[低] dryrun `preferred_days` 数量 < `sessions_per_week` 时生成同日同时段重叠动作**
   - 位置:`skills/dryrun.py:97` `preferred_days[slot % len(preferred_days)]` + 99-102 统一 `preferred_time`。
   - 触发:显式配置 `preferred_days=["monday"]` 且 `sessions_per_week=3` → 3 个 session 全落周一同一时刻,materialize 出 3 个起止相同的事件/提醒;默认回退分支不触发。

@@ -275,7 +275,7 @@ def parse_apple_health_export_json(
         summary = daily.setdefault(summary_date, _DailyAccumulator(summary_date))
         summary.add_source(sample.get("source"))
         weight = _float(sample.get("value_kg") if "value_kg" in sample else sample.get("value"))
-        if weight is not None:
+        if weight is not None and _valid_range(weight, 1.0, 500.0):
             summary.body_weight = _latest_value(summary.body_weight, {"endDate": sample.get("date")}, weight)
 
     body_fat_percentages = _iter_json_records(metrics.get("body_fat"))
@@ -289,7 +289,9 @@ def parse_apple_health_export_json(
         summary.add_source(sample.get("source"))
         body_fat = _float(sample.get("value"))
         if body_fat is not None:
-            summary.body_fat = _latest_value(summary.body_fat, {"endDate": sample.get("date")}, _percent_value(body_fat))
+            fat_percent = _percent_value(body_fat)
+            if _valid_range(fat_percent, 0.0, 100.0):
+                summary.body_fat = _latest_value(summary.body_fat, {"endDate": sample.get("date")}, fat_percent)
 
     for sample in _iter_json_records(metrics.get("workouts")):
         start_at, end_at, payload = _workout_payload_from_json(sample)
