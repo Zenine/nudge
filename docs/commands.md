@@ -7,7 +7,7 @@
 - **默认先 dry-run**：凡是会创建或修改 Apple Calendar、Reminders、Notes、Clock 或本地 SQLite 状态的命令，建议先使用 `--dry-run`、不带 `--apply`，或仅查看 `--json` 输出。
 - **Apple 写入需要 macOS 权限**：真实写 Apple Calendar/Reminders/Notes/Clock 的命令需要在 macOS 上运行，并授权相应 App 的自动化/访问权限。可先运行 `nudge doctor` 检查。
 - **本地 SQLite 是可写状态**：Nudge 会把计划、动作、状态、习惯、健康汇总、队列、幂等请求等写入本地 SQLite。涉及 `--apply`、`start`、`adapt --apply`、`log`、`agent status`、`daemon enqueue/run`、`db restore` 等命令前请确认目标状态目录。
-- **MCP/agent 是本地调用入口**：`agent apply`、`mcp serve` 和 `daemon run` 可代表其他本地 agent 执行结构化动作。真实 Apple 写入应先 dry-run，并为真实写入提供稳定 `request_id` 作为幂等键；启用 `[security.local_auth]` 后还需在请求 JSON/tool arguments 中提供 `auth_token`。
+- **MCP/agent 是本地调用入口**：`agent apply`、`mcp serve` 和 `daemon run` 可代表其他本地 agent 执行结构化动作。真实 Apple 写入应先 dry-run；`daemon enqueue` 以 `request_id` 作为队列幂等键（直连 agent/MCP 写入的 `request_id` 仅作 trace，不做 replay 去重）；启用 `[security.local_auth]` 后还需在请求 JSON/tool arguments 中提供 `auth_token`。
 - **Apple Health 导入只信任自己的导出**：`health import` / `daily sync --health` 可解析 Apple Health 导出 ZIP 或 HealthExport JSON。请只导入自己可信来源的文件。
 - **裸自然语言等价于 `do`**：`nudge "自然语言"` 会被 CLI 自动转成 `nudge do "自然语言"`。从 stdin 输入且未指定子命令时，也会走 `do`。
 
@@ -28,7 +28,7 @@
 | `nudge habits` | 查看 streak 或记录今日习惯 | 否 | `habits log <name>` 写 SQLite | 不需要 Apple 权限 |
 | `nudge schedule` | 查找本周日历空档 | 否 | 否 | 读取 Calendar，需要 Calendar 权限 |
 | `nudge reminders` | 将 Apple Reminders 状态同步回 Nudge | `backfill-ids --apply` 会更新 Reminders；`sync-completed --apply` 不创建新提醒但会写本地状态 | `--apply` 写 SQLite | 读取/更新 Reminders 需要 Reminders 权限 |
-| `nudge agent` | 本地 agent 结构化 Apple 动作入口 | `apply` 真实执行会写 Apple；`--dry-run` 不写 | `apply`/`status` 真实执行写 SQLite/幂等记录 | Apple 写入需要对应权限 |
+| `nudge agent` | 本地 agent 结构化 Apple 动作入口 | `apply` 真实执行会写 Apple；`--dry-run` 不写 | `apply`/`status` 真实执行写 SQLite（actions/tracking） | Apple 写入需要对应权限 |
 | `nudge mcp` | 本地 MCP stdio server | 工具调用 `apply_apple_actions` 真实执行会写 Apple | 状态回写工具可写 SQLite | 由 MCP client 触发；Apple 写入需要权限 |
 | `nudge daemon` | 本地队列运行时、launchd 和健康辅助 app | `run` 处理 `agent.apply` 队列时可能写 Apple | 队列、恢复、重试、运行状态写 SQLite；launchd/app 子命令写本机用户级文件 | launchd/app 仅 macOS；Apple 写入取决于队列内容 |
 | `nudge db` | SQLite 备份、导出、恢复 | 否 | `restore --yes` 替换当前 SQLite；backup/export 写输出文件 | 不需要 Apple 权限 |
@@ -266,7 +266,7 @@ nudge agent apply --file approved-request.json --json
 nudge agent status --file status.json --json
 ```
 
-要点：真实写入建议使用 caller 生成的 `request_id`；同一 `request_id` 重试相同 payload 会返回已存结果，避免重复写 Apple。
+要点：`agent apply` 直连路径不做 `request_id` replay 去重（`request_id` 仅作调用方 trace），避免重复写 Apple 靠 dry-run 预览 + 只提交已批准 payload；需要幂等入队时改用 `daemon enqueue`（以 `request_id` 为队列幂等键）。
 
 ### `nudge mcp`
 
