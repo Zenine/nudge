@@ -29,6 +29,7 @@
 - Skills JSONLogic validation 会校验 `missing` / `missing_some` 的危险路径与参数形状,避免 schema 校验通过但运行时才失败。
 - 默认状态目录与配置文件不再以包安装目录为锚:未显式配置时状态库默认落 `$XDG_DATA_HOME/nudge`(回退 `~/.local/share/nudge`),配置默认搜索源码树 `config.toml` 后回退 `$XDG_CONFIG_HOME/nudge/config.toml`;已存在的源码树 `.nudge` 目录仍沿用(向后兼容,不迁移既有数据)。修正 pip/pipx 安装后可能把 SQLite 写进 `site-packages` 的问题。
 - `pyproject.toml` 增加 `classifiers` 与 `[project.urls]`(Homepage/Repository/Issues/Changelog),完善 PyPI 项目页元数据;本地已通过 `twine check` 与干净 venv 的 wheel 安装预演(尚未上传 TestPyPI/正式 PyPI)。
+- CLI JSON 序列化去重:`error_to_json`、`action_summary`、`scheduled_at` 三个共享 helper 统一到 `nudge/json_contract.py` 作单一契约源,`do`/`agent`/`mcp` 不再各自维护副本(纯内部重构,输出契约不变)。
 
 ### Fixed
 

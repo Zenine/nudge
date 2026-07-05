@@ -256,9 +256,10 @@
   - 位置:除已记的 `agent.py → do._action_schema_problems/execute_action` 外,`mcp.py:22`、`daemon.py:24`、`skills.py:14`(`do.execute_action`)、`trainer.py:11`(import 私有 `skills._materialize_actions`)均从兄弟命令模块取函数;`review.py:31`、`chat.py:86` 用函数体内延迟 import 规避 `briefing`/`do` 的循环依赖(import cycle 信号)。
   - 影响:`execute_action`/`_action_schema_problems`/`_materialize_actions`/`_rewrite_family_group_actions` 这些真正的执行/校验核心逻辑住在 Click 命令模块内;任何 `do.py`/`agent.py` 重构会波及 mcp/daemon/trainer/skills,单测难隔离。
   - 建议:抽 `nudge/actions_core.py`(或 `runtime/`)承载 execute_action、schema 校验、family 改写、materialize;命令模块只做参数解析与输出。这是其它拆分的前置项(与上面"三个超大模块"联动)。
-- **[中] CLI JSON 序列化重复,`json_contract.py` 过度贫血**
-  - 位置:`_error_to_json` 有 3 份(`do.py:362`/`agent.py:1017`/`mcp.py:571`,字段已开始 drift);`_action_to_json`(`do.py:442`/`agent.py:881`)、`_failure_to_json`(`do.py:472`/`agent.py:905`)、`_scheduled_at`/`_summary`/target 序列化均 do 与 agent 各一份近似副本;而 `nudge/json_contract.py` 仅 11 行(只有 `versioned_payload`)。
-  - 建议:把 action/target/failure/error 的 JSON 序列化统一进 `json_contract.py` 作单一对外契约源。可独立交付、低风险,建议优先。
+- **[中·部分完成] CLI JSON 序列化重复,`json_contract.py` 过度贫血**
+  - 位置:`_error_to_json` 有 3 份(`do.py`/`agent.py`/`mcp.py`);`_action_to_json`/`_failure_to_json`/`_scheduled_at`/`_summary`/target 序列化均 do 与 agent 各一份近似副本;而 `nudge/json_contract.py` 仅 11 行(只有 `versioned_payload`)。
+  - 状态:2026-07-05 已完成一半:合并后已一致的 `error_to_json`(原 3 份)、`action_summary`、`scheduled_at` 提到 `json_contract.py` 作单一源,各命令以别名 import 回原私有名(零调用点/零行为改动)。
+  - 剩余:`_action_to_json`/`_failure_to_json`/target 序列化因 do(内部 action dict)与 agent(请求 item)输入形状不同,暂未合并;若要统一需先归一两种形状或抽公共 schema 层,风险高于前半,单独排期。
 - **[中] trainer 双 legacy 路径长期技术债(与本文件 2026-07-04 trainer 统一条的"剩余项"同源)**
   - 位置:`trainer.py` `_legacy_llm_plan`(`--legacy-llm`)、`_legacy_workout_status`(status 回退查旧 `weekly_workout`)、`trainer log` 命中 Skill 实例即提示改用 `nudge log done`(半废弃)。
   - 建议:定移除里程碑——确认 legacy `weekly_workout` 无存量数据后,删 `_legacy_*` 与其对 `brain.generate_workout_plan`/`parse_workout_log` 的依赖,trainer 收敛为 Skill runtime 薄壳。
