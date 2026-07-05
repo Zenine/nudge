@@ -1,0 +1,4 @@
+{"jsonrpc":"2.0","id":"mcp-demo-1","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"nudge-example-client","version":"0.1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}
+{"jsonrpc":"2.0","id":"mcp-demo-2","method":"tools/list","params":{}}
+{"jsonrpc":"2.0","id":"mcp-demo-3","method":"tools/call","params":{"name":"apply_apple_actions","arguments":{"request_id":"request-2026-07-05-demo-001","source":"examples.mcp","dry_run":true,"auth_token":"<LOCAL_AUTH_TOKEN_IF_ENABLED>","actions":[{"type":"reminder.create","name":"检查 dry-run 示例","due_date":"2026-07-06T09:00:00","list":"Tasks"},{"type":"calendar_event.create","summary":"Dry-run 项目同步","start":"2026-07-06T15:00:00","end":"2026-07-06T15:30:00","calendar":"Personal"}]}}}

@@ -215,13 +215,22 @@ nudge habits log reading
 
 ### `nudge schedule`
 
-用途：读取日历并查找本周空闲时段。
+用途：读取日历并查找本周空闲时段；可显式选择候选 slot 后创建 Calendar 事件。
 
 ```bash
-nudge schedule "找 2 小时深度工作时间"
+nudge schedule "找2小时深度工作时间"
+nudge schedule "深度工作" --duration 120 --json
+nudge schedule "深度工作" --duration 120 --book --slot 1 --title "Deep Work" --dry-run --json
+nudge schedule "深度工作" --duration 120 --book --slot 1 --title "Deep Work" --yes
 ```
 
-要点：当前命令只查找并展示空闲时段，不直接创建日历事件；读取 Calendar 需要 macOS Calendar 权限。
+要点：
+
+- 默认只读 Calendar，并按请求中的 `2小时` / `90分钟` / `1.5h` 等时长过滤空档；也可用 `--duration <minutes>` 明确指定。
+- `--book` 必须配 `--slot N`，避免 Nudge 自动替你挑时间。
+- `--dry-run` 只展示将创建的 Calendar event，不写 Apple。
+- 真实 `--book --yes` 会写 Calendar，并把 action 记录到本地 SQLite。
+- 读取和写入 Calendar 都需要 macOS Calendar 权限。
 
 ### `nudge reminders`
 

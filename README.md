@@ -17,7 +17,12 @@ nudge --dry-run "Project sync tomorrow at 3pm"
 `scripts/bootstrap_mac.sh` creates a project-local `.venv`; users do not need to manage Python virtual environments manually.
 
 For a full CLI reference, see [`docs/commands.md`](docs/commands.md).
+架构与数据流见 [`docs/architecture.md`](docs/architecture.md)。
 配置说明见 [`docs/configuration.md`](docs/configuration.md)。
+LLM provider 选择见 [`docs/llm.md`](docs/llm.md)。
+非 macOS 评估指南见 [`docs/non-macos.md`](docs/non-macos.md)。
+公开示例库见 [`examples/README.md`](examples/README.md)。
+发布记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## Recommended Flow
 

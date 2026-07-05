@@ -1,0 +1,101 @@
+schema_version: "0.1"
+kind: skill
+metadata:
+  id: custom-weekly-rhythm-demo
+  title: 自定义每周节奏示例
+  version: 0.1.0
+  creator: Example Author
+  category: productivity
+audience:
+  goals:
+    - 建立稳定的每周执行节奏
+    - 用可复盘的小任务降低启动成本
+  level: beginner
+assessment:
+  - id: weekly_goal
+    question: 这周最重要的目标是什么？
+    type: text
+  - id: sessions_per_week
+    question: 你希望这周安排几次专注时段？
+    type: number
+  - id: prefers_morning
+    question: 你更适合上午执行吗？
+    type: boolean
+  - id: output_style
+    question: 你希望每次结束后留下什么产出？
+    type: single_choice
+    options:
+      - id: notes
+        label: 简短笔记
+      - id: checklist
+        label: 检查清单
+      - id: demo
+        label: 小作品
+personalization:
+  - id: use_user_session_count
+    when:
+      ">=":
+        - var: assessment.sessions_per_week
+        - 1
+    apply:
+      - op: clamp
+        path: plan_template.defaults.sessions_per_week
+        min: 1
+        max: 5
+  - id: morning_preference
+    when:
+      "==":
+        - var: assessment.prefers_morning
+        - true
+    apply:
+      - op: set
+        path: plan_template.defaults.preferred_time
+        value: "09:00"
+  - id: demo_output_title
+    when:
+      "==":
+        - var: assessment.output_style
+        - demo
+    apply:
+      - op: set
+        path: plan_template.phases[0].sessions[1].title
+        value: 小作品推进
+plan_template:
+  defaults:
+    sessions_per_week: 3
+    session_minutes: 45
+    preferred_days: [Monday, Wednesday, Friday]
+    preferred_time: "14:00"
+  phases:
+    - id: weekly_loop
+      title: 每周循环
+      weeks: 1
+      sessions:
+        - id: plan
+          title: 明确本周目标
+          duration_minutes: 30
+        - id: focus
+          title: 专注推进
+          duration_minutes: 45
+        - id: review
+          title: 复盘与下步动作
+          duration_minutes: 25
+tracking:
+  metrics:
+    - id: session_completed
+      type: boolean
+    - id: focus_minutes
+      type: number
+adaptation:
+  - id: reduce_when_completion_low
+    trigger:
+      "<":
+        - var: history.completion_rate_7d
+        - 0.5
+    apply:
+      - op: clamp
+        path: plan_template.defaults.sessions_per_week
+        max: 2
+      - op: clamp
+        path: plan_template.defaults.session_minutes
+        max: 30

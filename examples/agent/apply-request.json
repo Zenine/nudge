@@ -1,0 +1,20 @@
+{
+  "request_id": "request-2026-07-05-demo-002",
+  "source": "examples.agent",
+  "dry_run": true,
+  "auth_token": "<LOCAL_AUTH_TOKEN_IF_ENABLED>",
+  "actions": [
+    {
+      "type": "reminder.create",
+      "name": "检查 agent dry-run 示例",
+      "due_date": "2026-07-06T09:00:00",
+      "list": "Tasks"
+    },
+    {
+      "type": "note.create",
+      "title": "Dry-run 示例备忘录",
+      "body": "这是公开示例文本，不包含真实个人数据。",
+      "folder": "Nudge Notes"
+    }
+  ]
+}

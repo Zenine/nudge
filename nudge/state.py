@@ -509,46 +509,60 @@ def skip_later_sleep_reminders_after_completion(
     prefer_completed_at: bool = True,
 ) -> list[dict]:
     """Auto-skip later same-day sleep reminders after bedtime is completed."""
-    completed = get_action(action_id)
-    if not completed:
-        return []
-    if not prefer_completed_at:
-        completed = dict(completed)
-        completed["completed_at"] = None
-    scheduled_at = str(completed.get("scheduled_at") or "")
-    if len(scheduled_at) < 10:
-        return []
-    try:
-        scheduled_time = datetime.strptime(scheduled_at[:16], "%Y-%m-%d %H:%M")
-    except ValueError:
-        return []
-    action_time_text = str(completed.get("completed_at") or completed.get("scheduled_at") or "").strip()
-    try:
-        action_time = datetime.strptime(action_time_text[:16], "%Y-%m-%d %H:%M")
-    except ValueError:
-        action_time = scheduled_time
+    with _db() as conn:
+        row = conn.execute("SELECT * FROM actions WHERE id = ?", (action_id,)).fetchone()
+        if not row:
+            return []
+        completed = dict(row)
+        if not prefer_completed_at:
+            completed["completed_at"] = None
+        scheduled_at = str(completed.get("scheduled_at") or "")
+        if len(scheduled_at) < 10:
+            return []
+        try:
+            scheduled_time = datetime.strptime(scheduled_at[:16], "%Y-%m-%d %H:%M")
+        except ValueError:
+            return []
+        action_time_text = str(completed.get("completed_at") or completed.get("scheduled_at") or "").strip()
+        try:
+            action_time = datetime.strptime(action_time_text[:16], "%Y-%m-%d %H:%M")
+        except ValueError:
+            action_time = scheduled_time
 
-    start_time = min(scheduled_time, action_time).replace(hour=0, minute=0)
-    end_time = max(
-        scheduled_time.replace(hour=0, minute=0) + timedelta(days=1),
-        action_time + timedelta(hours=SLEEP_AUTO_SKIP_LOOKAHEAD_HOURS),
-    )
-    start = start_time.strftime("%Y-%m-%d %H:%M")
-    end = end_time.strftime("%Y-%m-%d %H:%M")
-    actions = get_actions(since=start, until=end)
-    later = later_sleep_reminders_after(completed, actions)
-    for action in later:
-        update_action_status(
-            action["id"],
-            SLEEP_AFTER_SKIP_STATUS,
-            feedback={
-                "source": "nudge sleep auto-skip",
-                "note": "已完成睡觉目标，后续睡眠提醒自动跳过，不计失败。",
-                "completed_sleep_action_id": action_id,
-                "completed_sleep_action_summary": completed.get("summary"),
-            },
+        start_time = min(scheduled_time, action_time).replace(hour=0, minute=0)
+        end_time = max(
+            scheduled_time.replace(hour=0, minute=0) + timedelta(days=1),
+            action_time + timedelta(hours=SLEEP_AUTO_SKIP_LOOKAHEAD_HOURS),
         )
-    return later
+        start = start_time.strftime("%Y-%m-%d %H:%M")
+        end = end_time.strftime("%Y-%m-%d %H:%M")
+        rows = conn.execute(
+            """
+            SELECT * FROM actions
+            WHERE (scheduled_at IS NOT NULL AND scheduled_at >= ? AND scheduled_at < ?)
+               OR (completed_at IS NOT NULL AND completed_at >= ? AND completed_at < ?)
+               OR (scheduled_at IS NULL AND completed_at IS NULL AND created_at >= ? AND created_at < ?)
+            ORDER BY created_at DESC
+            """,
+            (start, end, start, end, start, end),
+        ).fetchall()
+        actions = [dict(action) for action in rows]
+        later = later_sleep_reminders_after(completed, actions)
+        if later:
+            feedback_json = json.dumps(
+                {
+                    "source": "nudge sleep auto-skip",
+                    "note": "已完成睡觉目标，后续睡眠提醒自动跳过，不计失败。",
+                    "completed_sleep_action_id": action_id,
+                    "completed_sleep_action_summary": completed.get("summary"),
+                },
+                ensure_ascii=False,
+            )
+            conn.executemany(
+                "UPDATE actions SET status = ?, feedback = ? WHERE id = ?",
+                [(SLEEP_AFTER_SKIP_STATUS, feedback_json, action["id"]) for action in later],
+            )
+        return later
 
 
 def skip_action(action_id: str, feedback: dict | None = None):

@@ -453,6 +453,87 @@ def get_due_today(timeout: int = DEFAULT_READ_TIMEOUT) -> list[dict]:
     return result
 
 
+def _parse_due_date_for_applescript(due_date: str | None) -> datetime | None:
+    """Parse the reminder due date format used by Nudge state/actions."""
+    if not due_date:
+        return None
+    value = due_date.strip()
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(value[:19] if "%S" in fmt else value[:16], fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _reminder_match_collection_script(
+    *,
+    name: str,
+    include_completed: bool,
+    due_date: str | None,
+) -> tuple[str, str | None]:
+    """Return AppleScript that safely collects exact reminder matches.
+
+    The fallback must never mutate `every reminder whose name is ...` directly:
+    it first builds a candidate list, counts it, and only mutates a single item
+    when the match is unique after optional due-date narrowing.
+    """
+    target_due = _parse_due_date_for_applescript(due_date)
+    if due_date and target_due is None:
+        return "", f"invalid reminder due_date for AppleScript fallback: {due_date}"
+
+    due_block = date_block("targetDueDate", target_due) + "\n\n" if target_due else ""
+    candidate_filter = "" if include_completed else " whose completed is false"
+    due_match = """
+            try
+                if due date of r = targetDueDate then set end of matchingReminders to r
+            end try""" if target_due else """
+            set end of matchingReminders to r"""
+    collection = f"""{due_block}set matchingReminders to {{}}
+set candidateReminders to every reminder{candidate_filter}
+repeat with r in candidateReminders
+    if name of r is \"{escape(name)}\" then{due_match}
+    end if
+end repeat
+set matchCount to count of matchingReminders"""
+    return collection, None
+
+
+def _safe_reminder_fallback_script(
+    *,
+    operation: str,
+    name: str,
+    list_name: str,
+    due_date: str | None = None,
+) -> tuple[str, str | None]:
+    include_completed = operation == "delete"
+    collection, error = _reminder_match_collection_script(
+        name=name,
+        include_completed=include_completed,
+        due_date=due_date,
+    )
+    if error:
+        return "", error
+
+    noun = "reminder" if include_completed else "incomplete reminder"
+    action = "completion" if operation == "complete" else "deletion"
+    mutation = (
+        "set completed of (item 1 of matchingReminders) to true\n\"done\""
+        if operation == "complete"
+        else "delete (item 1 of matchingReminders)\n\"deleted\""
+    )
+    due_detail = " at the requested due date" if due_date else ""
+    script = f"""tell application \"Reminders\"
+    tell list \"{escape(list_name)}\"
+        {collection.replace(chr(10), chr(10) + '        ')}
+        if matchCount = 0 then error \"no matching {noun}: {escape(name)}{due_detail}\"
+        if matchCount > 1 then error \"ambiguous reminder title: {escape(name)} matched \" & matchCount & \" reminders; refusing bulk {action}\"
+        {mutation}
+    end tell
+end tell
+"""
+    return script, None
+
 def complete_reminder(
     name: str,
     list_name: str,
@@ -460,7 +541,7 @@ def complete_reminder(
     prefer_eventkit: bool = True,
     due_date: str | None = None,
 ) -> tuple[bool, str]:
-    """Mark incomplete reminder(s) with an exact title as completed."""
+    """Mark one exact reminder as completed, refusing ambiguous title-only fallback matches."""
     if prefer_eventkit:
         ok, result = _run_eventkit_mutation(
             "complete",
@@ -472,21 +553,17 @@ def complete_reminder(
         if ok:
             return True, result
         eventkit_error = result
-        if due_date:
-            return False, f"EventKit failed for precise reminder completion: {eventkit_error}"
     else:
         eventkit_error = ""
 
-    script = f"""tell application "Reminders"
-    tell list "{escape(list_name)}"
-        set matchingReminders to every reminder whose name is "{escape(name)}" and completed is false
-        repeat with r in matchingReminders
-            set completed of r to true
-        end repeat
-    end tell
-end tell
-"done"
-"""
+    script, script_error = _safe_reminder_fallback_script(
+        operation="complete",
+        name=name,
+        list_name=list_name,
+        due_date=due_date,
+    )
+    if script_error:
+        return False, script_error
     ok, result = run_applescript(script, timeout=timeout)
     if ok:
         return True, result
@@ -539,26 +616,25 @@ def delete_reminder(
     list_name: str,
     timeout: int = 30,
     prefer_eventkit: bool = True,
+    due_date: str | None = None,
 ) -> tuple[bool, str]:
-    """Delete reminder(s) with an exact title from a list."""
+    """Delete one exact reminder, refusing ambiguous title-only fallback matches."""
     if prefer_eventkit:
-        ok, result = _run_eventkit_mutation("delete", name, list_name, timeout=timeout)
+        ok, result = _run_eventkit_mutation("delete", name, list_name, timeout=timeout, due_date=due_date)
         if ok:
             return True, result
         eventkit_error = result
     else:
         eventkit_error = ""
 
-    script = f"""tell application "Reminders"
-    tell list "{escape(list_name)}"
-        set matchingReminders to every reminder whose name is "{escape(name)}"
-        repeat with r in matchingReminders
-            delete r
-        end repeat
-    end tell
-end tell
-"deleted"
-"""
+    script, script_error = _safe_reminder_fallback_script(
+        operation="delete",
+        name=name,
+        list_name=list_name,
+        due_date=due_date,
+    )
+    if script_error:
+        return False, script_error
     ok, result = run_applescript(script, timeout=timeout)
     if ok:
         return True, result

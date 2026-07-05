@@ -607,7 +607,7 @@ def _complete_reminder_by_possible_titles(summary: str, scheduled_at: str, remin
 
     errors = []
     for title in titles:
-        ok, message = complete_reminder(title, reminder_list)
+        ok, message = complete_reminder(title, reminder_list, due_date=scheduled_at or None)
         if ok:
             return True, message
         errors.append(f"{title}: {message}")
