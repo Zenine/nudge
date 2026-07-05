@@ -27,5 +27,7 @@ backend = "native"
 backend = "native"
 
 [apple.clock]
-backend = "shortcuts"
-shortcut_name = "Nudge Create Alarm"
+backend = "disabled"
+# To create real Clock alarms, change to:
+# backend = "shortcuts"
+# shortcut_name = "Nudge Create Alarm"
