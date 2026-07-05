@@ -15,6 +15,16 @@ from nudge.state import save_health_import
 
 MAX_HEALTH_EXPORT_XML_BYTES = 256 * 1024 * 1024
 
+MAX_DAILY_SAMPLE_VALUES = {
+    "steps": 100_000.0,
+    "distance_walking_running_m": 100_000.0,
+    "active_energy_kcal": 20_000.0,
+    "basal_energy_kcal": 20_000.0,
+    "exercise_minutes": 24 * 60.0,
+    "stand_minutes": 24 * 60.0,
+    "sleep_minutes": 24 * 60.0,
+}
+
 
 RECORD_TYPES = {
     "HKQuantityTypeIdentifierStepCount",
@@ -81,6 +91,7 @@ class _DailyAccumulator:
         self.body_weight: tuple[str, float] | None = None
         self.body_fat: tuple[str, float] | None = None
         self.source_counts: dict[str, int] = {}
+        self.record_keys: set[tuple[str, str, str, str, str, str, str, str]] = set()
 
     def add_source(self, source_name: str | None) -> None:
         source = source_name or "unknown"
@@ -153,7 +164,7 @@ def parse_apple_health_export(
     daily_summaries = [
         accumulator.as_dict()
         for summary_date, accumulator in sorted(daily.items())
-        if _date_allowed(summary_date, date_from, date_to)
+        if accumulator.source_counts and _date_allowed(summary_date, date_from, date_to)
     ]
 
     return HealthImportResult(
@@ -295,7 +306,7 @@ def parse_apple_health_export_json(
     daily_summaries = [
         summary.as_dict()
         for summary_date, summary in sorted(daily.items())
-        if _date_allowed(summary_date, date_from, date_to)
+        if summary.source_counts and _date_allowed(summary_date, date_from, date_to)
     ]
 
     return HealthImportResult(
@@ -338,51 +349,109 @@ def _consume_record(
     if not summary_date or not _date_allowed(summary_date, date_from, date_to):
         return
 
-    accumulator = daily.setdefault(summary_date, _DailyAccumulator(summary_date))
-    accumulator.add_source(attrs.get("sourceName"))
-
     value = _float(attrs.get("value"))
     unit = attrs.get("unit", "")
     if value is None and record_type != "HKCategoryTypeIdentifierSleepAnalysis":
         return
 
+    accumulator = daily.setdefault(summary_date, _DailyAccumulator(summary_date))
+    record_key = _record_identity_key(attrs)
+    if record_key in accumulator.record_keys:
+        return
+
     if record_type == "HKQuantityTypeIdentifierStepCount":
+        if not _unit_allowed(unit, {"", "count"}):
+            return
+        if not _valid_accumulator_value(value, "steps"):
+            return
         accumulator.steps += value or 0
     elif record_type == "HKQuantityTypeIdentifierDistanceWalkingRunning":
-        accumulator.distance_walking_running_m += _distance_to_meters(value or 0, unit)
+        if not _unit_allowed(unit, {"m", "meter", "meters", "km", "mi", "mile", "miles"}):
+            return
+        distance = _distance_to_meters(value or 0, unit)
+        if not _valid_accumulator_value(distance, "distance_walking_running_m"):
+            return
+        accumulator.distance_walking_running_m += distance
     elif record_type == "HKQuantityTypeIdentifierActiveEnergyBurned":
-        accumulator.active_energy_kcal += _energy_to_kcal(value or 0, unit)
+        if not _unit_allowed(unit, {"kcal", "cal", "calorie", "calories", "kj", "kilojoule", "kilojoules"}):
+            return
+        energy = _energy_to_kcal(value or 0, unit)
+        if not _valid_accumulator_value(energy, "active_energy_kcal"):
+            return
+        accumulator.active_energy_kcal += energy
     elif record_type == "HKQuantityTypeIdentifierBasalEnergyBurned":
-        accumulator.basal_energy_kcal += _energy_to_kcal(value or 0, unit)
+        if not _unit_allowed(unit, {"kcal", "cal", "calorie", "calories", "kj", "kilojoule", "kilojoules"}):
+            return
+        energy = _energy_to_kcal(value or 0, unit)
+        if not _valid_accumulator_value(energy, "basal_energy_kcal"):
+            return
+        accumulator.basal_energy_kcal += energy
     elif record_type == "HKQuantityTypeIdentifierAppleExerciseTime":
-        accumulator.exercise_minutes += _duration_to_minutes(value or 0, unit)
+        if not _unit_allowed(unit, {"", "min", "minute", "minutes", "h", "hr", "hour", "hours", "s", "sec", "second", "seconds"}):
+            return
+        minutes = _duration_to_minutes(value or 0, unit)
+        if not _valid_accumulator_value(minutes, "exercise_minutes"):
+            return
+        accumulator.exercise_minutes += minutes
     elif record_type == "HKQuantityTypeIdentifierAppleStandTime":
-        accumulator.stand_minutes += _duration_to_minutes(value or 0, unit)
+        if not _unit_allowed(unit, {"", "min", "minute", "minutes", "h", "hr", "hour", "hours", "s", "sec", "second", "seconds"}):
+            return
+        minutes = _duration_to_minutes(value or 0, unit)
+        if not _valid_accumulator_value(minutes, "stand_minutes"):
+            return
+        accumulator.stand_minutes += minutes
     elif record_type == "HKQuantityTypeIdentifierHeartRate":
+        if not _valid_range(value, 20.0, 250.0):
+            return
         accumulator.heart_rates.append(value or 0)
     elif record_type == "HKQuantityTypeIdentifierRestingHeartRate":
+        if not _valid_range(value, 20.0, 250.0):
+            return
         accumulator.resting_heart_rates.append(value or 0)
     elif record_type == "HKQuantityTypeIdentifierHeartRateVariabilitySDNN":
+        if not _valid_range(value, 0.0, 500.0):
+            return
         accumulator.hrv_sdnn_values.append(value or 0)
     elif record_type == "HKQuantityTypeIdentifierWalkingHeartRateAverage":
+        if not _valid_range(value, 20.0, 250.0):
+            return
         accumulator.walking_heart_rates.append(value or 0)
     elif record_type == "HKQuantityTypeIdentifierVO2Max":
+        if not _valid_range(value, 0.0, 100.0):
+            return
         accumulator.vo2max_values.append(value or 0)
     elif record_type == "HKQuantityTypeIdentifierBodyMass":
-        accumulator.body_weight = _latest_value(accumulator.body_weight, attrs, value or 0)
+        if not _unit_allowed(unit, {"", "kg", "lb", "lbs", "pound", "pounds"}):
+            return
+        body_weight_kg = _mass_to_kg(value or 0, unit)
+        if not _valid_range(body_weight_kg, 1.0, 500.0):
+            return
+        accumulator.body_weight = _latest_value(accumulator.body_weight, attrs, body_weight_kg)
     elif record_type == "HKQuantityTypeIdentifierBodyFatPercentage":
+        body_fat = _percent_value(value or 0)
+        if not _unit_allowed(unit, {"", "%", "percent", "count"}):
+            return
+        if not _valid_range(body_fat, 0.0, 100.0):
+            return
         accumulator.body_fat = _latest_value(
             accumulator.body_fat,
             attrs,
-            _percent_value(value or 0),
+            body_fat,
         )
     elif record_type == "HKCategoryTypeIdentifierSleepAnalysis":
         minutes = _interval_minutes(attrs.get("startDate"), attrs.get("endDate"))
+        if not _valid_accumulator_value(minutes, "sleep_minutes"):
+            return
         sleep_value = attrs.get("value", "")
         if "InBed" in sleep_value:
             accumulator.sleep_in_bed_minutes += minutes
         elif "Asleep" in sleep_value:
             accumulator.sleep_asleep_minutes += minutes
+        else:
+            return
+
+    accumulator.record_keys.add(record_key)
+    accumulator.add_source(attrs.get("sourceName"))
 
 
 def _consume_json_record(
@@ -402,14 +471,19 @@ def _consume_json_record(
     if not summary_date or not _date_allowed(summary_date, date_from, date_to):
         return
 
-    accumulator = daily.setdefault(summary_date, _DailyAccumulator(summary_date))
-    accumulator.add_source(source)
     if value_type == "steps":
+        if not _valid_accumulator_value(value, "steps"):
+            return
+        accumulator = daily.setdefault(summary_date, _DailyAccumulator(summary_date))
         accumulator.steps += value
     elif value_type == "active_energy_kcal":
+        if not _valid_accumulator_value(value, "active_energy_kcal"):
+            return
+        accumulator = daily.setdefault(summary_date, _DailyAccumulator(summary_date))
         accumulator.active_energy_kcal += value
     else:
         raise ValueError("unsupported json value_type")
+    accumulator.add_source(source)
 
 
 def _workout_payload_from_json(attrs: dict) -> tuple[str | None, str | None, dict | None]:
@@ -608,6 +682,36 @@ def _date_allowed(summary_date: str, date_from: str | None, date_to: str | None)
     return True
 
 
+def _record_identity_key(attrs: dict[str, str]) -> tuple[str, str, str, str, str, str, str, str]:
+    return (
+        attrs.get("type", ""),
+        attrs.get("sourceName", ""),
+        attrs.get("sourceVersion", ""),
+        attrs.get("device", ""),
+        attrs.get("creationDate", ""),
+        attrs.get("startDate", ""),
+        attrs.get("endDate", ""),
+        attrs.get("value", ""),
+    )
+
+
+def _unit_allowed(unit: str, allowed: set[str]) -> bool:
+    return unit.strip().lower() in allowed
+
+
+def _valid_accumulator_value(value: float | None, metric: str) -> bool:
+    if value is None or value < 0:
+        return False
+    max_value = MAX_DAILY_SAMPLE_VALUES[metric]
+    return value <= max_value
+
+
+def _valid_range(value: float | None, minimum: float, maximum: float) -> bool:
+    if value is None:
+        return False
+    return minimum <= value <= maximum
+
+
 def _float(value: str | None) -> float | None:
     try:
         return float(str(value))
@@ -637,6 +741,13 @@ def _duration_to_minutes(value: float, unit: str) -> float:
         return value * 60
     if normalized in {"s", "sec", "second", "seconds"}:
         return value / 60
+    return value
+
+
+def _mass_to_kg(value: float, unit: str) -> float:
+    normalized = unit.lower()
+    if normalized in {"lb", "lbs", "pound", "pounds"}:
+        return value * 0.45359237
     return value
 
 

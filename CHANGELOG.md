@@ -14,7 +14,7 @@
 - 新增文档：命令参考、配置参考、架构与数据流文档、LLM provider 选择指南、非 macOS 评估指南、示例库。
 - 新增示例：自然语言 dry-run、agent apply 请求、MCP JSON-RPC 调用、自定义 Skill YAML 模板。
 - `nudge schedule` 支持按时长过滤空档、JSON 输出，以及显式 `--book --slot` 创建 Calendar event。
-- 新增安全/回归测试：LLM JSON fence 解析、Health XML 安全、local auth、SQLite 初始化/迁移、AppleScript escape 契约、Reminder AppleScript fallback 同名安全。
+- 新增安全/回归测试：LLM JSON fence 解析、Health XML 安全与每日汇总校验、local auth、SQLite 初始化/迁移、AppleScript escape 契约、Reminder AppleScript fallback 同名安全。
 
 ### Changed
 
@@ -24,6 +24,7 @@
 - legacy `state.json` 迁移改为事务写入；提交成功后再归档，归档失败会记录 `archive_pending` 并在下次初始化重试。
 - `config.example.toml` 补齐公开安全的脱敏示例，覆盖 `[family]`、`[user]`、`[calendars]`、`[reminders]` 与 `[security.local_auth]`。
 - README 增加命令、配置、架构和示例入口。
+- Health 每日汇总解析会跳过负值、明显异常值与未知单位,并对同一导出内完全重复的 XML Record 按稳定 key 去重。
 
 ### Security
 
