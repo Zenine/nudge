@@ -101,10 +101,11 @@
   - 建议:解析阶段按来源/样本去重或加合理上限校验;补充测试。
   - 状态:2026-07-05 已完成:Health XML 解析按稳定 record key 去重;steps/距离/能量/运动/站立/睡眠等每日累加字段跳过负值、明显异常值与未知单位;新增公开合成测试覆盖。
 
-- **[低] 测试覆盖集中在 config / state / json_contract / agent / mcp,核心解析与 Apple 适配缺直接单测**
-  - 位置:`tests/`(现有 6 个测试文件)。
-  - 影响:`brain._parse_json`、`apple/common.escape`、`health` 解析、`skills/jsonlogic` 等关键纯函数缺针对性单测,回归风险高。
-  - 建议:为上述纯函数补单元测试(可离线、无需 macOS),优先 `escape` 注入用例与 `_parse_json` fence 用例。
+- **[低] `skills/jsonlogic` 仍缺针对性单测**
+  - 位置:`nudge/skills/jsonlogic.py`。
+  - 背景:`brain._parse_json`、`apple/common.escape`、Health 解析已补回归测试;原“核心解析与 Apple 适配缺直接单测”条目已大幅降噪。
+  - 影响:Skills 条件判断是计划模板适配的关键纯函数,缺少边界测试会增加后续 skill schema 扩展风险。
+  - 建议:为 jsonlogic 常用操作符、缺失字段、类型不匹配、嵌套表达式补离线单测。
 
 ### 最严重(优先处理)
 
@@ -185,13 +186,13 @@
   - 状态:2026-07-05 已完成 PyPI 发布准备:新增发布 checklist、离线 packaging 验证入口、README 安装路径区分与包内容检查;实际 PyPI/Homebrew 发布仍未完成。
 - ~~**[P1] 缺架构与数据流文档**~~:`brain`/`json_contract`/`apple adapters`/`state`/`skills` 之间关系无说明,贡献者难快速理解。建议 `docs/architecture.md` + 一张数据流图。价值中高、成本中。
   - 状态:2026-07-05 已完成:新增 `docs/architecture.md`,覆盖 local-first runtime、自然语言/agent/MCP/daemon/Skills/Health/daily/review 数据流、SQLite/Apple adapter/安全边界与贡献者模块导航。
-- **[P1] 跨平台缺口**:核心写入仅 macOS。建议至少提供"非 Mac 上的 dry-run / 解析-only 模式"文档与可运行示例(纯逻辑路径已跨平台,verify.sh 在 Linux 也能跑测试),让非 Mac 用户能评估解析能力。价值高、成本中高(完整跨平台写入成本极高,先做"可评估"即可)。
+- ~~**[P1] 跨平台缺口**~~:核心写入仅 macOS。建议至少提供"非 Mac 上的 dry-run / 解析-only 模式"文档与可运行示例(纯逻辑路径已跨平台,verify.sh 在 Linux 也能跑测试),让非 Mac 用户能评估解析能力。价值高、成本中高(完整跨平台写入成本极高,先做"可评估"即可)。
   - 状态:2026-07-05 已完成:新增 `docs/non-macos.md`,说明非 macOS 环境可运行 docs audit、测试、JSON/YAML 示例解析、skills validate/dry-run、agent/MCP dry-run 与 LLM 配置后的自然语言 dry-run,并列出真实 Apple 写入不可用边界。
 - ~~**[P1] 缺示例库**~~:无 `examples/`。建议补自然语言输入样例、自定义 skill 模板、MCP 客户端调用样例。价值中、成本低。
   - 状态:2026-07-05 阶段完成:新增 `examples/` 索引、自然语言 dry-run 样例、自定义 Skill YAML 模板、MCP JSON-RPC dry-run 样例和 agent apply dry-run 请求;后续若 schema/工具扩展,需同步更新示例。
 - ~~**[P2] 缺 CHANGELOG / 版本发布说明**~~:`pyproject` 已到 0.5.1 但无变更记录。建议补 `CHANGELOG.md` 并在发版时维护。价值中、成本低。
   - 状态:2026-07-05 已完成:新增 `CHANGELOG.md`,从 0.5.1 起记录公开 runtime、文档、测试和安全边界变更;历史版本仅保留概览。
-- **[P2] 缺 LLM provider 选择指南**:`config.example.toml` 默认 qwen,提到 ollama 本地推理,但无"如何选 provider / 各自隐私与成本权衡"说明。建议 `docs/llm.md`。价值中、成本低。
+- ~~**[P2] 缺 LLM provider 选择指南**~~:`config.example.toml` 默认 qwen,提到 ollama 本地推理,但无"如何选 provider / 各自隐私与成本权衡"说明。建议 `docs/llm.md`。价值中、成本低。
   - 状态:2026-07-05 已完成:新增 `docs/llm.md`,覆盖 qwen/dashscope、openai、anthropic、deepseek、ollama/local 的隐私/成本/延迟/质量/离线权衡,并说明 fast/default/strong 模型分层和密钥安全配置。
 - **[P2] 缺截图/演示/快速演示 GIF**:README 无任何可视化,降低"发现"转化。建议加一段终端录屏 GIF 或 asciinema。价值中、成本低。
 - ~~**[P2] 配置项无文档**~~:`config.example.toml` 各字段(默认日历/列表、state.dir、apple backend=native/shortcuts)无解释。建议 `docs/configuration.md`。价值中、成本低。
@@ -241,6 +242,6 @@
 ### 商业闭环缺口(按漏斗排序,补充 2026-06-20 D3)
 
 1. **第一优先:可发现、可试用**——PyPI/Homebrew 分发、截图/演示、非 Mac 的 dry-run 评估路径(与 D4 P1 重叠;提级理由:用户基数为零时其余环节全部空转)。
-2. **第二优先:skills 接线激活**——它同时是产品差异化与唯一现实的 open-core 变现载体(skills 市场/教练内容包);先接进主链路自用证明,再谈作者指南与生态。
-3. **前提项:MCP 调用方认证**(2026-06-20 安全①)——"Apple 生态的 agent 写入网关"是比 life-coach 更清晰的定位,但无认证就无法超出单机自用,该安全项是这条路的硬前提。
-4. **留存基础**:没有升级通道(未发 PyPI = 用户装完即冻结版本)、没有反馈入口(无 issue 模板/CI)——归属 D4 P0/P1,此处点明其"留存"属性。
+2. ~~**第二优先:skills 接线激活**~~——2026-07-04 已完成 Skills runtime 接线与 trainer 默认统一到 Skill runtime;后续仅保留 skill 作者生态/测试等增量。
+3. ~~**前提项:MCP 调用方认证**~~——2026-07-05 已完成可选本地 token auth。
+4. **留存基础**:正式 PyPI/Homebrew 发布仍未完成;issue 模板/CI 已完成。
