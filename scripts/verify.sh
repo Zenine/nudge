@@ -52,4 +52,8 @@ echo "== Documentation audit =="
 run bin/nudge docs audit --json >/dev/null
 
 echo
+echo "== Packaging checks =="
+run scripts/check_package.sh
+
+echo
 echo "Nudge public verification passed"

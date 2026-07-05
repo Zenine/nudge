@@ -11,10 +11,11 @@
 - `nudge log --metric key=value` 支持记录数值/结构化指标，供 Skills adaptation 使用。
 - 新增 MCP/agent 可选本地 token 认证：`[security.local_auth]` 可保护 `agent apply/status`、MCP `apply_apple_actions/report_action_status` 与 daemon 队列执行路径。
 - 新增开源基础设施：`CONTRIBUTING.md`、`SECURITY.md`、`CODE_OF_CONDUCT.md`、GitHub Actions verify workflow、issue/PR 模板。
-- 新增文档：命令参考、配置参考、架构与数据流文档、LLM provider 选择指南、非 macOS 评估指南、示例库。
+- 新增文档：命令参考、配置参考、架构与数据流文档、LLM provider 选择指南、非 macOS 评估指南、示例库、PyPI 发布 checklist。
 - 新增示例：自然语言 dry-run、agent apply 请求、MCP JSON-RPC 调用、自定义 Skill YAML 模板。
 - `nudge schedule` 支持按时长过滤空档、JSON 输出，以及显式 `--book --slot` 创建 Calendar event。
 - 新增安全/回归测试：LLM JSON fence 解析、Health XML 安全与每日汇总校验、local auth、SQLite 初始化/迁移、AppleScript escape 契约、Reminder AppleScript fallback 同名安全。
+- 新增离线 packaging 检查脚本，构建并检查 wheel/sdist 是否包含 Swift/YAML 包数据，且不包含 tests、私有配置、本地数据库或 Health export。
 
 ### Changed
 
@@ -23,7 +24,7 @@
 - 睡眠 action 完成后的后续睡眠提醒 auto-skip 改为同一 SQLite 连接/事务内批量更新，避免逐条重新打开写连接。
 - legacy `state.json` 迁移改为事务写入；提交成功后再归档，归档失败会记录 `archive_pending` 并在下次初始化重试。
 - `config.example.toml` 补齐公开安全的脱敏示例，覆盖 `[family]`、`[user]`、`[calendars]`、`[reminders]` 与 `[security.local_auth]`。
-- README 增加命令、配置、架构和示例入口。
+- README 增加命令、配置、架构、示例入口，并区分当前源码安装与未来 PyPI/pipx 安装路径。
 - Health 每日汇总解析会跳过负值、明显异常值与未知单位,并对同一导出内完全重复的 XML Record 按稳定 key 去重。
 
 ### Security
@@ -35,7 +36,7 @@
 ### Notes
 
 - 真实 Apple 写入仍需要 macOS 和相应 App 权限；非 Mac 用户可使用文档审计、JSON/YAML 示例、纯逻辑测试和 dry-run/解析-only 路径评估项目。
-- 本版本没有发布到 PyPI/Homebrew；安装路径仍以源码仓库和本地 bootstrap 脚本为主。
+- 本版本已完成 PyPI 发布准备文档与本地 packaging 验证入口，但仍没有发布到 PyPI/Homebrew；安装路径仍以源码仓库和本地 bootstrap 脚本为主。
 
 ## [0.5.0 and earlier]
 

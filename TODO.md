@@ -182,6 +182,7 @@
 - ~~**[P0] 缺命令参考文档**~~:21 个命令里大部分无文档。建议新建 `docs/commands.md`(或每命令一节),标注哪些会真实写 Apple、哪些只读。价值高、成本中。
   - 状态:2026-07-04 已完成:新增 `docs/commands.md`,覆盖主要 CLI 命令、Apple/SQLite 写入范围与 macOS 权限说明。
 - **[P1] 缺一键可试用的分发渠道**:无 PyPI/Homebrew。建议先发 PyPI(已有 `pyproject.toml`,接近可发)。价值高、成本中。
+  - 状态:2026-07-05 已完成 PyPI 发布准备:新增发布 checklist、离线 packaging 验证入口、README 安装路径区分与包内容检查;实际 PyPI/Homebrew 发布仍未完成。
 - ~~**[P1] 缺架构与数据流文档**~~:`brain`/`json_contract`/`apple adapters`/`state`/`skills` 之间关系无说明,贡献者难快速理解。建议 `docs/architecture.md` + 一张数据流图。价值中高、成本中。
   - 状态:2026-07-05 已完成:新增 `docs/architecture.md`,覆盖 local-first runtime、自然语言/agent/MCP/daemon/Skills/Health/daily/review 数据流、SQLite/Apple adapter/安全边界与贡献者模块导航。
 - **[P1] 跨平台缺口**:核心写入仅 macOS。建议至少提供"非 Mac 上的 dry-run / 解析-only 模式"文档与可运行示例(纯逻辑路径已跨平台,verify.sh 在 Linux 也能跑测试),让非 Mac 用户能评估解析能力。价值高、成本中高(完整跨平台写入成本极高,先做"可评估"即可)。

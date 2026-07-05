@@ -6,6 +6,8 @@ This public repository contains the reusable runtime, CLI, Apple adapters, daemo
 
 ## Quick Start
 
+### Install from source today
+
 ```bash
 git clone https://github.com/Zenine/nudge.git
 cd nudge
@@ -15,6 +17,17 @@ nudge --dry-run "Project sync tomorrow at 3pm"
 ```
 
 `scripts/bootstrap_mac.sh` creates a project-local `.venv`; users do not need to manage Python virtual environments manually.
+
+### Future PyPI / pipx install
+
+`pyproject.toml` is prepared for the package name `nudge-ai-life-coach` and console script `nudge`, but this version has not been published to PyPI yet. After the release checklist is completed and the package is actually uploaded, the intended install path is:
+
+```bash
+pipx install nudge-ai-life-coach
+nudge doctor
+```
+
+Until then, use the source install path above. Maintainers can follow [`docs/releasing.md`](docs/releasing.md) for the PyPI checklist.
 
 For a full CLI reference, see [`docs/commands.md`](docs/commands.md).
 架构与数据流见 [`docs/architecture.md`](docs/architecture.md)。

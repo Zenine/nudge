@@ -49,3 +49,23 @@ def test_verify_script_reports_python_version_before_import_errors(tmp_path):
     assert result.returncode == 1
     assert "Nudge public verification requires Python 3.12+" in result.stderr
     assert "tomllib" not in result.stderr
+
+
+def test_verify_script_runs_package_check():
+    content = VERIFY.read_text(encoding="utf-8")
+
+    assert "scripts/check_package.sh" in content
+
+
+def test_package_check_script_is_offline_and_checks_expected_artifacts():
+    script = ROOT / "scripts" / "check_package.sh"
+    content = script.read_text(encoding="utf-8")
+
+    assert "python -m build" not in content
+    assert "-m build" in content
+    assert "twine upload" not in content
+    assert "gh release create" not in content
+    assert "eventkit_calendar_events.swift" in content
+    assert "nudge/skills/builtins/strength-basics-12w.yaml" in content
+    assert "tests/" in content
+    assert "Health export" in content
