@@ -1,31 +1,117 @@
+# Nudge 公开安全配置示例。
+# 复制为 config.toml 后，把占位日历/提醒列表名替换为你本机 Apple 应用中的名称。
+# 不要提交真实 API key、私有状态、个人健康细节或机器专属私有路径。
+
 [general]
+# 未指定目标时，日历事件写入的默认 Apple Calendar。
 default_calendar = "Personal"
+# 未指定目标时，提醒事项写入的默认 Apple Reminders 列表。
 default_reminder_list = "Tasks"
-locale = "en-US"
+# 解析与展示偏好的地区语言。
+locale = "zh-CN"
 
 [state]
+# 本机 SQLite/运行状态目录。保持在 git 外；NUDGE_STATE_DIR 会覆盖此值。
 dir = "~/.local/share/nudge"
 
 [llm]
+# 常见 provider：qwen、openai、anthropic、ollama。完全本地推理可使用
+# provider = "ollama"，并把模型名改成本机已安装的 Ollama 模型。
 provider = "qwen"
-# api_key = ""            # Prefer environment variables or secrets_path.
-# secrets_path = "~/.config/nudge/secrets.yaml"
-# For fully local inference, use provider = "ollama" and an installed Ollama model.
+# 优先使用环境变量或 secrets_path；不要提交真实 key。
+# api_key = "YOUR_PROVIDER_API_KEY"
+secrets_path = "~/.config/nudge/secrets.yaml"
 
 [llm.models]
+# fast 用于低延迟任务；default 用于常规解析/计划；strong 用于复杂任务。
 fast = "qwen-plus"
 default = "qwen-plus"
 strong = "qwen-plus"
 
+[security.local_auth]
+# 可选：保护 agent/MCP/daemon 写入入口。启用后，调用方必须在请求 JSON 中
+# 提供 auth_token，且该值必须等于 token_env 指定环境变量的值。
+# 不要把真实 token 写进 config.toml、shell history、日志或公开仓库。
+enabled = false
+token_env = "NUDGE_LOCAL_AUTH_TOKEN"
+protect_agent_apply = true
+protect_agent_status = true
+protect_mcp_write_tools = true
+
 [apple.calendar]
+# 影响真实 Apple Calendar 写入。修改真实数据前请先 dry-run。
 backend = "native"
 
 [apple.reminders]
+# 影响真实 Apple Reminders 写入。
 backend = "native"
 
 [apple.notes]
+# 影响真实 Apple Notes 写入。
 backend = "native"
 
 [apple.clock]
+# Clock/闹钟默认通过 Apple Shortcuts 创建。
 backend = "shortcuts"
 shortcut_name = "Nudge Create Alarm"
+
+# 可选家庭路由。公开示例只能使用占位符；真实姓名、私人关系和敏感细节
+# 只应保存在本机 config.toml 中。
+[family.member_a]
+display_name = "家庭成员A"
+role = "adult"
+aliases = ["成员A", "家人A"]
+calendar = "Family"
+reminder_list = "Family Tasks"
+
+[family.member_b]
+display_name = "家庭成员B"
+role = "child"
+aliases = ["成员B", "家人B"]
+calendar = "Family"
+reminder_list = "Family Tasks"
+
+[family.routing]
+# default 可填 "all"，也可填已配置成员 key，例如 "member_a"。
+default = "all"
+llm_fallback = false
+llm_confidence_threshold = 0.65
+
+[family.routing.display]
+title_prefix = true
+body_assignee_note = false
+
+[[family.routing.rules]]
+match = "作业"
+assignees = ["member_b"]
+
+[user]
+# 本机通用偏好。避免写入敏感个人细节。
+timezone = "America/Los_Angeles"
+wake_time = "07:00"
+sleep_time = "23:00"
+
+[user.fitness]
+# trainer / skills 流程会读取这里。共享示例中只保留泛化健康描述。
+level = "beginner"
+goal = "general_strength"
+equipment = ["dumbbells", "yoga_mat"]
+session_minutes = 45
+days_per_week = 3
+constraints = ["low_impact"]
+
+[calendars]
+# 用途 -> Apple Calendar 名称。用于限制读取上下文，也可能影响使用
+# 特定用途日历的命令写入目标。
+personal = "Personal"
+work = "Work"
+family = "Family"
+workout = "Fitness"
+
+[reminders]
+# 用途 -> Apple Reminders 列表名。未使用特定用途列表时，命令会回退到
+# [general].default_reminder_list。
+default = "Tasks"
+habits = "Habits"
+workout = "Fitness Tasks"
+family = "Family Tasks"

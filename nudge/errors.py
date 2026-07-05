@@ -265,6 +265,36 @@ def agent_status_request_error_report(raw_error: str) -> ErrorReport:
     )
 
 
+def agent_auth_required_report() -> ErrorReport:
+    """Build an error for optional local auth failures on mutating agent calls."""
+    return ErrorReport(
+        code="AGENT_AUTH_REQUIRED",
+        title="本地认证失败",
+        detail="该 Nudge 写入入口启用了本地 token 认证，但请求没有提供有效的 `auth_token`。",
+        next_steps=(
+            "确认调用方是可信本地进程，不要把 agent/MCP 写入入口暴露给不可信客户端。",
+            "从调用环境的 token 环境变量读取值，并放入请求 JSON 的 `auth_token` 字段。",
+            "不要把 token 写入仓库、日志、shell history 或公开 issue。",
+        ),
+        raw_error="local auth failed",
+    )
+
+
+def agent_auth_misconfigured_report() -> ErrorReport:
+    """Build an error when local auth is enabled but no expected token is available."""
+    return ErrorReport(
+        code="AGENT_AUTH_MISCONFIGURED",
+        title="本地认证配置不完整",
+        detail="配置启用了本地 token 认证，但运行环境没有提供可用的 token 环境变量。",
+        next_steps=(
+            "设置配置里的 token_env 对应环境变量后重试。",
+            "如果只是单机自用且接受 local trust 模型，可在 config.toml 中关闭 `[security.local_auth].enabled`。",
+            "不要把真实 token 写进 config.example.toml 或公开仓库。",
+        ),
+        raw_error="local auth token env missing",
+    )
+
+
 def agent_action_not_found_report(action_id: str) -> ErrorReport:
     """Build an actionable error when action id cannot be found in state DB."""
     value = str(action_id or "").strip() or "<empty>"

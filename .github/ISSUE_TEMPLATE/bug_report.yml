@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a reproducible problem in Nudge.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Do not paste API keys, OAuth tokens, `config.toml`, local SQLite databases, Apple Health exports, private calendar data, or other personal data.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Use synthetic examples and dry-run commands when possible.
+      placeholder: |
+        1. Run `nudge --dry-run "..."`
+        2. Observe ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Nudge version / commit
+      placeholder: 0.5.1 or commit SHA
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: Python 3.12.x
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS version or Linux distribution for dry-run/tests
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Redact private paths, secrets, personal data, and Health data before posting.
+      render: shell

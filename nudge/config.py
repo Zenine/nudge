@@ -12,6 +12,7 @@ DEFAULT_REMINDER_LIST = "Tasks"
 DEFAULT_NOTES_FOLDER = "Nudge"
 DEFAULT_CLOCK_SHORTCUT_NAME = "Nudge Create Alarm"
 DEFAULT_SECRETS_PATH = Path.home() / ".config" / "nudge" / "secrets.yaml"
+DEFAULT_LOCAL_AUTH_TOKEN_ENV = "NUDGE_LOCAL_AUTH_TOKEN"
 DEFAULT_LLM_CONFIG = {
     "provider": "qwen",
     "model": "qwen-plus",
@@ -204,6 +205,23 @@ def get_reminder_map(config: dict) -> dict:
 def get_llm_config(config: dict) -> dict:
     """Get LLM configuration ([llm] section)."""
     return config.get("llm", {})
+
+
+def get_local_auth_config(config: dict | None) -> dict:
+    """Return optional local auth settings for agent/MCP write entrypoints."""
+    config = config or {}
+    security = config.get("security", {}) if isinstance(config, dict) else {}
+    local_auth = security.get("local_auth", {}) if isinstance(security, dict) else {}
+    if not isinstance(local_auth, dict):
+        local_auth = {}
+    return {
+        "enabled": bool(local_auth.get("enabled", False)),
+        "token_env": str(local_auth.get("token_env") or DEFAULT_LOCAL_AUTH_TOKEN_ENV).strip()
+        or DEFAULT_LOCAL_AUTH_TOKEN_ENV,
+        "protect_agent_apply": bool(local_auth.get("protect_agent_apply", True)),
+        "protect_agent_status": bool(local_auth.get("protect_agent_status", True)),
+        "protect_mcp_write_tools": bool(local_auth.get("protect_mcp_write_tools", True)),
+    }
 
 
 def get_apple_backend_config(config: dict, service: str, default_backend: str) -> dict:

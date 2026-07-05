@@ -16,6 +16,9 @@ nudge --dry-run "Project sync tomorrow at 3pm"
 
 `scripts/bootstrap_mac.sh` creates a project-local `.venv`; users do not need to manage Python virtual environments manually.
 
+For a full CLI reference, see [`docs/commands.md`](docs/commands.md).
+配置说明见 [`docs/configuration.md`](docs/configuration.md)。
+
 ## Recommended Flow
 
 1. `nudge doctor` checks config, LLM keys, and Apple permissions.
@@ -68,6 +71,8 @@ scripts/bootstrap_launchd.sh status
 Structured `agent apply` and MCP `apply_apple_actions` real writes require a caller-generated `request_id`. Nudge treats that id as an idempotency key: retrying the exact same request returns the stored result instead of writing duplicate Apple items, while reusing the same id with different actions is rejected.
 
 Use `dry_run=true` first when generating multi-action plans. For real writes, keep the same `request_id` and payload that the user approved. If a process exits after reserving a request but before storing the final response, the same request can be retried after the stale-running window instead of being permanently stuck.
+
+For stricter local automation, enable `[security.local_auth]` and pass `auth_token` in `agent apply/status`, MCP `apply_apple_actions`, or MCP `report_action_status` requests. See `SECURITY.md` and `docs/configuration.md`.
 
 ## Private Data
 

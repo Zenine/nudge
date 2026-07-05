@@ -24,6 +24,7 @@ from nudge.commands.agent import (
     configure_agent_state,
     apply_agent_request,
     apply_action_status,
+    check_local_auth,
 )
 from nudge.commands.doctor import doctor_payload, run_checks
 from nudge.config import load_config
@@ -119,8 +120,12 @@ def _handle_tools_call(request_id: Any, params: object, config: dict) -> dict:
     if tool_name == "doctor_status":
         return _handle_doctor_status_call(request_id, arguments, config)
     if tool_name == "report_action_status":
-        return _handle_report_action_status_call(request_id, arguments)
+        if error := _mcp_write_auth_error(request_id, tool_name, arguments, config):
+            return error
+        return _handle_report_action_status_call(request_id, arguments, config)
 
+    if error := _mcp_write_auth_error(request_id, tool_name, arguments, config):
+        return error
     payload, exit_code = apply_agent_request(request=arguments, config=config)
     return _result_response(request_id, _tool_result(payload, is_error=bool(exit_code)))
 
@@ -173,6 +178,10 @@ def _apply_apple_actions_tool() -> dict:
                 "dry_run_token": {
                     "type": "string",
                     "description": "Token returned by a previous matching dry-run request.",
+                },
+                "auth_token": {
+                    "type": "string",
+                    "description": "Optional local auth token when Nudge local auth is enabled.",
                 },
                 "plan_driven": {
                     "type": "boolean",
@@ -297,6 +306,10 @@ def _report_action_status_tool() -> dict:
                     "description": "Additional metadata merged into structured feedback.",
                     "additionalProperties": True,
                 },
+                "auth_token": {
+                    "type": "string",
+                    "description": "Optional local auth token when Nudge local auth is enabled.",
+                },
             },
             "required": ["action_id", "status"],
         },
@@ -359,7 +372,7 @@ def _handle_doctor_status_call(request_id: Any, arguments: dict, config: dict) -
     return _result_response(request_id, _tool_result(payload, is_error=not bool(payload.get("ok"))))
 
 
-def _handle_report_action_status_call(request_id: Any, arguments: dict) -> dict:
+def _handle_report_action_status_call(request_id: Any, arguments: dict, config: dict) -> dict:
     """Handle MCP tool call for local-only status feedback."""
     if not isinstance(arguments, dict):
         payload = versioned_payload({
@@ -384,11 +397,32 @@ def _handle_report_action_status_call(request_id: Any, arguments: dict) -> dict:
 
     payload, exit_code = apply_action_status(
         request=arguments,
+        config=config,
         dry_run_override=False,
         feedback_channel="mcp.report_action_status",
         feedback_source_type="agent",
     )
     return _result_response(request_id, _tool_result(payload, is_error=bool(exit_code)))
+
+
+def _mcp_write_auth_error(request_id: Any, tool_name: str, arguments: dict, config: dict) -> dict | None:
+    """Return JSON-RPC unauthorized response for protected mutating MCP tools."""
+    if tool_name == "apply_apple_actions":
+        protect_key = "protect_mcp_write_tools"
+    elif tool_name == "report_action_status":
+        protect_key = "protect_mcp_write_tools"
+    else:
+        return None
+
+    error = check_local_auth(request=arguments, config=config, protect_key=protect_key)
+    if error is None:
+        return None
+    return _error_response(
+        request_id,
+        -32001,
+        "Unauthorized",
+        data={"code": error.code, "tool": tool_name},
+    )
 
 
 def _list_nudge_notes_tool() -> dict:
@@ -547,9 +581,12 @@ def _result_response(request_id: Any, result: dict) -> dict:
     return {"jsonrpc": JSONRPC_VERSION, "id": request_id, "result": result}
 
 
-def _error_response(request_id: Any, code: int, message: str) -> dict:
+def _error_response(request_id: Any, code: int, message: str, data: dict | None = None) -> dict:
+    error = {"code": code, "message": message}
+    if data is not None:
+        error["data"] = data
     return {
         "jsonrpc": JSONRPC_VERSION,
         "id": request_id,
-        "error": {"code": code, "message": message},
+        "error": error,
     }

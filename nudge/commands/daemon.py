@@ -164,7 +164,10 @@ def _run_payload(
         return response, exit_code, ""
 
     if request_type == "agent.status":
-        response, exit_code = apply_action_status(request=payload)
+        response, exit_code = apply_action_status(
+            request=payload,
+            config=config if config is not None else load_config(),
+        )
         return response, exit_code, ""
 
     return {

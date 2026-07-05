@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import secrets
 import sys
 from pathlib import Path
@@ -25,10 +26,13 @@ from nudge.config import (
     DEFAULT_NOTES_FOLDER,
     DEFAULT_REMINDER_LIST,
     get_defaults,
+    get_local_auth_config,
     load_config,
 )
 from nudge.errors import (
     ErrorReport,
+    agent_auth_misconfigured_report,
+    agent_auth_required_report,
     agent_action_not_found_report,
     agent_batch_too_large_report,
     agent_confirmation_invalid_report,
@@ -265,6 +269,17 @@ def apply_agent_request(
     """
     request_id = request.get("request_id") if isinstance(request, dict) else None
     source = request.get("source") if isinstance(request, dict) else None
+    if error := check_local_auth(
+        request=request,
+        config=config,
+        protect_key="protect_agent_apply",
+    ):
+        return _agent_error_payload(
+            request_id=request_id,
+            source=source,
+            dry_run=dry_run_override or bool(request.get("dry_run", False)) if isinstance(request, dict) else dry_run_override,
+            error=error,
+        ), 1
     try:
         apple_backends = resolve_apple_backends(config)
         normalized = _normalize_request(request, config)
@@ -300,12 +315,24 @@ def apply_agent_request(
 def apply_action_status(
     *,
     request: object,
+    config: dict | None = None,
     dry_run_override: bool = False,
     feedback_channel: str = "agent.status",
     feedback_source_type: str = "agent",
 ) -> tuple[dict, int]:
     """Apply one structured action-status 回写 request and return payload + exit code."""
     source = request.get("source") if isinstance(request, dict) else None
+    if error := check_local_auth(
+        request=request,
+        config=config,
+        protect_key="protect_agent_status",
+    ):
+        return _agent_error_payload(
+            request_id=None,
+            source=source,
+            dry_run=dry_run_override,
+            error=error,
+        ), 1
     try:
         normalized = _normalize_status_request(request)
     except ValueError as e:
@@ -358,6 +385,27 @@ def apply_action_status(
         feedback_channel=feedback_channel,
         feedback_source_type=feedback_source_type,
     ), 0
+
+
+def check_local_auth(
+    *,
+    request: object,
+    config: dict | None,
+    protect_key: str,
+) -> ErrorReport | None:
+    """Return an auth error when optional local auth blocks this mutating request."""
+    auth = get_local_auth_config(config)
+    if not auth["enabled"] or not auth.get(protect_key, True):
+        return None
+
+    expected = os.environ.get(auth["token_env"], "")
+    if not expected:
+        return agent_auth_misconfigured_report()
+
+    provided = request.get("auth_token") if isinstance(request, dict) else None
+    if not isinstance(provided, str) or not hmac.compare_digest(provided, expected):
+        return agent_auth_required_report()
+    return None
 
 
 def _read_request_text(file_path: str | None) -> str:
@@ -950,8 +998,19 @@ def _confirmation_secret() -> bytes:
     except FileNotFoundError:
         CONFIRMATION_SECRET_PATH.parent.mkdir(parents=True, exist_ok=True)
         value = secrets.token_hex(32)
-        CONFIRMATION_SECRET_PATH.write_text(value + "\n", encoding="utf-8")
-        CONFIRMATION_SECRET_PATH.chmod(0o600)
+        data = (value + "\n").encode("utf-8")
+        try:
+            fd = os.open(
+                CONFIRMATION_SECRET_PATH,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
+        except FileExistsError:
+            value = CONFIRMATION_SECRET_PATH.read_text(encoding="utf-8").strip()
+        else:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(data)
+            CONFIRMATION_SECRET_PATH.chmod(0o600)
     return value.encode("utf-8")
 
 

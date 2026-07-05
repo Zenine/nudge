@@ -12,27 +12,30 @@
   - 影响:本地任何进程或被诱导的 MCP client 都可发起 `apply_apple_actions` 写日历/提醒/备忘录/闹钟。`require_confirmation`、`request_id` 幂等、HMAC dry-run token 只防“误写/重复写”,不防“恶意调用方”。
   - 建议:文档已声明本地优先模型,可在 README/AGENTS 明确威胁模型边界;若要更严,考虑对 MCP serve 增加可选的本地 token / 调用方白名单,并在 `_tool_annotations` 注释外再加一层服务端校验说明。
   - 备注:这是设计取舍,需人工确认是否接受现状,不要静默当成 bug 修。
+  - 状态:2026-07-05 已完成可选本地 token auth: `[security.local_auth]` 默认关闭;启用后保护 `agent apply/status`、MCP `apply_apple_actions/report_action_status` 与 daemon 队列执行路径。
 
 - **[中] Apple Health 导出 XML 解析使用 `xml.etree.ElementTree.iterparse`,对不可信 zip 存在 XXE / 实体膨胀(billion laughs)风险**
   - 位置:`nudge/health.py:7`(`import xml.etree.ElementTree as ET`)、`nudge/health.py:137`(`ET.iterparse`)。
   - 影响:虽然导出文件通常来自用户自己的 Apple Health,但若导入来源不可信的 `export.zip`,标准库默认会处理实体引用,可能触发实体膨胀拒绝服务或本地文件读取。
   - 建议:对外部输入改用 `defusedxml`(或显式关闭实体解析的自定义 parser);至少在文档中限定只导入用户本人可信导出。
   - 备注:`requirements.txt` 未含 `defusedxml`,引入需评估“纯标准库”约定。
+  - 状态:2026-07-04 已完成 defusedxml 解析与 XML 大小上限防护。
 
 - **[低] Health 导入 zip 仅按名读取条目,未做 zip-slip / 超大解压防护**
   - 位置:`nudge/health.py:131-136`、`nudge/health.py:496-504`(`ZipFile` + `zf.open`/`namelist`/`infolist`)。
   - 影响:当前只 `open` 读流、未 `extractall`,zip-slip 风险较低;但未限制单个 XML 解压大小,异常超大导出可能耗尽内存(配合上一条)。
   - 建议:对候选 XML 读取设大小上限,或流式解析时限制累计字节。
+  - 状态:2026-07-04 已完成 XML entry size 上限防护;zip-slip 仍因不 `extractall` 保持低风险。
 
 - **[低] AppleScript 转义函数静默丢弃换行/制表符,且为各 adapter 共用唯一防注入屏障**
   - 位置:`nudge/apple/common.py:7`(`escape`)。被 `reminders.py` / `calendar.py` / `notes.py` 大量内插到双引号 AppleScript 字符串。
   - 影响:`escape` 仅处理 `\` `"` 与空白,双引号转义可阻断常规注入;但把 `\n`/`\t` 替换成空格会静默改写用户文本(数据完整性问题),且所有注入安全都集中依赖这一个函数,改动风险高。
   - 建议:为 `escape` 补充单元测试覆盖引号/反斜杠/换行注入用例;对需要保留换行的字段(如备忘录正文已走 HTML 路径)确认不经过此函数丢字符。
 
-- **[低] 确认 token HMAC 密钥文件创建有 TOCTOU 与并发写竞态**
-  - 位置:`nudge/commands/agent.py:946-955`(`_confirmation_secret`,先 read 失败再写新密钥)。
+- ~~**[低] 确认 token HMAC 密钥文件创建有 TOCTOU 与并发写竞态**~~
+  - 位置:`nudge/commands/agent.py`(`_confirmation_secret`,确认 token HMAC 密钥)。
   - 影响:多个进程并发首次写入时可能互相覆盖密钥,导致已发出的 dry-run token 失效;`chmod 0o600` 在写入之后,存在极短窗口文件权限默认更宽。
-  - 建议:用 `O_CREAT|O_EXCL` 原子创建并先设权限再写内容;或用文件锁。
+  - 状态:2026-07-05 已完成:改为 `O_CREAT|O_EXCL` 原子创建,创建 mode 传入 `0o600`;若并发创建输掉竞态则读取已存在 secret,不覆盖。
 
 ### 性能
 
@@ -40,11 +43,13 @@
   - 位置:`nudge/state.py:74-93`(`_get_conn` / `_db`),每次调用都 `_ensure_migrated` + `connect` + `PRAGMA journal_mode=WAL` + `_init_tables`(`executescript` 全部 `CREATE TABLE/INDEX IF NOT EXISTS`)。
   - 影响:`nudge/commands/daemon.py:1052` 的 `run` 循环每条命令会触发多次状态读写,每次都重新建表/设 PRAGMA;agent apply 单请求也多次开关连接。高频场景下是明显的重复初始化成本。
   - 建议:把建表/迁移收敛为“进程内只跑一次”(已有 `_migrated` 标志,可同样缓存“已初始化”状态),或复用一个长连接 / 连接缓存;`PRAGMA` 与 `_init_tables` 不必每次执行。
+  - 状态:2026-07-04 已完成小范围优化:按 `DB_PATH` 缓存 schema 初始化,`configure_state()` 重置缓存,迁移改用 raw connection 避免 `_get_conn()` 递归耦合;仍保留每次 `_db()` 打开/关闭连接。
 
 - **[中] `actions` 表缺少查询列索引,周期报表/状态过滤走全表扫描**
   - 位置:`nudge/state.py:107-118`(`actions` 表无 `status`/`scheduled_at`/`completed_at`/`plan_id`/`created_at` 索引);`nudge/state.py:469-521`(`get_actions` 用复杂 OR 时间条件查询)。
   - 影响:`review` / `daily sync` / 自动跳过睡眠提醒(`skip_later_sleep_reminders_after_completion` → `get_actions(since, until)`)在 actions 增长后会变慢。
   - 建议:为 `actions(status)`、`actions(scheduled_at)`、`actions(completed_at)`、`actions(plan_id)` 增加索引;或加 `created_at` 复合索引。
+  - 状态:2026-07-04 已完成:新增 `idx_actions_status`、`idx_actions_plan_id`、`idx_actions_scheduled_at`、`idx_actions_completed_at`、`idx_actions_created_at`。
 
 - **[低] 完成一个睡眠相关 action 会触发额外区间查询 + 逐条更新**
   - 位置:`nudge/state.py:377-422`(`skip_later_sleep_reminders_after_completion` 调 `get_actions` 再循环 `update_action_status`,每次 `update_action_status` 又各开一次连接)。
@@ -62,11 +67,13 @@
   - 位置:`nudge/brain.py:232-237`(`_parse_json`:仅当首行以 ``` 开头时,按“去掉首行、若末行是 ``` 再去末行”切片)。
   - 影响:模型在 fence 前后加说明文字、用 ```json 带语言标记换行不规范、或返回前导空白时,`raw.startswith("```")` 判断失败或切片错位,直接 `json.JSONDecodeError`。多个调用方(check-in、家庭路由等)依赖它。
   - 建议:改为正则提取第一个 ```...``` 代码块或第一个 `{`/`[` 到匹配结尾的子串;并对解析失败统一回退/重试。
+  - 状态:2026-07-04 已完成:支持 fenced JSON、前后说明文字、正文内首个 JSON object/list 提取,并新增 `tests/test_brain_json_parse.py` 回归测试。
 
 - **[中] `_migrate_from_json` 迁移与重命名非原子,且未用统一连接管理**
   - 位置:`nudge/state.py:248-282`。
   - 影响:迁移过程中(写 habit_logs 后、`rename` 前)若进程崩溃,下次再进会因 `count > 0` 跳过迁移但旧 `state.json` 仍在,残留歧义;且这里手工 `conn.close()` 而非 `_db()` 上下文,异常路径可能漏关。
   - 建议:迁移放进单事务,成功提交后再 rename;或 rename 失败时记录告警。
+  - 状态:2026-07-05 已完成:迁移写入使用单事务,提交后再归档 legacy JSON;归档失败会记录 `state_migrations=archive_pending` 并在下次状态初始化重试,不再静默跳过。
 
 - **[低] `complete_reminder` 等按“精确标题”匹配,可能批量误操作同名提醒**
   - 位置:`nudge/apple/reminders.py:456-495`(AppleScript 回退 `every reminder whose name is "..."` 全部置完成)、`delete_reminder` 同理(552-567,删除所有同名)。
@@ -90,9 +97,9 @@
 
 ### 最严重(优先处理)
 
-1. **[中] 状态层每次操作重建连接 + 重跑建表/迁移**(`nudge/state.py:74-93`):daemon/agent 高频路径的系统性性能损耗,改动收益最大。
-2. **[中] LLM JSON fence 解析脆弱**(`nudge/brain.py:232-237`):直接影响自然语言解析成功率与用户可见可靠性。
-3. **[中] Health XML 解析无 XXE/实体膨胀防护**(`nudge/health.py:137`):若导入来源不完全可信即为真实安全风险;需先确认威胁模型。
+1. **[中] Health XML 解析无 XXE/实体膨胀防护**(`nudge/health.py:137`):若导入来源不完全可信即为真实安全风险;需先确认威胁模型。
+2. ~~**[中] `_migrate_from_json` 迁移与重命名非原子**(`nudge/state.py:248-282`):崩溃时可能残留旧 `state.json`;schema 初始化耦合已改善,但 rename 原子性仍待处理。~~（2026-07-05 已完成,见上方状态行）
+3. **[中] MCP / agent 写入入口无身份认证**(`nudge/commands/mcp.py` / `agent.py`):若要超出单机自用,需明确本地调用方认证策略。
 
 ## 产品与商业价值评审(2026-06-20:目标闭环/更优实现/商业价值/功能遗漏)
 
@@ -151,7 +158,9 @@
 聚焦"易被采用的开源工具"所缺的关键内容,与代码审查章节不重复(那里是 bug/安全/性能)。
 
 - **[P0] 缺贡献与社区基础设施**:无 `CONTRIBUTING` / `CODE_OF_CONDUCT` / `SECURITY.md` / `.github` issue+PR 模板 / CI。建议新增,并把 `scripts/verify.sh` 接入 GitHub Actions(macOS runner 跑 Apple 相关,Linux runner 跑纯逻辑测试)。价值高、成本低,是开源可持续的地基。
+  - 状态:2026-07-04 已完成:新增 `CONTRIBUTING.md`、`SECURITY.md`、`CODE_OF_CONDUCT.md`、GitHub Actions verify workflow、issue/PR 模板。
 - **[P0] 缺命令参考文档**:21 个命令里大部分无文档。建议新建 `docs/commands.md`(或每命令一节),标注哪些会真实写 Apple、哪些只读。价值高、成本中。
+  - 状态:2026-07-04 已完成:新增 `docs/commands.md`,覆盖主要 CLI 命令、Apple/SQLite 写入范围与 macOS 权限说明。
 - **[P1] 缺一键可试用的分发渠道**:无 PyPI/Homebrew。建议先发 PyPI(已有 `pyproject.toml`,接近可发)。价值高、成本中。
 - **[P1] 缺架构与数据流文档**:`brain`/`json_contract`/`apple adapters`/`state`/`skills` 之间关系无说明,贡献者难快速理解。建议 `docs/architecture.md` + 一张数据流图。价值中高、成本中。
 - **[P1] 跨平台缺口**:核心写入仅 macOS。建议至少提供"非 Mac 上的 dry-run / 解析-only 模式"文档与可运行示例(纯逻辑路径已跨平台,verify.sh 在 Linux 也能跑测试),让非 Mac 用户能评估解析能力。价值高、成本中高(完整跨平台写入成本极高,先做"可评估"即可)。
@@ -160,6 +169,7 @@
 - **[P2] 缺 LLM provider 选择指南**:`config.example.toml` 默认 qwen,提到 ollama 本地推理,但无"如何选 provider / 各自隐私与成本权衡"说明。建议 `docs/llm.md`。价值中、成本低。
 - **[P2] 缺截图/演示/快速演示 GIF**:README 无任何可视化,降低"发现"转化。建议加一段终端录屏 GIF 或 asciinema。价值中、成本低。
 - **[P2] 配置项无文档**:`config.example.toml` 各字段(默认日历/列表、state.dir、apple backend=native/shortcuts)无解释。建议 `docs/configuration.md`。价值中、成本低。
+  - 状态:2026-07-05 已完成:新增 `docs/configuration.md`,并补充 `config.example.toml` 的脱敏示例和注释;覆盖 `[general]`、`[state]`、`[llm]`/`[llm.models]`、Apple backend、`[family]`、`[user]`/`[user.fitness]`、`[calendars]`、`[reminders]`。
 
 ## 架构与产品审阅补充(2026-07-04:接线缺口/隐藏能力/商业闭环)
 
@@ -182,6 +192,7 @@
 - **[中] 四个配置区块被代码读取但示例配置完全缺失**
   - 位置:`[family]`(`config.py:61/99/119`,家庭组路由)、`[user]`(`config.py:161`,trainer/schedule/habits 依赖)、`[calendars]`(`config.py:166`)、`[reminders]`(`config.py:199`,定义后几乎无消费方)。
   - 影响:家庭路由这一差异化功能对外部用户不可发现。与 2026-06-20 D4"[P2] 配置项无文档"相关,本条指出具体缺失区块;`config.example.toml` 补脱敏示例即可。
+  - 状态:2026-07-05 已完成:公开示例已补 `[family]`、`[user]`/`[user.fitness]`、`[calendars]`、`[reminders]` 脱敏配置;配置参考文档说明真实 Apple 写入影响。
 - **[低] launchd 双管理入口重叠**
   - 位置:`scripts/bootstrap_launchd.sh`(管 4 个 LaunchAgent)与 `nudge daemon launchd install`(只管 `com.nudge.agent`)各自生成/加载 plist。
   - 影响:两处安装同名 agent 可能状态不一致。建议收敛为单一入口(脚本调用 CLI 或反之)。

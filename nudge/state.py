@@ -1,6 +1,7 @@
 """Local state persistence using SQLite in the synced Nudge state directory."""
 
 import json
+import logging
 import sqlite3
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
@@ -15,6 +16,10 @@ from nudge.sleep_reminders import (
 from nudge.config import load_config, resolve_state_dir
 
 
+logger = logging.getLogger(__name__)
+_LEGACY_JSON_MIGRATION_NAME = "legacy_state_json"
+
+
 def _default_state_dir(config: dict | None = None) -> Path:
     if config is None:
         try:
@@ -27,6 +32,7 @@ def _default_state_dir(config: dict | None = None) -> Path:
 STATE_DIR = _default_state_dir()
 DB_PATH = STATE_DIR / "nudge.db"
 LEGACY_JSON = STATE_DIR / "state.json"
+_schema_initialized_for: Path | None = None
 _QUEUE_STATUS = {"queued", "running", "succeeded", "failed", "dead_letter"}
 DEFAULT_COMMAND_QUEUE_MAX_DEPTH = 1000
 DEFAULT_AGENT_REQUEST_STALE_MINUTES = 30
@@ -59,11 +65,13 @@ def configure_state(config: dict | None = None) -> Path:
     SQLite state follows that config's ``[state].dir`` instead of the default
     project state directory.
     """
-    global STATE_DIR, DB_PATH, LEGACY_JSON
+    global STATE_DIR, DB_PATH, LEGACY_JSON, _migrated, _schema_initialized_for
 
     STATE_DIR = _default_state_dir(config)
     DB_PATH = STATE_DIR / "nudge.db"
     LEGACY_JSON = STATE_DIR / "state.json"
+    _migrated = False
+    _schema_initialized_for = None
     return STATE_DIR
 
 
@@ -71,14 +79,36 @@ def _ensure_dir():
     STATE_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _connect_raw() -> sqlite3.Connection:
+    """Open a database connection without migration or schema setup."""
+    _ensure_dir()
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    return conn
+
+
+def _ensure_schema(conn: sqlite3.Connection) -> None:
+    """Initialize schema once per process for the current database path."""
+    global _schema_initialized_for
+
+    db_path = DB_PATH.resolve()
+    if _schema_initialized_for == db_path:
+        return
+    _init_tables(conn)
+    _schema_initialized_for = db_path
+
+
 def _get_conn() -> sqlite3.Connection:
     """Get a raw database connection, creating tables if needed."""
     _ensure_dir()
     _ensure_migrated()
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    _init_tables(conn)
+    conn = _connect_raw()
+    try:
+        _ensure_schema(conn)
+    except Exception:
+        conn.close()
+        raise
     return conn
 
 
@@ -116,6 +146,21 @@ def _init_tables(conn: sqlite3.Connection):
             feedback        TEXT,
             created_at      TEXT DEFAULT (datetime('now', 'localtime'))
         );
+
+        CREATE INDEX IF NOT EXISTS idx_actions_status
+            ON actions(status);
+
+        CREATE INDEX IF NOT EXISTS idx_actions_plan_id
+            ON actions(plan_id);
+
+        CREATE INDEX IF NOT EXISTS idx_actions_scheduled_at
+            ON actions(scheduled_at);
+
+        CREATE INDEX IF NOT EXISTS idx_actions_completed_at
+            ON actions(completed_at);
+
+        CREATE INDEX IF NOT EXISTS idx_actions_created_at
+            ON actions(created_at);
 
         CREATE TABLE IF NOT EXISTS habit_logs (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -238,6 +283,13 @@ def _init_tables(conn: sqlite3.Connection):
             created_at      TEXT DEFAULT (datetime('now', 'localtime')),
             finished_at     TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS state_migrations (
+            name        TEXT PRIMARY KEY,
+            status      TEXT NOT NULL,
+            last_error  TEXT,
+            updated_at  TEXT DEFAULT (datetime('now', 'localtime'))
+        );
     """)
     conn.commit()
 
@@ -250,36 +302,113 @@ def _migrate_from_json():
     if not LEGACY_JSON.exists():
         return
 
-    conn = _get_conn()
-
-    # Check if already migrated
-    count = conn.execute("SELECT COUNT(*) FROM habit_logs").fetchone()[0]
-    if count > 0:
-        conn.close()
-        return
-
+    conn = _connect_raw()
+    migrated = False
     try:
-        with open(LEGACY_JSON) as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, ValueError):
-        conn.close()
-        return
+        _ensure_schema(conn)
 
-    habits = data.get("habits", {})
-    for name, info in habits.items():
-        last_logged = info.get("last_logged")
-        streak = info.get("streak", 0)
-        if last_logged:
-            conn.execute(
-                "INSERT OR IGNORE INTO habit_logs (habit_name, date, completed, streak) VALUES (?, ?, 1, ?)",
-                (name, last_logged, streak),
+        pending = conn.execute(
+            "SELECT status FROM state_migrations WHERE name = ?",
+            (_LEGACY_JSON_MIGRATION_NAME,),
+        ).fetchone()
+        if pending:
+            if pending["status"] == "archive_pending":
+                _archive_legacy_json(conn)
+            return
+
+        # Check if already migrated
+        count = conn.execute("SELECT COUNT(*) FROM habit_logs").fetchone()[0]
+        if count > 0:
+            logger.warning(
+                "Skipping legacy state JSON migration because SQLite habit_logs already contains data; "
+                "leaving %s in place",
+                LEGACY_JSON,
             )
+            return
 
-    conn.commit()
-    conn.close()
+        try:
+            with open(LEGACY_JSON) as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            return
+
+        with conn:
+            habits = data.get("habits", {})
+            for name, info in habits.items():
+                last_logged = info.get("last_logged")
+                streak = info.get("streak", 0)
+                if last_logged:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO habit_logs (habit_name, date, completed, streak) VALUES (?, ?, 1, ?)",
+                        (name, last_logged, streak),
+                    )
+            conn.execute(
+                """
+                INSERT INTO state_migrations (name, status, last_error, updated_at)
+                VALUES (?, 'archive_pending', NULL, datetime('now', 'localtime'))
+                ON CONFLICT(name) DO UPDATE SET
+                    status = excluded.status,
+                    last_error = excluded.last_error,
+                    updated_at = excluded.updated_at
+                """,
+                (_LEGACY_JSON_MIGRATION_NAME,),
+            )
+        migrated = True
+    finally:
+        conn.close()
 
     # Rename old file so we don't migrate again
-    LEGACY_JSON.rename(LEGACY_JSON.with_suffix(".json.bak"))
+    if migrated:
+        archive_conn = _connect_raw()
+        try:
+            _ensure_schema(archive_conn)
+            _archive_legacy_json(archive_conn)
+        finally:
+            archive_conn.close()
+
+
+def _archive_legacy_json(conn: sqlite3.Connection) -> bool:
+    """Archive legacy state.json after committed SQLite migration, retrying on later runs."""
+    if not LEGACY_JSON.exists():
+        with conn:
+            conn.execute(
+                """
+                UPDATE state_migrations
+                SET status = 'archived', last_error = NULL, updated_at = datetime('now', 'localtime')
+                WHERE name = ?
+                """,
+                (_LEGACY_JSON_MIGRATION_NAME,),
+            )
+        return True
+
+    try:
+        LEGACY_JSON.rename(LEGACY_JSON.with_suffix(".json.bak"))
+    except OSError as exc:
+        with conn:
+            conn.execute(
+                """
+                UPDATE state_migrations
+                SET status = 'archive_pending', last_error = ?, updated_at = datetime('now', 'localtime')
+                WHERE name = ?
+                """,
+                (str(exc), _LEGACY_JSON_MIGRATION_NAME),
+            )
+        logger.warning(
+            "Failed to archive legacy state JSON after migration; will retry on next state initialization: %s",
+            exc,
+        )
+        return False
+
+    with conn:
+        conn.execute(
+            """
+            UPDATE state_migrations
+            SET status = 'archived', last_error = NULL, updated_at = datetime('now', 'localtime')
+            WHERE name = ?
+            """,
+            (_LEGACY_JSON_MIGRATION_NAME,),
+        )
+    return True
 
 
 # ── Habit tracking ──────────────────────────────────────────────
@@ -1295,5 +1424,5 @@ def _ensure_migrated():
     """Run migration once on first database access."""
     global _migrated
     if not _migrated:
-        _migrated = True
         _migrate_from_json()
+        _migrated = True

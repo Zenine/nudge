@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest an improvement or new capability.
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please use synthetic examples only. Do not include secrets, private schedules, Health exports, local databases, or personal `config.toml` contents.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user need or workflow gap should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior, commands, or documentation you want.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Privacy and Apple write safety
+      description: If this can affect Apple apps or local data, how should dry-run, confirmation, and offline tests work?

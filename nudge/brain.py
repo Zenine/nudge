@@ -2,6 +2,7 @@
 
 import json
 import math
+import re
 from datetime import datetime
 
 from nudge.llm import LLMError, create_provider, get_model_for_task
@@ -229,12 +230,35 @@ def _call(system: str, user_message: str, task: str = "default",
             raise
 
 
+_JSON_FENCE_RE = re.compile(r"```[ \t]*(?:json)?[^\r\n`]*(?:\r?\n)?(.*?)```", re.IGNORECASE | re.DOTALL)
+
+
 def _parse_json(raw: str) -> list | dict:
-    """Parse JSON from LLM output, stripping markdown fences if present."""
-    if raw.startswith("```"):
-        lines = raw.split("\n")
-        raw = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
-    return json.loads(raw)
+    """Parse the first JSON object/list from LLM output."""
+    last_error: json.JSONDecodeError | None = None
+
+    for match in _JSON_FENCE_RE.finditer(raw):
+        try:
+            return json.loads(match.group(1).strip())
+        except json.JSONDecodeError as exc:
+            last_error = exc
+
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(raw):
+        if char not in "{[":
+            continue
+        try:
+            parsed, _ = decoder.raw_decode(raw, index)
+            return parsed
+        except json.JSONDecodeError as exc:
+            last_error = exc
+
+    try:
+        return json.loads(raw.strip())
+    except json.JSONDecodeError as exc:
+        if last_error is not None:
+            raise last_error
+        raise exc
 
 
 def call_llm(system: str, user_message: str, task: str = "default") -> str:

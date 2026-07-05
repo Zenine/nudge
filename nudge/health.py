@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import hashlib
 import json
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from zipfile import ZipFile
+from zipfile import ZipFile, ZipInfo
 
 from nudge.state import save_health_import
+
+
+MAX_HEALTH_EXPORT_XML_BYTES = 256 * 1024 * 1024
 
 
 RECORD_TYPES = {
@@ -130,6 +133,7 @@ def parse_apple_health_export(
 
     with ZipFile(export_path) as zf:
         export_xml = _find_health_export_xml(zf)
+        _assert_health_xml_size(zf.getinfo(export_xml))
         ignored_route_files = sum(
             1 for name in zf.namelist() if "/workout-routes/" in name and name.lower().endswith(".gpx")
         )
@@ -497,11 +501,21 @@ def _find_health_export_xml(zf: ZipFile) -> str:
     for info in zf.infolist():
         if not info.filename.lower().endswith(".xml"):
             continue
+        _assert_health_xml_size(info)
         with zf.open(info) as candidate:
             sample = candidate.read(2048).decode("utf-8", errors="replace")
         if "HealthData" in sample:
+            _assert_health_xml_size(info)
             return info.filename
     raise ValueError("Apple Health export XML not found in zip")
+
+
+def _assert_health_xml_size(info: ZipInfo) -> None:
+    if info.file_size > MAX_HEALTH_EXPORT_XML_BYTES:
+        raise ValueError(
+            f"Apple Health export XML entry too large: {info.filename} "
+            f"is {info.file_size} bytes; max is {MAX_HEALTH_EXPORT_XML_BYTES} bytes"
+        )
 
 
 def _record_summary_date(attrs: dict[str, str]) -> str | None:
