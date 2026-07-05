@@ -29,7 +29,7 @@ from nudge.commands.agent import (
 from nudge.commands.doctor import doctor_payload, run_checks
 from nudge.config import load_config
 from nudge.errors import ErrorReport, classify_apple_error
-from nudge.json_contract import versioned_payload
+from nudge.json_contract import error_to_json as _error_to_json, versioned_payload
 
 
 MCP_PROTOCOL_VERSION = "2025-11-25"
@@ -565,15 +565,6 @@ def _mcp_doctor_error_payload(error: ErrorReport) -> dict:
         "checks": [],
         "errors": [_error_to_json(error)],
     })
-
-
-def _error_to_json(error: ErrorReport) -> dict:
-    return {
-        "code": error.code,
-        "message": error.title,
-        "detail": error.detail,
-        "raw_error": error.raw_error,
-    }
 
 
 def _result_response(request_id: Any, result: dict) -> dict:

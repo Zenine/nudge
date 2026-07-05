@@ -41,7 +41,12 @@ from nudge.errors import (
     llm_schema_error_report,
 )
 from nudge.family_routing import resolve_family_recipients
-from nudge.json_contract import versioned_payload
+from nudge.json_contract import (
+    action_summary as _action_summary,
+    error_to_json as _error_to_json,
+    scheduled_at as _scheduled_at,
+    versioned_payload,
+)
 from nudge.state import configure_state, log_action
 
 
@@ -156,16 +161,6 @@ def _validate_actions(actions: list[dict]) -> None:
     problems = _action_schema_problems(actions)
     if problems:
         raise click.ClickException(format_llm_schema_error("; ".join(problems)))
-
-
-def _action_summary(action: dict) -> str:
-    """Return the display summary for any supported action."""
-    return action.get("summary") or action.get("name") or action.get("label") or action.get("title", "")
-
-
-def _scheduled_at(action: dict) -> str | None:
-    """Return the canonical action schedule timestamp."""
-    return action.get("start") or action.get("due_date") or action.get("time")
 
 
 def _rewrite_family_group_actions(
@@ -357,16 +352,6 @@ def _json_target(
     if action_type == "note":
         return {"kind": "Notes folder", "name": defaults.get("default_notes_folder", DEFAULT_NOTES_FOLDER)}
     return {"kind": "Unknown", "name": ""}
-
-
-def _error_to_json(error: ErrorReport) -> dict:
-    """Serialize an ErrorReport for machine consumers."""
-    return {
-        "code": error.code,
-        "message": error.title,
-        "detail": error.detail,
-        "raw_error": error.raw_error,
-    }
 
 
 def _routing_value_to_string(value: object) -> str:

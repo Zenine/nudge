@@ -43,7 +43,12 @@ from nudge.errors import (
     apple_backend_error_report,
 )
 from nudge.feedback import STATUS_ALLOWED, STATUS_NEXT_ACTIONS, STATUS_REASONS, build_feedback
-from nudge.json_contract import versioned_payload
+from nudge.json_contract import (
+    action_summary as _summary,
+    error_to_json as _error_to_json,
+    scheduled_at as _scheduled_at,
+    versioned_payload,
+)
 from nudge.state import (
     STATE_DIR,
     complete_action,
@@ -929,23 +934,6 @@ def _confirmation_secret() -> bytes:
                 handle.write(data)
             CONFIRMATION_SECRET_PATH.chmod(0o600)
     return value.encode("utf-8")
-
-
-def _error_to_json(error: ErrorReport) -> dict:
-    return {
-        "code": error.code,
-        "message": error.title,
-        "detail": error.detail,
-        "raw_error": error.raw_error,
-    }
-
-
-def _summary(action: dict) -> str:
-    return action.get("summary") or action.get("name") or action.get("label") or action.get("title", "")
-
-
-def _scheduled_at(action: dict) -> str | None:
-    return action.get("start") or action.get("due_date") or action.get("time")
 
 
 def _optional_string(value: object) -> str | None:
