@@ -253,7 +253,7 @@ def get_apple_backend_config(config: dict, service: str, default_backend: str) -
 
     - Calendar: `native`
     - Reminders: `native`
-    - Clock: `shortcuts`
+    - Clock: `shortcuts` or `disabled`
 
     The returned dict is intentionally small and plain so command modules can
     pass it to backend selectors without depending on TOML layout details.

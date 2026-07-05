@@ -227,6 +227,24 @@ class ShortcutsClockBackend:
 
 
 @dataclass(frozen=True)
+class DisabledClockBackend:
+    """Explicitly disabled Clock backend for deployments that use Calendar/Reminders only."""
+
+    shortcut_name: str = ""
+    name: str = "disabled"
+
+    def check(self) -> tuple[bool, str]:
+        return True, "Clock alarm creation disabled by config"
+
+    def create_alarm(self, *, time: str, label: str) -> WriteResult:
+        return WriteResult(
+            ok=False,
+            message="Clock alarm creation is disabled by config",
+            external_id=None,
+        )
+
+
+@dataclass(frozen=True)
 class NativeNotesBackend:
     """Project-native Notes backend."""
 
@@ -284,7 +302,9 @@ def get_clock_backend(config: dict) -> ClockBackend:
         return ShortcutsClockBackend(
             shortcut_name=service_config.get("shortcut_name", DEFAULT_CREATE_ALARM_SHORTCUT)
         )
-    raise UnsupportedAppleBackendError("clock", backend, ("shortcuts",))
+    if backend == "disabled":
+        return DisabledClockBackend()
+    raise UnsupportedAppleBackendError("clock", backend, ("shortcuts", "disabled"))
 
 
 def get_notes_backend(config: dict) -> NotesBackend:

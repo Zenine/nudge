@@ -18,7 +18,7 @@ if sys.version_info < (3, 12):
     raise SystemExit(1)
 PY
 then
-  echo "ERROR: Nudge public verification requires Python 3.12+." >&2
+  echo "ERROR: Nudge verification requires Python 3.12+." >&2
   echo "Current interpreter: $PYTHON_BIN" >&2
   echo "Run scripts/bootstrap_mac.sh to create .venv, or set NUDGE_PYTHON=/path/to/python3.12." >&2
   exit 1

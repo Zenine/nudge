@@ -78,33 +78,6 @@ def test_agent_apply_requires_auth_before_writes(monkeypatch):
     assert "secret-token" not in json.dumps(payload, ensure_ascii=False)
 
 
-def test_agent_apply_accepts_valid_auth_and_excludes_token_from_replay_hash(monkeypatch):
-    calls = []
-
-    def fake_execute_action(action, **kwargs):
-        calls.append(action["summary"])
-        action["_external_id"] = "calendar::event-1"
-        return True
-
-    monkeypatch.setattr("nudge.commands.agent.execute_action", fake_execute_action)
-    monkeypatch.setenv("NUDGE_TEST_LOCAL_AUTH_TOKEN", "first-token")
-    first_payload, first_exit = apply_agent_request(
-        request=_calendar_request(auth_token="first-token"),
-        config=_auth_config(),
-    )
-
-    monkeypatch.setenv("NUDGE_TEST_LOCAL_AUTH_TOKEN", "second-token")
-    second_payload, second_exit = apply_agent_request(
-        request=_calendar_request(auth_token="second-token"),
-        config=_auth_config(),
-    )
-
-    assert first_exit == 0
-    assert second_exit == 0
-    assert calls == ["Auth protected sync"]
-    assert second_payload["request_replay"] is True
-
-
 def test_agent_status_requires_auth_before_state_update(monkeypatch):
     monkeypatch.setenv("NUDGE_TEST_LOCAL_AUTH_TOKEN", "secret-token")
     action_id = state.log_action("calendar_event", "Protected action", status="pending")

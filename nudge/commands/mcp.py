@@ -22,7 +22,6 @@ from nudge.apple.notes import (
 )
 from nudge.commands.agent import (
     MAX_AGENT_ACTIONS,
-    configure_agent_state,
     apply_agent_request,
     apply_action_status,
     check_local_auth,
@@ -36,7 +35,6 @@ from nudge.json_contract import versioned_payload
 MCP_PROTOCOL_VERSION = "2025-11-25"
 SERVER_INFO = {"name": "nudge", "version": "0.5.1"}
 JSONRPC_VERSION = "2.0"
-_configure_agent_state = configure_agent_state
 
 
 @click.group("mcp")
@@ -54,8 +52,6 @@ def serve_command(config_path):
     messages.
     """
     config = load_config(config_path)
-    if config_path:
-        configure_agent_state(config)
     for raw_line in sys.stdin:
         line = raw_line.strip()
         if not line:
@@ -159,10 +155,7 @@ def _apply_apple_actions_tool() -> dict:
             "properties": {
                 "request_id": {
                     "type": "string",
-                    "description": (
-                        "Caller-generated idempotency key. Required for real writes so retries "
-                        "do not duplicate Apple Calendar / Reminders / Notes / Clock items."
-                    ),
+                    "description": "Optional caller-generated request id for tracing.",
                 },
                 "source": {
                     "type": "string",
@@ -235,7 +228,7 @@ def _apply_apple_actions_tool() -> dict:
                     },
                 },
             },
-            "required": ["request_id", "actions"],
+            "required": ["actions"],
         },
     }
 

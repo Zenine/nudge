@@ -134,6 +134,8 @@ Return a JSON array. Each suggestion must use this shape:
 Rules:
 - Use only these types: move, reduce, split, delete, keep, increase.
 - Prefer move/reduce/delete for future actions that were skipped or partially completed.
+- Only target existing actions with type=calendar_event for move/reduce/split/delete; for reminders or other non-calendar actions, use keep or describe a manual adjustment.
+- For move/reduce, always include both start and end in YYYY-MM-DD HH:MM and preserve the provided dates exactly.
 - Include action_id when referencing an existing action from the Actions list.
 - Be specific and actionable, not motivational filler.
 - Base every suggestion on the provided completion data.

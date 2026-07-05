@@ -330,12 +330,16 @@ case "$COMMAND" in
     ;;
 esac
 
-check_platform
-
 case "$COMMAND" in
   help|-h|--help)
     print_usage
+    exit 0
     ;;
+esac
+
+check_platform
+
+case "$COMMAND" in
   install)
     install_agents
     ;;

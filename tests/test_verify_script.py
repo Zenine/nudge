@@ -50,7 +50,7 @@ def test_verify_script_reports_python_version_before_import_errors(tmp_path):
     )
 
     assert result.returncode == 1
-    assert "Nudge public verification requires Python 3.12+" in result.stderr
+    assert "Nudge verification requires Python 3.12+" in result.stderr
     assert "tomllib" not in result.stderr
 
 

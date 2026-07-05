@@ -51,9 +51,11 @@ backend = "native"
 backend = "native"
 
 [apple.clock]
-# Clock/闹钟默认通过 Apple Shortcuts 创建。
-backend = "shortcuts"
-shortcut_name = "Nudge Create Alarm"
+# Clock/闹钟默认关闭,避免示例配置意外创建真实闹钟。
+# 需要创建真实 Clock 闹钟时改为:
+#   backend = "shortcuts"
+#   shortcut_name = "Nudge Create Alarm"
+backend = "disabled"
 
 # 可选家庭路由。公开示例只能使用占位符；真实姓名、私人关系和敏感细节
 # 只应保存在本机 config.toml 中。
