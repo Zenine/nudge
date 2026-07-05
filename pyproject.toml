@@ -12,6 +12,16 @@ license = "AGPL-3.0-only"
 authors = [
   {name = "Zenine"}
 ]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: End Users/Desktop",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Office/Business :: Scheduling",
+  "Topic :: Utilities",
+]
 dependencies = [
   "anthropic",
   "click",
@@ -19,6 +29,12 @@ dependencies = [
   "openai",
   "PyYAML",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Zenine/nudge"
+Repository = "https://github.com/Zenine/nudge"
+Issues = "https://github.com/Zenine/nudge/issues"
+Changelog = "https://github.com/Zenine/nudge/blob/main/CHANGELOG.md"
 
 [project.scripts]
 nudge = "nudge.cli:main"

@@ -2,6 +2,14 @@
 
 This project is prepared for PyPI packaging, but maintainers must still run the release manually. Do not upload artifacts, create GitHub releases, push tags, or publish Homebrew formulae until the checklist below is complete and the version is intentionally released.
 
+## Current status (2026-07-05)
+
+- **Local preflight: PASSED** — `scripts/verify.sh` (Python 3.12), `python -m twine check dist/*`, and a clean-venv install of the built wheel (console script + packaged `nudge/skills/builtins/*.yaml` and `nudge/apple/*.swift` verified working).
+- **Metadata:** `pyproject.toml` now carries `classifiers` and `[project.urls]`.
+- **TestPyPI rehearsal upload: NOT DONE** — requires a maintainer TestPyPI token; run manually (see below).
+- **Production PyPI / Homebrew: NOT RELEASED.**
+- The `pipx install nudge-ai-life-coach` path in the README/docs is the *intended* future path and is not yet live.
+
 ## Scope and safety boundaries
 
 - Package name: `nudge-ai-life-coach`.
