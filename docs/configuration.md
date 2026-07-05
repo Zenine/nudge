@@ -1,6 +1,6 @@
 # 配置参考
 
-Nudge 默认读取仓库根目录的 `config.toml`。首次使用可复制公开安全的示例文件：
+Nudge 默认优先读取仓库根目录的 `config.toml`；源码树没有该文件时,回退到 `$XDG_CONFIG_HOME/nudge/config.toml`(默认 `~/.config/nudge/config.toml`),方便 pip/pipx 安装的用户。首次使用可复制公开安全的示例文件:
 
 ```bash
 cp config.example.toml config.toml
@@ -49,6 +49,7 @@ dir = "~/.local/share/nudge"
 
 - `dir`：状态目录。可以使用 `~`，也可以用相对路径；相对路径会按项目根目录解析。
 - 环境变量 `NUDGE_STATE_DIR` 优先级高于 `[state].dir`。
+- 未设置 `NUDGE_STATE_DIR` 且未配置 `[state].dir` 时:若源码树已存在 `.nudge` 目录则沿用(向后兼容),否则默认 `$XDG_DATA_HOME/nudge`(回退 `~/.local/share/nudge`),确保 pip/pipx 安装不会把数据库写进包安装目录。
 - 状态目录可能包含个人计划、执行历史和 Apple 外部 ID，不应提交。
 
 ## `[llm]` 与 `[llm.models]`
