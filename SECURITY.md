@@ -20,7 +20,7 @@ Prefer GitHub private vulnerability reporting when it is available for this repo
 
 ## Local-first threat model
 
-Nudge's MCP and agent entrypoints are designed for a local-first workflow. By default, a process that can invoke the CLI, write to stdin, or connect through a configured local MCP client is treated as a trusted local caller. Dry-run, confirmation, schema validation, batch limits, and idempotency controls reduce accidental writes, duplicate writes, and hidden payload changes, but they are not a full authentication boundary against malicious local processes.
+Nudge's MCP and agent entrypoints are designed for a local-first workflow. By default, a process that can invoke the CLI, write to stdin, or connect through a configured local MCP client is treated as a trusted local caller. Dry-run, confirmation, schema validation, and batch limits reduce accidental writes and hidden payload changes, but they are not a full authentication boundary against malicious local processes. (Optional asynchronous `daemon enqueue` uses `request_id` as a queue idempotency key; direct `agent apply` / MCP writes are not deduplicated.)
 
 For stricter local automation, Nudge supports optional token authentication for mutating agent/MCP entrypoints:
 

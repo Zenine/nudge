@@ -125,7 +125,7 @@ SQLite 是 Nudge runtime 的事实状态源，包含：
 
 ## 安全边界
 
-Nudge 的信任模型是 local-first：默认信任能够以同一用户身份调用 CLI、写 stdin 或连接本地 MCP client 的本地进程。安全控制重点是减少误写、重复写和隐藏 payload 变更，而不是替代 OS 级隔离。
+Nudge 的信任模型是 local-first：默认信任能够以同一用户身份调用 CLI、写 stdin 或连接本地 MCP client 的本地进程。安全控制重点是减少误写和隐藏 payload 变更（异步入队时 `daemon enqueue` 另以 `request_id` 做队列幂等），而不是替代 OS 级隔离。
 
 主要边界：
 
