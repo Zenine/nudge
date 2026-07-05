@@ -2,7 +2,8 @@
 
 from pathlib import Path
 
-from nudge.config import get_defaults, get_family_aliases, load_config
+import nudge.config as config
+from nudge.config import get_defaults, get_family_aliases, load_config, resolve_state_dir
 
 
 def test_load_config_reads_explicit_public_safe_file(tmp_path):
@@ -48,3 +49,31 @@ def test_get_family_aliases_handles_empty_public_config():
 
     assert all_aliases == []
     assert alias_map == {}
+
+
+def test_resolve_state_dir_defaults_to_xdg_not_package_dir(monkeypatch, tmp_path):
+    # A pip/pipx install roots PROJECT_ROOT at site-packages; the default state
+    # dir must never fall inside the installed package. It must use XDG instead.
+    pkg = tmp_path / "site-packages"
+    pkg.mkdir()
+    xdg = tmp_path / "xdg-data"
+    monkeypatch.setattr(config, "PROJECT_ROOT", pkg)
+    monkeypatch.setenv("XDG_DATA_HOME", str(xdg))
+    monkeypatch.delenv("NUDGE_STATE_DIR", raising=False)
+
+    resolved = resolve_state_dir({})
+
+    assert resolved == xdg / "nudge"
+    assert pkg not in resolved.parents
+
+
+def test_resolve_state_dir_prefers_existing_legacy_project_dir(monkeypatch, tmp_path):
+    # Back-compat: a source checkout that already has PROJECT_ROOT/.nudge keeps
+    # using it so existing local data is never orphaned by the XDG change.
+    root = tmp_path / "checkout"
+    (root / ".nudge").mkdir(parents=True)
+    monkeypatch.setattr(config, "PROJECT_ROOT", root)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    monkeypatch.delenv("NUDGE_STATE_DIR", raising=False)
+
+    assert resolve_state_dir({}) == root / ".nudge"

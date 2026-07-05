@@ -93,7 +93,8 @@ PY
 
 ```bash
 bin/nudge skills validate examples/skills/custom-skill-template.yaml
-bin/nudge skills dry-run examples/skills/custom-skill-template.yaml --weeks 1
+bin/nudge skills dry-run examples/skills/custom-skill-template.yaml \
+  --context examples/skills/context.example.json --weeks 1
 ```
 
 ## 安全地只看输出

@@ -101,11 +101,12 @@
   - 建议:解析阶段按来源/样本去重或加合理上限校验;补充测试。
   - 状态:2026-07-05 已完成:Health XML 解析按稳定 record key 去重;steps/距离/能量/运动/站立/睡眠等每日累加字段跳过负值、明显异常值与未知单位;新增公开合成测试覆盖。
 
-- **[低] `skills/jsonlogic` 仍缺针对性单测**
+- ~~**[低] `skills/jsonlogic` 仍缺针对性单测**~~
   - 位置:`nudge/skills/jsonlogic.py`。
   - 背景:`brain._parse_json`、`apple/common.escape`、Health 解析已补回归测试;原“核心解析与 Apple 适配缺直接单测”条目已大幅降噪。
   - 影响:Skills 条件判断是计划模板适配的关键纯函数,缺少边界测试会增加后续 skill schema 扩展风险。
   - 建议:为 jsonlogic 常用操作符、缺失字段、类型不匹配、嵌套表达式补离线单测。
+  - 状态:2026-07-05 已完成:新增 `tests/test_skills_jsonlogic.py`,覆盖常用操作符、缺失字段、类型不匹配、嵌套表达式、危险路径与 invalid missing 参数校验。
 
 ### 最严重(优先处理)
 
@@ -223,9 +224,10 @@
 - **[低] launchd 双管理入口重叠**
   - 位置:`scripts/bootstrap_launchd.sh`(管 4 个 LaunchAgent)与 `nudge daemon launchd install`(只管 `com.nudge.agent`)各自生成/加载 plist。
   - 影响:两处安装同名 agent 可能状态不一致。建议收敛为单一入口(脚本调用 CLI 或反之)。
-- **[低] README 只覆盖约 1/3 能力(具体清单)**
+- ~~**[低] README 只覆盖约 1/3 能力(具体清单)**~~
   - 未提及:`chat`、`trainer`、`habits`、`health`、`schedule`、`briefing`、`failures`、`dogfood`、`skills` 全套、`db`、`reminders`、`check-in`、`daemon app`/`daemon launchd`,以及 MCP 的 `report_action_status`/`doctor_status`/`list_nudge_notes` 三个 tool;`nudge <裸文本>` 自动路由到 `do`(`cli.py:37`)的隐式行为也未说明。
   - 归属:落地时并入 2026-06-20 D4 的 [P0] 命令参考文档,本条作为具体清单。
+  - 状态:2026-07-05 已完成:README 新增 Capability Map,覆盖自然语言/日程、reminders/log/check-in、health/habits/daily/review、skills/trainer、agent/MCP、daemon/db/docs/doctor,并说明 `nudge <text>` 自动路由到 `do`。
 
 ### 架构债务(补充 2026-06-20 代码审查,不重复)
 
@@ -233,11 +235,35 @@
   - 位置:`nudge/commands/agent.py:21`(import `_action_schema_problems`/`execute_action`);依赖链 `mcp/daemon → agent → do → brain/apple/state`。
   - 建议:把两个函数提升为正式公共 API(如挪到独立 `actions_core` 模块),再动 `do.py` 重构。
 - **[中] 三个超大模块职责过载**
-  - `nudge/state.py` 1277 行(动作/习惯/健康/队列/幂等键等 7 个领域一个文件)、`nudge/commands/daemon.py` 1139 行(队列循环+launchd+图形 app+告警)、`nudge/commands/do.py` 807 行(家庭路由逻辑未下沉到已有的 `family_routing.py`)。
+  - `nudge/state.py` 1442 行(2026-07-05 复核,原 1277,仍在增长;动作/习惯/健康/队列/幂等键/daemon runs/legacy JSON 迁移 8 个领域一个文件)、`nudge/commands/daemon.py` 1142 行(队列循环+launchd+图形 app+告警)、`nudge/commands/do.py` 807 行(家庭路由逻辑未下沉到已有的 `family_routing.py`)。
   - 建议:按领域拆分;与 2026-06-20 性能①(连接复用)一起动 state 层最划算。
 - **[低] 模块级可变全局状态非线程安全**
   - 位置:`brain._provider/_llm_config`、`state.STATE_DIR/DB_PATH`、`agent.STATE_DIR` 等,靠 `configure_*` 重绑定。
   - 影响:daemon 常驻 + 未来多配置场景有隐患;与"每次操作重连重建表"同根,宜一并修。
+  - 具体 foot-gun(2026-07-05 复核):`trainer log`/`status`/`_legacy_llm_plan` 未调 `configure_state`,自定义 `--config`(非默认 state 目录)时读写默认库,check-in 落回"请用通用打卡"。默认配置不触发;是全局态设计的直接后果,修 `configure_state` 缺调即可临时止血,根治需消除 import 即读盘。
+
+### 架构债务(补充 2026-07-05 四维度审阅,与上不重复)
+
+> 来源:2026-07-04/05 六提交 + 未提交工作区的四维度并行只读审阅(安全/正确性/架构/打包)。仅登记架构与可发布性债务;发现的运行期 bug(MCP 非 ASCII token DoS、Health JSON 路径缺范围校验等)不在本节。
+
+- ~~**[高·发布阻塞] pip 安装后默认 config/state 路径落进包安装目录(`site-packages`)**~~
+  - 位置:`config.py:25` `PROJECT_ROOT = parents[1]` 为锚;`load_config` 默认找 `PROJECT_ROOT/config.toml`,`resolve_state_dir` 无 env/config 时回退 `PROJECT_ROOT/.nudge`;`state.py` 在 import 时即据此设 `DB_PATH`。
+  - 影响:wheel 安装后、用户尚无 `config.toml` 时,SQLite 会写进 `site-packages/nudge/../.nudge`;`config.example.toml` 里的 `~/.local/share/nudge` 只在用户手建 config 后生效,默认值本身不符合可发布 runtime。与正在推进的 PyPI 发布(见"商业闭环缺口 1"/D4 P1)直接冲突,应作为发布前置。
+  - 状态:2026-07-05 已完成:`resolve_state_dir` 无 env/config 时,存在源码树 `.nudge` 则沿用(向后兼容),否则默认 `$XDG_DATA_HOME/nudge`(回退 `~/.local/share/nudge`);`load_config` 默认搜索源码树 `config.toml` 后回退 `$XDG_CONFIG_HOME/nudge/config.toml`。新增 `tests/test_config.py` 两个回归(XDG 默认、存量 `.nudge` 兼容),完整 `scripts/verify.sh`(3.12)通过。
+- **[中] 命令层私有函数互相 import,形成隐式耦合网(扩大 2026-07-04"agent 复用 do"一条)**
+  - 位置:除已记的 `agent.py → do._action_schema_problems/execute_action` 外,`mcp.py:22`、`daemon.py:24`、`skills.py:14`(`do.execute_action`)、`trainer.py:11`(import 私有 `skills._materialize_actions`)均从兄弟命令模块取函数;`review.py:31`、`chat.py:86` 用函数体内延迟 import 规避 `briefing`/`do` 的循环依赖(import cycle 信号)。
+  - 影响:`execute_action`/`_action_schema_problems`/`_materialize_actions`/`_rewrite_family_group_actions` 这些真正的执行/校验核心逻辑住在 Click 命令模块内;任何 `do.py`/`agent.py` 重构会波及 mcp/daemon/trainer/skills,单测难隔离。
+  - 建议:抽 `nudge/actions_core.py`(或 `runtime/`)承载 execute_action、schema 校验、family 改写、materialize;命令模块只做参数解析与输出。这是其它拆分的前置项(与上面"三个超大模块"联动)。
+- **[中] CLI JSON 序列化重复,`json_contract.py` 过度贫血**
+  - 位置:`_error_to_json` 有 3 份(`do.py:362`/`agent.py:1017`/`mcp.py:571`,字段已开始 drift);`_action_to_json`(`do.py:442`/`agent.py:881`)、`_failure_to_json`(`do.py:472`/`agent.py:905`)、`_scheduled_at`/`_summary`/target 序列化均 do 与 agent 各一份近似副本;而 `nudge/json_contract.py` 仅 11 行(只有 `versioned_payload`)。
+  - 建议:把 action/target/failure/error 的 JSON 序列化统一进 `json_contract.py` 作单一对外契约源。可独立交付、低风险,建议优先。
+- **[中] trainer 双 legacy 路径长期技术债(与本文件 2026-07-04 trainer 统一条的"剩余项"同源)**
+  - 位置:`trainer.py` `_legacy_llm_plan`(`--legacy-llm`)、`_legacy_workout_status`(status 回退查旧 `weekly_workout`)、`trainer log` 命中 Skill 实例即提示改用 `nudge log done`(半废弃)。
+  - 建议:定移除里程碑——确认 legacy `weekly_workout` 无存量数据后,删 `_legacy_*` 与其对 `brain.generate_workout_plan`/`parse_workout_log` 的依赖,trainer 收敛为 Skill runtime 薄壳。
+- **[低] `errors.py` `render()` 带写日志副作用**
+  - 位置:`errors.py:22`,`ErrorReport.render()` 内部调 `log_error_report(...)`;"结构体渲染成字符串"这个纯操作产生落盘副作用,每 render 一次落一条 error 日志,测试/预览难以无副作用格式化。建议把日志移到实际"发生错误并上报"的调用点。
+- **[低] `requirements.txt` 混入测试依赖 `pytest`**
+  - 建议:运行时/测试依赖分离,`pytest` 移到 `pyproject.toml` 的 `[project.optional-dependencies].test`,保持"纯运行时依赖"清爽。
 
 ### 商业闭环缺口(按漏斗排序,补充 2026-06-20 D3)
 
@@ -245,3 +271,28 @@
 2. ~~**第二优先:skills 接线激活**~~——2026-07-04 已完成 Skills runtime 接线与 trainer 默认统一到 Skill runtime;后续仅保留 skill 作者生态/测试等增量。
 3. ~~**前提项:MCP 调用方认证**~~——2026-07-05 已完成可选本地 token auth。
 4. **留存基础**:正式 PyPI/Homebrew 发布仍未完成;issue 模板/CI 已完成。
+
+## 运行期 bug 与正确性(2026-07-05 四维度审阅)
+
+> 来源:同 2026-07-05 架构债务小节的四维度只读审阅(安全/正确性/架构/打包)。本节只列可复现的运行期缺陷,与架构债务分开。落地前先写回归测试再修(项目 TDD 约定),验证入口 `scripts/verify.sh`(3.12 `.venv`)。
+
+- ~~**[中·已复核·建议发布前修] 非 ASCII `auth_token` 打崩 MCP 长驻服务(DoS)**~~
+  - 位置:`nudge/commands/agent.py:405` `hmac.compare_digest(provided, expected)` 两侧为 `str`,`provided` 来自请求 JSON 完全可控;Python `compare_digest` 对含非 ASCII 的 `str` 抛 `TypeError`。`nudge/commands/mcp.py:57` 的 `for raw_line in sys.stdin` 主循环无 try/except(`_handle_line` 的 try 只包 `json.loads`),异常冒泡打死进程。
+  - 触发:`[security.local_auth].enabled=true` 时,一条 `{"auth_token":"café",...}` 的 tools/call(无需正确 token)即崩服务,后续全部请求失效——安全特性自身引入 DoS。
+  - 状态:2026-07-05 已完成:`check_local_auth` 改按 bytes `compare_digest`(仍恒定时间);`_handle_line` 对 `_handle_message` 加每请求异常隔离,返回 JSON-RPC internal error(-32603)不中断服务。新增 `tests/test_local_auth.py` 两个回归(非 ASCII token 拒绝不崩、单请求异常不打死循环),完整 `scripts/verify.sh`(3.12)通过。
+- **[低] 确认密钥文件崩溃残留空文件 → 空 HMAC 密钥**
+  - 位置:`agent.py` `_confirmation_secret`(`O_CREAT|O_EXCL`,0o600)。创建成功、`write` 之前进程被杀会残留空文件;后续读到空串直接以 `b""` 当 HMAC 密钥,dry-run→apply 确认 token 可离线复算。
+  - 定级:本地信任模型下能读该文件者本有等价能力,故低;仍建议修。
+  - 修:读取后校验非空,为空视同缺失并重建;或先写临时文件再 `os.rename` 原子替换。
+- **[低] Health JSON 导入路径 weight/body_fat 无范围校验,与 XML 路径不一致**
+  - 位置:`health.py` JSON 体重 277-279、体脂 290-292 无 `_valid_range`;XML 路径体重 427(1.0–500.0)、体脂 434(0.0–100.0)有。
+  - 影响:异常值(0/99999/体脂>100)经 JSON 导入原样写入 `health_daily_summary`,同值经 XML 会被丢弃;数据质量不一致,不崩溃。
+  - 修:JSON 路径复用同阈值 `_valid_range`。
+- **[低] dryrun `preferred_days` 数量 < `sessions_per_week` 时生成同日同时段重叠动作**
+  - 位置:`skills/dryrun.py:97` `preferred_days[slot % len(preferred_days)]` + 99-102 统一 `preferred_time`。
+  - 触发:显式配置 `preferred_days=["monday"]` 且 `sessions_per_week=3` → 3 个 session 全落周一同一时刻,materialize 出 3 个起止相同的事件/提醒;默认回退分支不触发。
+  - 修:`sessions_per_week > len(preferred_days)` 时同日多 session 错开时段,或校验层拒绝该组合。
+- **[信息·行为变化,非 bug] `complete_reminder` 改精确 `due_date` 匹配,漂移时合规完成可能失败**
+  - 位置:`commands/reminders.py:610` 传 `due_date=scheduled_at`;`apple/reminders.py:489` `if due date of r = targetDueDate` 精确等值。
+  - 说明:本次"拒绝仅按标题模糊批量匹配"安全收紧的预期副作用——用户在 Apple 端改过到期时间、或 `scheduled_at` 与实际 due date 分钟级不一致时,两条路径都可能匹配不到而报错。列此仅供回归观察 check-in 完成成功率,非缺陷。
+- 另:`trainer --config` 读写错库(非默认 state 目录时)是同批审阅发现的正确性 bug,已归档在架构债务"模块级可变全局"条下(全局态设计的直接后果),不在此重列。

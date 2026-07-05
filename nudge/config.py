@@ -25,14 +25,28 @@ DEFAULT_LLM_CONFIG = {
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
+def _default_config_path() -> Path:
+    """Default config search: source-tree config.toml first, then XDG.
+
+    Anchoring on PROJECT_ROOT alone breaks pip/pipx installs, where PROJECT_ROOT
+    is inside site-packages. Fall back to ``$XDG_CONFIG_HOME/nudge/config.toml``
+    (``~/.config/nudge/config.toml``) so installed users have a real home for it.
+    """
+    project_config = PROJECT_ROOT / "config.toml"
+    if project_config.exists():
+        return project_config
+    base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    return Path(base).expanduser() / "nudge" / "config.toml"
+
+
 def load_config(path: str | Path | None = None) -> dict:
-    """Load config.toml. Searches in script dir if no path given."""
+    """Load config.toml. Searches source tree then XDG if no path given."""
     if path is None:
-        path = Path(__file__).parent.parent / "config.toml"
+        path = _default_config_path()
     else:
         path = Path(path)
         if not path.is_absolute():
-            path = Path(__file__).parent.parent / path
+            path = PROJECT_ROOT / path
 
     if not path.exists():
         raise FileNotFoundError(
@@ -56,7 +70,14 @@ def resolve_state_dir(config: dict | None = None) -> Path:
         path = Path(str(configured)).expanduser()
         return path if path.is_absolute() else PROJECT_ROOT / path
 
-    return PROJECT_ROOT / ".nudge"
+    # No explicit state dir: keep an existing source-tree ``.nudge`` (back-compat,
+    # never orphan local data), otherwise default to XDG so pip/pipx installs never
+    # write databases into the installed package directory (site-packages).
+    legacy = PROJECT_ROOT / ".nudge"
+    if legacy.exists():
+        return legacy
+    base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(base).expanduser() / "nudge"
 
 
 def get_family_aliases(config: dict) -> tuple[list[str], dict[str, dict]]:

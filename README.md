@@ -48,6 +48,21 @@ LLM provider 选择见 [`docs/llm.md`](docs/llm.md)。
 7. `scripts/bootstrap_launchd.sh` optionally automates morning brief, daily sync, evening brief, and the daemon.
 8. `nudge skills start <skill-id>` runs the skill assessment, personalizes the plan, and writes the first week into Calendar/Reminders; `nudge skills adapt <plan-id> --apply` materializes the next week using your real check-in data.
 
+## Capability Map
+
+Nudge exposes both a human-friendly CLI and machine-friendly agent/MCP entrypoints. The full reference is in [`docs/commands.md`](docs/commands.md); this map highlights the main surfaces and whether they write to Apple apps or local state.
+
+| Area | Commands | Typical use | Writes |
+| --- | --- | --- | --- |
+| Natural-language actions | `nudge "..."`, `nudge do`, `nudge chat`, `nudge schedule` | Turn a request into Calendar / Reminders / Notes / Clock actions; find and optionally book calendar slots. | Apple apps when not using `--dry-run`; SQLite action log for executed writes |
+| Reminders and completion tracking | `nudge reminders sync-completed`, `nudge reminders backfill-ids`, `nudge log`, `nudge check-in` | Reconcile Reminders completions, backfill external IDs, and record outcomes/metrics. | SQLite; Reminders only for explicit mutation paths |
+| Health, habits, daily review | `nudge health import/daily`, `nudge habits`, `nudge daily sync`, `nudge review`, `nudge failures`, `nudge dogfood`, `nudge briefing` | Import Apple Health exports, inspect habits/streaks, generate daily/weekly review context, and surface stale or failed actions. | SQLite; notifications only when explicitly requested |
+| Skills and trainer | `nudge skills list/show/validate/dry-run/start/status/adapt/create/update/delete`, `nudge trainer plan/log/status` | Run deterministic skill templates such as `strength-basics-12w`, adapt future weeks from logged metrics, and keep trainer compatibility. | SQLite and Apple apps for `start`/`adapt --apply` / trainer writes; dry-run paths are read-only |
+| Agent / MCP automation | `nudge agent apply/status`, `nudge mcp serve` | Let trusted local automation submit structured action JSON or expose MCP tools. | Apple apps and SQLite after idempotency/auth checks; dry-run paths are safe previews |
+| Daemon, database, docs, diagnostics | `nudge daemon ...`, `nudge db backup/export/restore`, `nudge docs audit`, `nudge doctor` | Queue/retry background work, manage launchd/app helpers, back up local state, audit docs, and diagnose config/permissions. | SQLite/db files; launchd/app helper commands alter local automation only when explicitly run |
+
+`nudge <text>` is intentionally equivalent to `nudge do <text>` when the first argument is not a known subcommand. Use `--dry-run` or command-specific preview flags before any real Apple write.
+
 ## Skills Lifecycle
 
 ```bash

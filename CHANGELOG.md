@@ -14,7 +14,7 @@
 - 新增文档：命令参考、配置参考、架构与数据流文档、LLM provider 选择指南、非 macOS 评估指南、示例库、PyPI 发布 checklist。
 - 新增示例：自然语言 dry-run、agent apply 请求、MCP JSON-RPC 调用、自定义 Skill YAML 模板。
 - `nudge schedule` 支持按时长过滤空档、JSON 输出，以及显式 `--book --slot` 创建 Calendar event。
-- 新增安全/回归测试：LLM JSON fence 解析、Health XML 安全与每日汇总校验、local auth、SQLite 初始化/迁移、AppleScript escape 契约、Reminder AppleScript fallback 同名安全。
+- 新增安全/回归测试：LLM JSON fence 解析、Health XML 安全与每日汇总校验、local auth、SQLite 初始化/迁移、AppleScript escape 契约、Reminder AppleScript fallback 同名安全、Skills JSONLogic 规则校验。
 - 新增离线 packaging 检查脚本，构建并检查 wheel/sdist 是否包含 Swift/YAML 包数据，且不包含 tests、私有配置、本地数据库或 Health export。
 
 ### Changed
@@ -24,8 +24,16 @@
 - 睡眠 action 完成后的后续睡眠提醒 auto-skip 改为同一 SQLite 连接/事务内批量更新，避免逐条重新打开写连接。
 - legacy `state.json` 迁移改为事务写入；提交成功后再归档，归档失败会记录 `archive_pending` 并在下次初始化重试。
 - `config.example.toml` 补齐公开安全的脱敏示例，覆盖 `[family]`、`[user]`、`[calendars]`、`[reminders]` 与 `[security.local_auth]`。
-- README 增加命令、配置、架构、示例入口，并区分当前源码安装与未来 PyPI/pipx 安装路径。
+- README 增加命令、配置、架构、示例入口、Capability Map,并区分当前源码安装与未来 PyPI/pipx 安装路径。
 - Health 每日汇总解析会跳过负值、明显异常值与未知单位,并对同一导出内完全重复的 XML Record 按稳定 key 去重。
+- Skills JSONLogic validation 会校验 `missing` / `missing_some` 的危险路径与参数形状,避免 schema 校验通过但运行时才失败。
+- 默认状态目录与配置文件不再以包安装目录为锚:未显式配置时状态库默认落 `$XDG_DATA_HOME/nudge`(回退 `~/.local/share/nudge`),配置默认搜索源码树 `config.toml` 后回退 `$XDG_CONFIG_HOME/nudge/config.toml`;已存在的源码树 `.nudge` 目录仍沿用(向后兼容,不迁移既有数据)。修正 pip/pipx 安装后可能把 SQLite 写进 `site-packages` 的问题。
+
+### Fixed
+
+- 修复 MCP 可选本地认证在收到非 ASCII `auth_token` 时抛 `TypeError` 打崩 stdio 服务的问题(`hmac.compare_digest` 改按 bytes 比较,仍恒定时间);MCP 主循环现对单条请求的意外异常做隔离,返回 JSON-RPC internal error 而非中断整个服务。
+- `docs/non-macos.md` 的 `skills dry-run` 示例补上必需的 `--context`,并新增 `examples/skills/context.example.json`,使非 macOS/CI 用户照抄即可跑通。
+- 修复 `test_verify_script` 在存在 `.venv` 时递归自调用导致超时的缺陷:显式经 `NUDGE_PYTHON` 指定测试解释器。
 
 ### Security
 

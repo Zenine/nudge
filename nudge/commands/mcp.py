@@ -8,6 +8,7 @@ delegates Apple writes to the existing agent relay engine, while
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from typing import Any
 
@@ -72,7 +73,12 @@ def _handle_line(line: str, config: dict) -> dict | None:
         return _error_response(None, -32700, f"Parse error: {e}")
     if not isinstance(message, dict):
         return _error_response(None, -32600, "Invalid Request")
-    return _handle_message(message, config)
+    try:
+        return _handle_message(message, config)
+    except Exception:  # noqa: BLE001 - a long-running stdio server must survive
+        # per-request failures rather than crashing the whole loop.
+        logging.getLogger(__name__).exception("MCP request handling failed")
+        return _error_response(message.get("id"), -32603, "Internal error")
 
 
 def _handle_message(message: dict, config: dict) -> dict | None:

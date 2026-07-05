@@ -135,6 +135,28 @@ def _missing(paths: Any, data: Mapping[str, Any]) -> list[str]:
     return missing
 
 
+def _validate_missing_paths(paths: Any) -> None:
+    if isinstance(paths, str):
+        _path_parts(paths)
+        return
+    if not isinstance(paths, list):
+        raise JsonLogicError("missing expects a string or list of strings")
+    for path in paths:
+        if not isinstance(path, str):
+            raise JsonLogicError("missing paths must be strings")
+        _path_parts(path)
+
+
+def _validate_missing_some_args(args: list[Any]) -> None:
+    if len(args) != 2 or not isinstance(args[0], int) or isinstance(args[0], bool):
+        raise JsonLogicError("missing_some expects [minimum_required, paths]")
+    if args[0] < 0:
+        raise JsonLogicError("missing_some minimum_required must be non-negative")
+    if not isinstance(args[1], list):
+        raise JsonLogicError("missing_some paths must be a list of strings")
+    _validate_missing_paths(args[1])
+
+
 def evaluate(rule: Any, data: Mapping[str, Any]) -> Any:
     """Evaluate a JSONLogic rule using a deliberately small safe subset."""
     if not isinstance(rule, Mapping):
@@ -188,11 +210,10 @@ def evaluate(rule: Any, data: Mapping[str, Any]) -> Any:
     if op == "missing":
         return _missing(raw_args, data)
     if op == "missing_some":
-        if len(args) != 2 or not isinstance(args[0], int):
-            raise JsonLogicError("missing_some expects [minimum_required, paths]")
+        _validate_missing_some_args(args)
         required = args[0]
         missing = _missing(args[1], data)
-        total = len(args[1]) if isinstance(args[1], list) else 1
+        total = len(args[1])
         present = total - len(missing)
         return [] if present >= required else missing
 
@@ -219,6 +240,12 @@ def validate_rule(rule: Any) -> None:
         if not isinstance(path, str):
             raise JsonLogicError("var path must be a string")
         _path_parts(path)
+        return
+    if op == "missing":
+        _validate_missing_paths(raw_args)
+        return
+    if op == "missing_some":
+        _validate_missing_some_args(_as_args(raw_args))
         return
 
     for arg in _as_args(raw_args):

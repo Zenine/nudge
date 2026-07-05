@@ -403,7 +403,12 @@ def check_local_auth(
         return agent_auth_misconfigured_report()
 
     provided = request.get("auth_token") if isinstance(request, dict) else None
-    if not isinstance(provided, str) or not hmac.compare_digest(provided, expected):
+    # Compare as bytes: hmac.compare_digest raises TypeError on non-ASCII str,
+    # and provided is attacker-controlled. bytes is safe for any input and stays
+    # constant-time.
+    if not isinstance(provided, str) or not hmac.compare_digest(
+        provided.encode("utf-8"), expected.encode("utf-8")
+    ):
         return agent_auth_required_report()
     return None
 

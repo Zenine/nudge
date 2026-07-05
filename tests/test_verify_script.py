@@ -35,7 +35,10 @@ def test_verify_script_reports_python_version_before_import_errors(tmp_path):
 
     env = os.environ.copy()
     env["PATH"] = f"{fake_bin}:{env['PATH']}"
-    env.pop("NUDGE_PYTHON", None)
+    # Pin the interpreter explicitly. Relying on PATH fallback made this test
+    # recurse (verify.sh prefers a present .venv/bin/python, re-runs the whole
+    # suite, and re-invokes itself) for anyone with a bootstrapped .venv.
+    env["NUDGE_PYTHON"] = str(fake_python)
 
     result = subprocess.run(
         [str(VERIFY)],
