@@ -14,7 +14,7 @@ func sanitize(_ value: String) -> String {
 }
 
 let args = Array(CommandLine.arguments.dropFirst())
-let listOnly = args.first == "--lists"
+let listOnly = args.count == 1 && args[0] == "--lists"
 let requestedListName = args.first
 let requestedDateText = args.dropFirst().first
 let requestedMode = args.dropFirst(2).first ?? "incomplete"

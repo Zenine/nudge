@@ -125,6 +125,12 @@ def test_eventkit_all_due_mode_is_read_only_and_preserves_existing_predicates() 
     assert "store.remove(" not in source
 
 
+def test_eventkit_lists_flag_does_not_shadow_a_reminder_list_name() -> None:
+    source = reminders.EVENTKIT_DUE_TODAY_SCRIPT.read_text()
+
+    assert 'let listOnly = args.count == 1 && args[0] == "--lists"' in source
+
+
 def test_complete_fallback_does_not_bulk_complete_every_same_title(monkeypatch) -> None:
     _disable_eventkit(monkeypatch)
     scripts: list[str] = []
