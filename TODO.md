@@ -4,7 +4,6 @@
 
 ## 当前增量
 
-- [ ] 为升级前 `reminder_list IS NULL` 的旧 reminder action 设计只读候选与确认后 backfill 流程；在此之前，多列表完成同步只允许“明确 Apple 完成记录”作为写回证据，不根据列表中消失推断完成。
 - [ ] 在真实 Dogfood 稳定后设计非 TTY 的结构化反馈客户端协议，供未来 IM / iOS 入口复用 `nudge.feedback.interview.v1`；首版不得扩大 Apple 读取或写入权限。
 
 ## 代码审查发现(2026-06-20:安全/性能/功能)

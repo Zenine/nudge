@@ -1,7 +1,7 @@
 # Legacy Reminder 列表归属 Backfill 设计
 
 - 日期：2026-07-19
-- 状态：整体设计已批准，实施计划已完成，待执行
+- 状态：已实现并通过公开运行库完整验证
 - 首版入口：`nudge reminders backfill-lists`
 - 写入边界：只更新 Nudge SQLite 的 `actions.reminder_list`，不修改 Apple Reminders
 

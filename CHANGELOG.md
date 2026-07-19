@@ -6,6 +6,8 @@
 
 ### Changed
 
+- 新增 `nudge reminders backfill-lists`：默认只读地为升级前 `reminder_list IS NULL` 的 open reminder action 生成列表归属候选；EventKit 新增包含已完成与未完成 Reminder 的 `all-due` 只读查询模式，真实回填必须统一确认、创建并校验 SQLite 备份，再以候选快照复核和单事务条件更新仅写入本地列表字段。
+- Reminder 列表归属回填已通过公开运行库完整验证与真实本机配置只读 Dogfood；dry-run 未创建备份且主数据库修改时间未变化。命令层静态边界不持有 Apple Reminder 创建、完成、删除或外部 ID 修改能力，整个流程不修改 Apple 数据。
 - 新增 `nudge feedback interview`：按范围选取逾期 action，以固定核心题和最多 3 个可选 GPT 追问收集结构化反馈；高风险分组不预选且可关闭 GPT，失败自动降级为核心题，最终以单个 SQLite 事务统一写入且不调用 Apple adapter。
 - `reminders sync-completed` 与 `daily sync` 支持重复传入 `--list`，也可从 `[reminders].sync_lists` 读取有序、去重的多列表配置；JSON 输出保留逐列表结果。
 - Reminder action 新增目标列表持久化字段，现有 SQLite 会在初始化时自动补列；旧 action 保持兼容。
