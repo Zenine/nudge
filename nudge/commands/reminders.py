@@ -41,6 +41,12 @@ def reminders_command():
     pass
 
 
+from nudge.commands.reminder_list_backfill import backfill_lists_command
+
+
+reminders_command.add_command(backfill_lists_command)
+
+
 @reminders_command.command("sync-completed")
 @click.option("--date", "date_text", default=None, help="Sync one local date, YYYY-MM-DD; defaults to today")
 @click.option(
