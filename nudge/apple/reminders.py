@@ -1,7 +1,7 @@
 """Apple Reminders integration via AppleScript."""
 
 import subprocess
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -178,6 +178,42 @@ def query_completed_on_date(
         return False, "swift executable not found"
     except subprocess.TimeoutExpired:
         return False, "EventKit completed-reminders query timed out"
+
+    if result.returncode != 0:
+        error = result.stderr.strip() or result.stdout.strip() or f"swift exited with code {result.returncode}"
+        return False, error
+
+    return True, _parse_due_today_rows(result.stdout)
+
+
+def query_all_due_on_date(
+    list_name: str,
+    target_date,
+    timeout: int = DEFAULT_READ_TIMEOUT,
+) -> tuple[bool, list[dict] | str]:
+    """Get completed and incomplete reminders due on one local date from one list."""
+    if not isinstance(target_date, (date, datetime)):
+        return False, "target_date must be a date or datetime"
+
+    cmd = [
+        "/usr/bin/swift",
+        str(EVENTKIT_DUE_TODAY_SCRIPT),
+        list_name,
+        target_date.strftime("%Y-%m-%d"),
+        "all-due",
+    ]
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except FileNotFoundError:
+        return False, "swift executable not found"
+    except subprocess.TimeoutExpired:
+        return False, "EventKit all-due reminder query timed out"
 
     if result.returncode != 0:
         error = result.stderr.strip() or result.stdout.strip() or f"swift exited with code {result.returncode}"

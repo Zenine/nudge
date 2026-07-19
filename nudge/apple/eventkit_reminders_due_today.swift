@@ -20,8 +20,8 @@ let requestedDateText = args.dropFirst().first
 let requestedMode = args.dropFirst(2).first ?? "incomplete"
 let store = EKEventStore()
 
-if !listOnly && requestedMode != "incomplete" && requestedMode != "completed" {
-    fail("Invalid mode: \(requestedMode); expected incomplete or completed", code: 4)
+if !listOnly && requestedMode != "incomplete" && requestedMode != "completed" && requestedMode != "all-due" {
+    fail("Invalid mode: \(requestedMode); expected incomplete, completed, or all-due", code: 4)
 }
 
 func hasReadableReminderAccess(_ status: EKAuthorizationStatus) -> Bool {
@@ -119,6 +119,8 @@ if requestedMode == "completed" {
         ending: end,
         calendars: calendars
     )
+} else if requestedMode == "all-due" {
+    predicate = store.predicateForReminders(in: calendars)
 } else {
     predicate = store.predicateForIncompleteReminders(
         withDueDateStarting: start,
@@ -149,34 +151,28 @@ store.fetchReminders(matching: predicate) { reminders in
     for reminder in reminders ?? [] {
         let title = sanitize(reminder.title ?? "")
         let list = sanitize(reminder.calendar.title)
-        let dueTime: String
-        if let dueDate = reminder.dueDateComponents?.date {
-            dueTime = formatter.string(from: dueDate)
-            let dueAt = dueFormatter.string(from: dueDate)
-            if requestedMode == "completed" {
-                let completedAt: String
-                if let completionDate = reminder.completionDate {
-                    completedAt = completedFormatter.string(from: completionDate)
-                } else {
-                    completedAt = ""
-                }
-                rows.append("\(title)\t\(dueTime)\t\(list)\t\(completedAt)\t\(dueAt)")
-            } else {
-                rows.append("\(title)\t\(dueTime)\t\(list)\t\t\(dueAt)")
+        let dueDate = reminder.dueDateComponents?.date
+        if requestedMode == "all-due" {
+            guard let dueDate else {
+                continue
             }
+            if dueDate < start || dueDate > end {
+                continue
+            }
+        }
+
+        let dueTime = dueDate.map { formatter.string(from: $0) } ?? ""
+        let dueAt = dueDate.map { dueFormatter.string(from: $0) } ?? ""
+        if requestedMode == "completed" || requestedMode == "all-due" {
+            let completedAt: String
+            if let completionDate = reminder.completionDate {
+                completedAt = completedFormatter.string(from: completionDate)
+            } else {
+                completedAt = ""
+            }
+            rows.append("\(title)\t\(dueTime)\t\(list)\t\(completedAt)\t\(dueAt)")
         } else {
-            dueTime = ""
-            if requestedMode == "completed" {
-                let completedAt: String
-                if let completionDate = reminder.completionDate {
-                    completedAt = completedFormatter.string(from: completionDate)
-                } else {
-                    completedAt = ""
-                }
-                rows.append("\(title)\t\(dueTime)\t\(list)\t\(completedAt)\t")
-            } else {
-                rows.append("\(title)\t\(dueTime)\t\(list)\t\t")
-            }
+            rows.append("\(title)\t\(dueTime)\t\(list)\t\t\(dueAt)")
         }
     }
     semaphore.signal()

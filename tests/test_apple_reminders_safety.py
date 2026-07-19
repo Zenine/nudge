@@ -1,5 +1,9 @@
 """Safety tests for AppleScript reminder mutation fallbacks."""
 
+import subprocess
+from datetime import date
+from types import SimpleNamespace
+
 from nudge.apple import reminders
 
 
@@ -9,6 +13,116 @@ def _disable_eventkit(monkeypatch):
         "_run_eventkit_mutation",
         lambda *args, **kwargs: (False, "EventKit unavailable"),
     )
+
+
+def test_query_all_due_on_date_reads_completed_and_incomplete_reminders(monkeypatch) -> None:
+    calls: list[dict] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append({"cmd": cmd, **kwargs})
+        return SimpleNamespace(
+            returncode=0,
+            stdout=(
+                "Finished task\t09:00\tTasks\t2026-07-18 10:15\t2026-07-18 09:00\n"
+                "Open task\t11:30\tTasks\t\t2026-07-18 11:30\n"
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(reminders.subprocess, "run", fake_run)
+
+    ok, rows = reminders.query_all_due_on_date("Tasks", date(2026, 7, 18))
+
+    assert ok is True
+    assert calls == [
+        {
+            "cmd": [
+                "/usr/bin/swift",
+                str(reminders.EVENTKIT_DUE_TODAY_SCRIPT),
+                "Tasks",
+                "2026-07-18",
+                "all-due",
+            ],
+            "capture_output": True,
+            "text": True,
+            "timeout": reminders.DEFAULT_READ_TIMEOUT,
+        }
+    ]
+    assert rows == [
+        {
+            "name": "Finished task",
+            "due_time": "09:00",
+            "list": "Tasks",
+            "completed_at": "2026-07-18 10:15",
+            "due_at": "2026-07-18 09:00",
+        },
+        {
+            "name": "Open task",
+            "due_time": "11:30",
+            "list": "Tasks",
+            "due_at": "2026-07-18 11:30",
+        },
+    ]
+
+
+def test_query_all_due_on_date_rejects_non_date_values() -> None:
+    class DateLike:
+        def strftime(self, _format: str) -> str:
+            return "2026-07-18"
+
+    assert reminders.query_all_due_on_date("Tasks", DateLike()) == (
+        False,
+        "target_date must be a date or datetime",
+    )
+
+
+def test_query_all_due_on_date_returns_stable_process_errors(monkeypatch) -> None:
+    def missing_swift(*_args, **_kwargs):
+        raise FileNotFoundError
+
+    monkeypatch.setattr(reminders.subprocess, "run", missing_swift)
+    assert reminders.query_all_due_on_date("Tasks", date(2026, 7, 18)) == (
+        False,
+        "swift executable not found",
+    )
+
+    def timed_out(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd="swift", timeout=7)
+
+    monkeypatch.setattr(reminders.subprocess, "run", timed_out)
+    assert reminders.query_all_due_on_date("Tasks", date(2026, 7, 18), timeout=7) == (
+        False,
+        "EventKit all-due reminder query timed out",
+    )
+
+    monkeypatch.setattr(
+        reminders.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=2, stdout="", stderr="access denied\n"),
+    )
+    assert reminders.query_all_due_on_date("Tasks", date(2026, 7, 18)) == (
+        False,
+        "access denied",
+    )
+
+
+def test_eventkit_all_due_mode_is_read_only_and_preserves_existing_predicates() -> None:
+    source = reminders.EVENTKIT_DUE_TODAY_SCRIPT.read_text()
+
+    assert 'requestedMode != "all-due"' in source
+    assert "expected incomplete, completed, or all-due" in source
+    assert 'requestedMode == "completed"' in source
+    assert "predicateForCompletedReminders(" in source
+    assert 'requestedMode == "all-due"' in source
+    assert "predicateForReminders(in: calendars)" in source
+    assert "predicateForIncompleteReminders(" in source
+    assert "guard let dueDate else" in source
+    assert "dueDate < start || dueDate > end" in source
+    assert "reminder.dueDateComponents?.date" in source
+    assert "reminder.completionDate" in source
+    assert "eventkit_reminders_mutate" not in source
+    assert "store.save(" not in source
+    assert "store.remove(" not in source
 
 
 def test_complete_fallback_does_not_bulk_complete_every_same_title(monkeypatch) -> None:
