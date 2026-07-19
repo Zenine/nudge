@@ -42,22 +42,26 @@ def reminders_command():
 
 @reminders_command.command("sync-completed")
 @click.option("--date", "date_text", default=None, help="Sync one local date, YYYY-MM-DD; defaults to today")
-@click.option("--list", "list_name", default=None, help="Reminder list name; defaults to config")
+@click.option(
+    "--list",
+    "list_names",
+    multiple=True,
+    help="Reminder list name; repeat for multiple lists; defaults to config",
+)
 @click.option("--apply", "apply_changes", is_flag=True, help="Write completed candidates back to SQLite; silence later sleep reminders")
 @click.option("--config", "-c", "config_path", default=None, help="Config file path")
 @click.option("--json", "json_output", is_flag=True, help="Print stable JSON for scripts")
-def sync_completed_command(date_text, list_name, apply_changes, config_path, json_output):
-    """Mark Nudge reminders done when Apple Reminders no longer lists them as incomplete."""
+def sync_completed_command(date_text, list_names, apply_changes, config_path, json_output):
+    """Mark Nudge reminders done after an explicit Apple completion match."""
     try:
         target_date = _parse_date(date_text)
         config = load_config(config_path)
         if config_path:
             configure_state(config)
-        defaults = get_defaults(config)
-        reminder_list = list_name or defaults.get("default_reminder_list", DEFAULT_REMINDER_LIST)
-        payload = sync_completed_for_date(
+        reminder_lists = resolve_sync_lists(list_names, config)
+        payload = sync_completed_for_lists(
             target_date=target_date,
-            reminder_list=reminder_list,
+            reminder_lists=reminder_lists,
             apply_changes=apply_changes,
         )
         _emit(payload, json_output)
@@ -66,12 +70,77 @@ def sync_completed_command(date_text, list_name, apply_changes, config_path, jso
     except ValueError as exc:
         payload = _error_payload(
             _parse_date(None),
-            list_name or "",
+            ",".join(list_names),
             str(exc),
             dry_run=not apply_changes,
         )
         _emit(payload, json_output)
         raise click.exceptions.Exit(1)
+
+
+def resolve_sync_lists(explicit_names, config: dict) -> list[str]:
+    """Resolve an ordered, duplicate-free set of lists for completion sync."""
+    configured = (config.get("reminders") or {}).get("sync_lists")
+    if explicit_names:
+        raw_names = list(explicit_names)
+    elif configured is not None:
+        if not isinstance(configured, list):
+            raise ValueError("[reminders].sync_lists must be an array of list names")
+        raw_names = configured
+    else:
+        defaults = get_defaults(config)
+        raw_names = [defaults.get("default_reminder_list", DEFAULT_REMINDER_LIST)]
+
+    result: list[str] = []
+    for raw_name in raw_names:
+        if not isinstance(raw_name, str) or not raw_name.strip():
+            raise ValueError("reminder list names must be non-empty strings")
+        name = raw_name.strip()
+        if name not in result:
+            result.append(name)
+    if not result:
+        raise ValueError("at least one reminder list is required")
+    return result
+
+
+def sync_completed_for_lists(
+    *,
+    target_date: date,
+    reminder_lists: list[str],
+    apply_changes: bool,
+) -> dict:
+    """Sync one due date across multiple Apple Reminders lists safely."""
+    results = [
+        sync_completed_for_date(
+            target_date=target_date,
+            reminder_list=reminder_list,
+            apply_changes=apply_changes,
+        )
+        for reminder_list in reminder_lists
+    ]
+
+    def annotated_items(key: str) -> list[dict]:
+        items: list[dict] = []
+        for result in results:
+            for item in result.get(key) or []:
+                items.append({**item, "list": item.get("list") or result.get("list")})
+        return items
+
+    return versioned_payload({
+        "ok": all(result.get("ok") for result in results),
+        "dry_run": not apply_changes,
+        "date": target_date.isoformat(),
+        "list": reminder_lists[0] if len(reminder_lists) == 1 else "",
+        "lists": reminder_lists,
+        "checked": sum(int(result.get("checked") or 0) for result in results),
+        "open": sum(int(result.get("open") or 0) for result in results),
+        "candidates": annotated_items("candidates"),
+        "updated": sum(int(result.get("updated") or 0) for result in results),
+        "auto_skipped_after_sleep": annotated_items("auto_skipped_after_sleep"),
+        "warnings": annotated_items("warnings"),
+        "errors": annotated_items("errors"),
+        "results": results,
+    })
 
 
 @reminders_command.command("backfill-ids")
@@ -141,7 +210,12 @@ def backfill_ids(
     apply_changes: bool,
 ) -> dict:
     """Backfill stable external ids for legacy reminder actions."""
-    actions = _legacy_reminder_actions(from_date=from_date, to_date=to_date, limit=limit)
+    actions = _legacy_reminder_actions(
+        from_date=from_date,
+        to_date=to_date,
+        limit=limit,
+        reminder_list=reminder_list,
+    )
     candidates: list[dict] = []
     missing: list[dict] = []
     ambiguous: list[dict] = []
@@ -257,6 +331,7 @@ def _legacy_reminder_actions(
     from_date: date | None,
     to_date: date | None,
     limit: int | None,
+    reminder_list: str,
 ) -> list[dict]:
     since = f"{from_date.isoformat()} 00:00" if from_date else None
     until = f"{to_date.isoformat()} 00:00" if to_date else None
@@ -267,6 +342,7 @@ def _legacy_reminder_actions(
         and not action.get("external_id")
         and action.get("summary")
         and action.get("scheduled_at")
+        and _belongs_to_reminder_list(action, reminder_list)
     ]
     actions.sort(key=lambda item: str(item.get("scheduled_at") or ""))
     if limit is not None:
@@ -320,7 +396,7 @@ def sync_completed_for_date(
     through Click, so this helper keeps the mutation and matching behavior in
     one place.
     """
-    actions = _reminder_actions_for_date(target_date)
+    actions = _reminder_actions_for_date(target_date, reminder_list=reminder_list)
     ok, incomplete = query_due_on_date(
         list_name=reminder_list,
         target_date=target_date,
@@ -417,7 +493,11 @@ def _backfill_completed_sleep_cascade(
         since=start.strftime("%Y-%m-%d %H:%M"),
         until=end.strftime("%Y-%m-%d %H:%M"),
     ):
-        if action.get("type") != "reminder" or action.get("status") != "done":
+        if (
+            action.get("type") != "reminder"
+            or action.get("status") != "done"
+            or not _belongs_to_reminder_list(action, reminder_list)
+        ):
             continue
         skipped = skip_later_sleep_reminders_after_completion(action["id"]) or []
         new_skipped = [
@@ -442,7 +522,7 @@ def _parse_date(value: str | None) -> date:
         raise ValueError(f"date must use YYYY-MM-DD: {value}") from exc
 
 
-def _reminder_actions_for_date(target_date: date) -> list[dict]:
+def _reminder_actions_for_date(target_date: date, *, reminder_list: str) -> list[dict]:
     start = datetime.combine(target_date, datetime.min.time())
     end = start + timedelta(days=1)
     actions = get_actions(
@@ -455,7 +535,14 @@ def _reminder_actions_for_date(target_date: date) -> list[dict]:
         if action.get("type") == "reminder"
         and action.get("status") in ("created", "pending")
         and str(action.get("scheduled_at") or "").startswith(target_date.isoformat())
+        and _belongs_to_reminder_list(action, reminder_list)
     ]
+
+
+def _belongs_to_reminder_list(action: dict, reminder_list: str) -> bool:
+    """Keep legacy unassigned actions visible while honoring known ownership."""
+    assigned = action.get("reminder_list")
+    return not assigned or assigned == reminder_list
 
 
 def _completed_candidates(
@@ -474,6 +561,8 @@ def _completed_candidates(
         if action.get("id") in open_action_ids:
             continue
         completed_match = _matching_completed(action, completed)
+        if completed_match is None:
+            continue
         candidates.append(_candidate_payload(action, completed_match))
     return candidates, len(open_action_ids)
 
@@ -564,7 +653,7 @@ def _completion_feedback(action: dict, candidate: dict, reminder_list: str, targ
     if completed_at:
         note = "Apple Reminders completionDate 已同步回 Nudge。"
     else:
-        note = "Apple Reminders 未完成列表中已不存在该 Nudge reminder，按兼容候选写回。"
+        note = "Apple Reminders 已返回明确完成记录，但未提供 completionDate。"
     extra = {
         "reminder_list": reminder_list,
         "sync_date": target_date.isoformat(),
@@ -589,8 +678,10 @@ def _complete_auto_skipped_sleep_reminders(actions: list[dict], reminder_list: s
     for action in actions:
         summary = str(action.get("summary") or "")
         scheduled_at = str(action.get("scheduled_at") or "")
-        ok, message = _complete_reminder_by_possible_titles(summary, scheduled_at, reminder_list)
+        target_list = str(action.get("reminder_list") or reminder_list)
+        ok, message = _complete_reminder_by_possible_titles(summary, scheduled_at, target_list)
         item = _candidate_payload(action)
+        item["list"] = target_list
         item["apple_completed"] = ok
         item["apple_message"] = message
         results.append(item)

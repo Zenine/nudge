@@ -117,3 +117,5 @@ default = "Tasks"
 habits = "Habits"
 workout = "Fitness Tasks"
 family = "Family Tasks"
+# completion sync 默认读取的列表；命令行可重复传入 --list 覆盖。
+sync_lists = ["Tasks", "Habits", "Fitness Tasks", "Family Tasks"]

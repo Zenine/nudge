@@ -1,5 +1,12 @@
 # Nudge TODO
 
+> 最后更新：2026-07-19。已完成且已验证的多列表同步、测试状态隔离和结构化反馈访谈记录在 `CHANGELOG.md`；当前行动以“当前增量”为准，下方历史审查区保留既有审查脉络。
+
+## 当前增量
+
+- [ ] 为升级前 `reminder_list IS NULL` 的旧 reminder action 设计只读候选与确认后 backfill 流程；在此之前，多列表完成同步只允许“明确 Apple 完成记录”作为写回证据，不根据列表中消失推断完成。
+- [ ] 在真实 Dogfood 稳定后设计非 TTY 的结构化反馈客户端协议，供未来 IM / iOS 入口复用 `nudge.feedback.interview.v1`；首版不得扩大 Apple 读取或写入权限。
+
 ## 代码审查发现(2026-06-20:安全/性能/功能)
 
 > 来源:对 `nudge` 仓库的只读代码审查(本地优先 macOS CLI,Python 3.12+)。

@@ -18,6 +18,7 @@
 | `nudge do` / `nudge "..."` | 将自然语言解析为日历/提醒/备忘录/闹钟动作 | 是，除非 `--dry-run` | 通常会记录动作状态 | 真实写入需要对应 Apple App 权限；解析需要 LLM 配置 |
 | `nudge log` | 标记动作 done/skipped/partial/deferred/blocked 或解析反馈 | 可能会同步完成 Apple Reminders | 是，除非 `--dry-run` | 同步提醒完成时需要 Reminders 权限 |
 | `nudge check-in` | `log` 别名 | 同 `log` | 同 `log` | 同 `log` |
+| `nudge feedback` | 查看待反馈项、批量应用 JSON，或在 TTY 中完成结构化反馈访谈 | 否 | `apply` 和 `interview` 写 SQLite；访谈在最终统一确认后原子写入 | `interview` 的可选 GPT 追问需要 LLM 配置；不调用 Apple adapter |
 | `nudge skills` | 管理、验证、预览、启动和适配 Skill | `start`、`adapt --apply` 会写 Apple；dry-run/validate/show/list 不写 | `start`、`adapt --apply`、create/update/delete 会写本地状态或本地 skill 存储 | Apple 写入路径需要 Calendar/Reminders 权限 |
 | `nudge trainer` | 健身计划入口，默认走 strength Skill runtime | `plan` 真实执行会写 Apple；`--dry-run` 不写 | 计划与完成记录写 SQLite | Apple 写入需要权限；旧 LLM 模式需要 LLM 配置 |
 | `nudge doctor` | 检查配置、LLM key、Apple App 访问 | 否 | 否 | 在 macOS 上检查 Calendar/Reminders/Mail/Notes/Clock 访问 |
@@ -84,6 +85,26 @@ nudge log parse "今天训练完成，强度 8"
 ```bash
 nudge check-in partial --reason low_energy --next-action reduce
 ```
+
+### `nudge feedback`
+
+用途：查看当天待反馈项、应用结构化 JSON，或在交互式终端中一次处理一批逾期反馈。
+
+```bash
+nudge feedback today
+nudge feedback apply --dry-run --file feedback.json
+nudge feedback interview
+nudge feedback interview --scope all-overdue --limit 20
+```
+
+要点：
+
+- `interview` 默认选择本周已逾期超过 24 小时的 pending/created action，单批默认 20 条、最多 50 条。
+- 固定核心题覆盖结果、原因、下一步与文字说明；每条可有至多 3 个 GPT 可选追问。调用超时、失败或响应不合法时自动降级为核心题。
+- 高风险分类同时检查标题与 `reminder_list` 等本地上下文；家庭列表、家庭课程、付款、证件和出行事项不预选，并在发送前显示 provider、model 和字段，用户可整组关闭 GPT 追问。
+- 所有答案先保存在内存；最终确认页按风险组显示原时间、核心答案、GPT 问答、附加文字、Reminder 提示和睡眠派生原因，统一确认后才以单个 SQLite 事务写入。取消、冲突或写入错误不会留下半批状态。
+- 10 秒 GPT 调用同时关闭 Nudge 外层和 provider SDK 内建重试；失败后立即降级为核心题。
+- 命令只写 Nudge SQLite，不直接调用 Apple Calendar、Reminders 或 Notes adapter。
 
 ### `nudge skills`
 
@@ -238,16 +259,19 @@ nudge schedule "深度工作" --duration 120 --book --slot 1 --title "Deep Work"
 
 子命令：
 
-- `reminders sync-completed`：当 Apple Reminders 不再列出某条提醒为未完成时，将对应 Nudge action 标记完成。`--apply` 写 SQLite，并可能静默后续睡眠提醒。
+- `reminders sync-completed`：同步一个或多个 Apple Reminders 列表。新 action 会记录目标列表，并在同步和 ID backfill 前先按已知列表归属过滤；旧 action 没有列表字段时仍会进入明确匹配流程以保持兼容。所有 action 都必须在当前列表找到明确完成匹配后才会写回，不能仅凭“该列表里不存在”推断完成，因此移动列表不会造成误完成。睡眠派生完成会使用每条 action 自己记录的目标列表。`--apply` 写 SQLite，并可能静默后续睡眠提醒。
 - `reminders backfill-ids`：为旧 Apple Reminders 附加稳定 Nudge ID。`--apply` 会写 Apple Reminders 和 SQLite。
 
 示例：
 
 ```bash
 nudge reminders sync-completed --date 2026-07-04 --json
+nudge reminders sync-completed --list Tasks --list Health --list GPT --json
 nudge reminders sync-completed --apply
 nudge reminders backfill-ids --from 2026-07-01 --to 2026-07-05 --apply
 ```
+
+未传 `--list` 时，优先读取 `[reminders].sync_lists`；未配置该数组时回退到 `[general].default_reminder_list`。`daily sync` 使用同一规则。
 
 ### `nudge agent`
 

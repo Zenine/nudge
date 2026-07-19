@@ -55,6 +55,25 @@ _HEALTH_DAILY_FILL_FIELDS = {
     "vo2max",
 }
 
+_FEEDBACK_INTERVIEW_TARGET_STATUSES = {
+    "created",
+    "pending",
+    "done",
+    "partial",
+    "skipped",
+    "deferred",
+    "blocked",
+    "skipped_after_sleep",
+}
+
+
+class FeedbackInterviewConflictError(RuntimeError):
+    """Raised when one or more interview action snapshots are stale."""
+
+    def __init__(self, action_ids: list[str]):
+        self.action_ids = sorted(set(action_ids))
+        super().__init__(f"feedback interview action conflict: {', '.join(self.action_ids)}")
+
 
 def configure_state(config: dict | None = None) -> Path:
     """Re-resolve process state paths from an already-loaded config.
@@ -142,6 +161,7 @@ def _init_tables(conn: sqlite3.Connection):
             completed_at    TEXT,
             status          TEXT DEFAULT 'pending',
             external_id     TEXT,
+            reminder_list   TEXT,
             feedback        TEXT,
             created_at      TEXT DEFAULT (datetime('now', 'localtime'))
         );
@@ -280,6 +300,11 @@ def _init_tables(conn: sqlite3.Connection):
             updated_at  TEXT DEFAULT (datetime('now', 'localtime'))
         );
     """)
+    action_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info('actions')").fetchall()
+    }
+    if "reminder_list" not in action_columns:
+        conn.execute("ALTER TABLE actions ADD COLUMN reminder_list TEXT")
     conn.commit()
 
 
@@ -460,14 +485,25 @@ def log_action(
     external_id: str | None = None,
     plan_id: str | None = None,
     status: str = "created",
+    reminder_list: str | None = None,
 ) -> str:
     """Log an action. Returns the action id."""
     action_id = uuid4().hex[:12]
     with _db() as conn:
         conn.execute(
-            "INSERT INTO actions (id, plan_id, type, summary, scheduled_at, external_id, status) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (action_id, plan_id, action_type, summary, scheduled_at, external_id, status),
+            "INSERT INTO actions "
+            "(id, plan_id, type, summary, scheduled_at, external_id, status, reminder_list) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                action_id,
+                plan_id,
+                action_type,
+                summary,
+                scheduled_at,
+                external_id,
+                status,
+                reminder_list,
+            ),
         )
     return action_id
 
@@ -587,6 +623,100 @@ def update_action_status(action_id: str, status: str, feedback: dict | None = No
             "UPDATE actions SET status = ?, feedback = ? WHERE id = ?",
             (status, feedback_json, action_id),
         )
+
+
+def apply_feedback_interview_batch(
+    updates: list[dict],
+    *,
+    snapshots: dict[str, dict],
+) -> list[str]:
+    """Apply a validated feedback interview batch in one SQLite transaction."""
+    if not isinstance(updates, list) or not updates:
+        raise ValueError("feedback interview updates must be a non-empty list")
+    if not isinstance(snapshots, dict):
+        raise ValueError("feedback interview snapshots must be an object")
+
+    prepared = []
+    seen_ids = set()
+    for index, update in enumerate(updates, start=1):
+        if not isinstance(update, dict):
+            raise ValueError(f"updates[{index}] must be an object")
+        action_id = str(update.get("id") or "").strip()
+        status = str(update.get("status") or "").strip()
+        feedback = update.get("feedback")
+        if not action_id or action_id in seen_ids:
+            raise ValueError(f"updates[{index}].id is missing or duplicated")
+        if status not in _FEEDBACK_INTERVIEW_TARGET_STATUSES:
+            raise ValueError(f"updates[{index}].status is unsupported: {status}")
+        if not isinstance(feedback, dict):
+            raise ValueError(f"updates[{index}].feedback must be an object")
+        snapshot = snapshots.get(action_id)
+        if not isinstance(snapshot, dict):
+            raise ValueError(f"missing snapshot for action: {action_id}")
+        seen_ids.add(action_id)
+        try:
+            feedback_json = json.dumps(feedback, ensure_ascii=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"updates[{index}].feedback must be JSON serializable") from exc
+        prepared.append({
+            "id": action_id,
+            "status": status,
+            "completed_at": update.get("completed_at"),
+            "feedback": feedback_json,
+            "snapshot_status": snapshot.get("status"),
+            "snapshot_completed_at": snapshot.get("completed_at"),
+            "snapshot_feedback": snapshot.get("feedback"),
+        })
+
+    conn = _get_conn()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        placeholders = ",".join("?" for _ in prepared)
+        rows = conn.execute(
+            f"SELECT id, status, completed_at, feedback FROM actions WHERE id IN ({placeholders})",
+            tuple(item["id"] for item in prepared),
+        ).fetchall()
+        current = {row["id"]: dict(row) for row in rows}
+        conflicts = []
+        for item in prepared:
+            row = current.get(item["id"])
+            if row is None or any(
+                row[field] != item[f"snapshot_{field}"]
+                for field in ("status", "completed_at", "feedback")
+            ):
+                conflicts.append(item["id"])
+        if conflicts:
+            raise FeedbackInterviewConflictError(conflicts)
+
+        for item in prepared:
+            cursor = conn.execute(
+                """
+                UPDATE actions
+                SET status = ?, completed_at = ?, feedback = ?
+                WHERE id = ?
+                  AND status IS ?
+                  AND completed_at IS ?
+                  AND feedback IS ?
+                """,
+                (
+                    item["status"],
+                    item["completed_at"],
+                    item["feedback"],
+                    item["id"],
+                    item["snapshot_status"],
+                    item["snapshot_completed_at"],
+                    item["snapshot_feedback"],
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise FeedbackInterviewConflictError([item["id"]])
+        conn.commit()
+        return [item["id"] for item in prepared]
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def update_action_external_id(action_id: str, external_id: str) -> None:

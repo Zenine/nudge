@@ -4,6 +4,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+VERIFY_STATE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/nudge-verify.XXXXXX")"
+cleanup_verify_state() {
+  if [[ -n "${VERIFY_STATE_DIR:-}" && -d "$VERIFY_STATE_DIR" ]]; then
+    rm -rf -- "$VERIFY_STATE_DIR"
+  fi
+}
+trap cleanup_verify_state EXIT
+export NUDGE_STATE_DIR="$VERIFY_STATE_DIR"
+
 PYTHON_BIN="${NUDGE_PYTHON:-}"
 if [[ -z "$PYTHON_BIN" && -x "$ROOT/.venv/bin/python" ]]; then
   PYTHON_BIN="$ROOT/.venv/bin/python"
@@ -45,6 +54,7 @@ run bin/nudge doctor --help >/dev/null
 run bin/nudge daemon --help >/dev/null
 run bin/nudge docs --help >/dev/null
 run bin/nudge docs audit --help >/dev/null
+run bin/nudge feedback interview --help >/dev/null
 run bin/nudge mcp --help >/dev/null
 
 echo

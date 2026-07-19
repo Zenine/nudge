@@ -19,8 +19,16 @@ class LLMProvider:
         self.api_key = api_key
         self.base_url = base_url
 
-    def call(self, system: str, user_message: str, model: str,
-             max_tokens: int = 1024, temperature: float = 0) -> str:
+    def call(
+        self,
+        system: str,
+        user_message: str,
+        model: str,
+        max_tokens: int = 1024,
+        temperature: float = 0,
+        timeout: float | None = None,
+        max_retries: int | None = None,
+    ) -> str:
         """Make an LLM call. Returns the response text."""
         raise NotImplementedError
 
@@ -33,9 +41,23 @@ class LLMProvider:
 class AnthropicProvider(LLMProvider, provider_name="anthropic"):
     """Anthropic Claude API."""
 
-    def call(self, system, user_message, model, max_tokens=1024, temperature=0):
+    def call(
+        self,
+        system,
+        user_message,
+        model,
+        max_tokens=1024,
+        temperature=0,
+        timeout=None,
+        max_retries=None,
+    ):
         import anthropic
-        client = anthropic.Anthropic(api_key=self.api_key)
+        client_kwargs = {"api_key": self.api_key}
+        if timeout is not None:
+            client_kwargs["timeout"] = timeout
+        if max_retries is not None:
+            client_kwargs["max_retries"] = max_retries
+        client = anthropic.Anthropic(**client_kwargs)
         try:
             response = client.messages.create(
                 model=model,
@@ -60,9 +82,23 @@ class AnthropicProvider(LLMProvider, provider_name="anthropic"):
 class OpenAICompatibleProvider(LLMProvider, provider_name="openai"):
     """OpenAI and any OpenAI-compatible API (DeepSeek, Moonshot, Together, etc.)."""
 
-    def call(self, system, user_message, model, max_tokens=1024, temperature=0):
+    def call(
+        self,
+        system,
+        user_message,
+        model,
+        max_tokens=1024,
+        temperature=0,
+        timeout=None,
+        max_retries=None,
+    ):
         from openai import OpenAI, APIConnectionError, AuthenticationError, RateLimitError
-        client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        client_kwargs = {"api_key": self.api_key, "base_url": self.base_url}
+        if timeout is not None:
+            client_kwargs["timeout"] = timeout
+        if max_retries is not None:
+            client_kwargs["max_retries"] = max_retries
+        client = OpenAI(**client_kwargs)
         try:
             response = client.chat.completions.create(
                 model=model,
@@ -93,9 +129,23 @@ class OllamaProvider(LLMProvider, provider_name="ollama"):
     def __init__(self, api_key=None, base_url=None):
         super().__init__(api_key=api_key, base_url=base_url or "http://localhost:11434/v1")
 
-    def call(self, system, user_message, model, max_tokens=1024, temperature=0):
+    def call(
+        self,
+        system,
+        user_message,
+        model,
+        max_tokens=1024,
+        temperature=0,
+        timeout=None,
+        max_retries=None,
+    ):
         from openai import OpenAI, APIConnectionError
-        client = OpenAI(api_key="ollama", base_url=self.base_url)
+        client_kwargs = {"api_key": "ollama", "base_url": self.base_url}
+        if timeout is not None:
+            client_kwargs["timeout"] = timeout
+        if max_retries is not None:
+            client_kwargs["max_retries"] = max_retries
+        client = OpenAI(**client_kwargs)
         try:
             response = client.chat.completions.create(
                 model=model,

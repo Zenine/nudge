@@ -215,15 +215,24 @@ def configure(llm_config: dict | None = None):
     _provider = None  # reset, will be recreated on next call
 
 
-def _call(system: str, user_message: str, task: str = "default",
-          retries: int = 1) -> str:
+def _call(
+    system: str,
+    user_message: str,
+    task: str = "default",
+    retries: int = 1,
+    timeout: float | None = None,
+) -> str:
     """Make an LLM call with retry logic."""
     provider = _get_provider()
     model = get_model_for_task(task, _llm_config)
 
     for attempt in range(retries + 1):
         try:
-            return provider.call(system, user_message, model=model)
+            kwargs = {"model": model}
+            if timeout is not None:
+                kwargs["timeout"] = timeout
+                kwargs["max_retries"] = 0
+            return provider.call(system, user_message, **kwargs)
         except LLMError:
             if attempt < retries:
                 import time
@@ -263,9 +272,16 @@ def _parse_json(raw: str) -> list | dict:
         raise exc
 
 
-def call_llm(system: str, user_message: str, task: str = "default") -> str:
+def call_llm(
+    system: str,
+    user_message: str,
+    task: str = "default",
+    *,
+    timeout: float | None = None,
+    retries: int = 1,
+) -> str:
     """Public interface for making LLM calls."""
-    return _call(system, user_message, task=task)
+    return _call(system, user_message, task=task, timeout=timeout, retries=retries)
 
 
 def parse_json_response(raw: str) -> list | dict:

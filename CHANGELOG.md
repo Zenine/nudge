@@ -2,6 +2,21 @@
 
 本项目遵循“公开 runtime 与私人数据分离”的发布边界。公开变更记录只描述可复用代码、文档、测试和安全边界；不记录个人计划、私有配置、真实健康数据或本机专属路径。
 
+## [Unreleased]
+
+### Changed
+
+- 新增 `nudge feedback interview`：按范围选取逾期 action，以固定核心题和最多 3 个可选 GPT 追问收集结构化反馈；高风险分组不预选且可关闭 GPT，失败自动降级为核心题，最终以单个 SQLite 事务统一写入且不调用 Apple adapter。
+- `reminders sync-completed` 与 `daily sync` 支持重复传入 `--list`，也可从 `[reminders].sync_lists` 读取有序、去重的多列表配置；JSON 输出保留逐列表结果。
+- Reminder action 新增目标列表持久化字段，现有 SQLite 会在初始化时自动补列；旧 action 保持兼容。
+
+### Fixed
+
+- 修复结构化反馈访谈的复核问题：家庭列表及常见付款/出行标题现在保守进入高风险组；10 秒调用显式关闭 provider SDK 内建重试；最终确认页展示完整 GPT 答案与风险/Reminder/睡眠派生上下文；选择题拒绝 0、负数及越界编号；非法最终 payload 使用稳定 schema 错误且整批零写入。
+- 隔离 pytest 与项目验证的可变状态：测试模块导入前以及 `scripts/verify.sh` 全流程都会把 `NUDGE_STATE_DIR` 指向退出后清理的临时目录，避免继承用户主状态路径后写入测试 action、日志或 evaluation。
+- 修复指定某个 Reminders 列表同步或执行 ID backfill 时，已知属于其它列表的本地 action 仍会进入当前列表候选的问题；睡眠派生完成也改为使用每条 action 自己保存的目标列表。升级前未记录列表的旧 action 仍保持兼容，但必须命中明确的 Apple 完成记录；dry-run / apply 均不再把“目标列表中不存在”当作完成证据。
+- 修复 `nudge doctor` 读取 `[reminders].sync_lists` 时把整个数组当作单个列表名而触发 `unhashable type: list` 的问题；doctor 现会展平、去重并同时保留按用途配置的单列表。
+
 ## [0.5.1] - 2026-07-05
 
 ### Added

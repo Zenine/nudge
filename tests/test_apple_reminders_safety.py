@@ -113,6 +113,87 @@ def test_auto_skipped_reminder_completion_passes_scheduled_at_as_due_date(monkey
     assert calls[0]["due_date"] == "2026-07-05 21:30"
 
 
+def test_sync_completed_never_infers_completion_from_list_absence() -> None:
+    from nudge.commands import reminders as reminder_commands
+
+    actions = [
+        {
+            "id": "target-list",
+            "type": "reminder",
+            "summary": "Target task",
+            "scheduled_at": "2026-07-13 09:00",
+            "reminder_list": "Focus",
+        },
+        {
+            "id": "other-list",
+            "type": "reminder",
+            "summary": "Family task",
+            "scheduled_at": "2026-07-13 09:00",
+            "reminder_list": "Family",
+        },
+        {
+            "id": "legacy-unknown-list",
+            "type": "reminder",
+            "summary": "Legacy task",
+            "scheduled_at": "2026-07-13 10:00",
+            "reminder_list": None,
+        },
+    ]
+
+    candidates, open_count = reminder_commands._completed_candidates(
+        actions,
+        incomplete=[],
+        completed=[],
+    )
+
+    assert open_count == 0
+    assert candidates == []
+
+
+def test_sync_completed_accepts_positive_match_for_moved_or_legacy_reminder() -> None:
+    from nudge.commands import reminders as reminder_commands
+
+    actions = [
+        {
+            "id": "moved",
+            "type": "reminder",
+            "summary": "Moved task",
+            "scheduled_at": "2026-07-13 09:00",
+            "reminder_list": "Old list",
+        },
+        {
+            "id": "legacy",
+            "type": "reminder",
+            "summary": "Legacy task",
+            "scheduled_at": "2026-07-13 10:00",
+            "reminder_list": None,
+        },
+    ]
+    completed = [
+        {
+            "name": "Moved task",
+            "due_time": "09:00",
+            "due_at": "2026-07-13 09:00",
+            "completed_at": "2026-07-13 09:05",
+        },
+        {
+            "name": "Legacy task",
+            "due_time": "10:00",
+            "due_at": "2026-07-13 10:00",
+            "completed_at": "2026-07-13 10:05",
+        },
+    ]
+
+    candidates, open_count = reminder_commands._completed_candidates(
+        actions,
+        incomplete=[],
+        completed=completed,
+    )
+
+    assert open_count == 0
+    assert [item["id"] for item in candidates] == ["moved", "legacy"]
+
+
 def test_complete_falls_back_to_due_date_limited_applescript_when_eventkit_fails(monkeypatch) -> None:
     monkeypatch.setattr(
         reminders,

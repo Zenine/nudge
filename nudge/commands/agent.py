@@ -732,6 +732,7 @@ def _apply_normalized_request(
                 summary=_summary(executable),
                 scheduled_at=_scheduled_at(executable),
                 external_id=executable.get("_external_id"),
+                reminder_list=executable.get("_reminder_list"),
             )
         else:
             statuses[index] = "failed"

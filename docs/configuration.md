@@ -192,11 +192,14 @@ default = "Tasks"
 habits = "Habits"
 workout = "Fitness Tasks"
 family = "Family Tasks"
+sync_lists = ["Tasks", "Habits", "Fitness Tasks", "Family Tasks"]
 ```
 
 - key 是 Nudge 内部用途名，value 是 Apple Reminders 里的列表名。
 - `[general].default_reminder_list` 仍是缺省写入列表。
 - 已支持用途映射的命令会使用这里的列表；未支持的路径会回退到默认列表。
+- `sync_lists` 是 `reminders sync-completed` 与 `daily sync` 默认读取的列表集合；命令行重复传入 `--list` 时会覆盖该集合并按给定顺序去重。
+- 新建 reminder action 会把实际目标列表保存到 SQLite，后续同步和 ID backfill 会先按该归属过滤；升级前没有列表字段的旧 action 保持兼容，仍需命中 Apple 的明确完成记录才会写回。
 
 ## 最小安全配置
 

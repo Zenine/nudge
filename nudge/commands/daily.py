@@ -9,13 +9,13 @@ from typing import Iterable
 
 import click
 
-from nudge.commands.reminders import sync_completed_for_date
-from nudge.config import DEFAULT_REMINDER_LIST, get_defaults, load_config
+from nudge.commands.reminders import resolve_sync_lists, sync_completed_for_date
+from nudge.config import load_config
 from nudge.docs_audit import audit_docs
 from nudge.failures import build_failure_visibility_report
 from nudge.health import apply_health_import, parse_apple_health_export
 from nudge.json_contract import versioned_payload
-from nudge.state import get_actions, log_action
+from nudge.state import configure_state, get_actions, log_action
 
 
 DEFAULT_HEALTH_EXPORT_DIR = (
@@ -47,7 +47,12 @@ def daily_command():
     type=click.IntRange(1, 60),
     help="How far back to look for pending reminder gaps and Health import data",
 )
-@click.option("--list", "list_name", default=None, help="Reminder list name; defaults to config")
+@click.option(
+    "--list",
+    "list_names",
+    multiple=True,
+    help="Reminder list name; repeat for multiple lists; defaults to config",
+)
 @click.option("--health", "health_path", type=click.Path(exists=True, dir_okay=False), default=None, help="Health export JSON/ZIP path")
 @click.option("--health-from", default=None, help="Import Health dates from YYYY-MM-DD, inclusive")
 @click.option("--health-to", default=None, help="Import Health dates before YYYY-MM-DD, exclusive")
@@ -66,7 +71,7 @@ def sync_command(
     date_text: str | None,
     date_from: str | None,
     lookback_days: int,
-    list_name: str | None,
+    list_names: tuple[str, ...],
     health_path: str | None,
     health_from: str | None,
     health_to: str | None,
@@ -84,21 +89,29 @@ def sync_command(
         health_end = _parse_date(health_to) if health_to else target_date + timedelta(days=1)
         if health_end <= health_start:
             raise ValueError("--health-to must be later than --health-from")
-        reminder_list = _reminder_list(list_name, config_path)
+        try:
+            config = load_config(config_path)
+        except FileNotFoundError:
+            config = {}
+        if config_path:
+            configure_state(config)
+        reminder_lists = resolve_sync_lists(list_names, config)
 
         reminder_dates = _reminder_sync_dates(
             target_date=target_date,
             start_date=reminder_start,
             forced_range=bool(date_from),
         )
-        reminder_results = [
-            sync_completed_for_date(
-                target_date=reminder_date,
-                reminder_list=reminder_list,
-                apply_changes=apply_changes,
-            )
-            for reminder_date in reminder_dates
-        ]
+        reminder_results = []
+        for reminder_date in reminder_dates:
+            for reminder_list in reminder_lists:
+                reminder_results.append(
+                    sync_completed_for_date(
+                        target_date=reminder_date,
+                        reminder_list=reminder_list,
+                        apply_changes=apply_changes,
+                    )
+                )
         health_payload = _sync_health(
             health_path=health_path,
             skip_health=skip_health,
@@ -116,7 +129,8 @@ def sync_command(
             "dry_run": not apply_changes,
             "date": target_date.isoformat(),
             "reminders": {
-                "list": reminder_list,
+                "list": reminder_lists[0] if len(reminder_lists) == 1 else "",
+                "lists": reminder_lists,
                 "dates": [item.isoformat() for item in reminder_dates],
                 "results": reminder_results,
             },
@@ -131,7 +145,7 @@ def sync_command(
             "ok": False,
             "dry_run": not apply_changes,
             "date": date_text or date.today().isoformat(),
-            "reminders": {"list": list_name or "", "dates": [], "results": []},
+            "reminders": {"list": "", "lists": list(list_names), "dates": [], "results": []},
             "health": {"ok": False, "skipped": bool(skip_health), "errors": []},
             "remaining_failures": {},
             "human_needed": [],
@@ -159,17 +173,6 @@ def _reminder_start_date(target_date: date, date_from: str | None, lookback_days
     if start > target_date:
         raise ValueError("--from must be on or before --date")
     return start
-
-
-def _reminder_list(list_name: str | None, config_path: str | None) -> str:
-    if list_name:
-        return list_name
-    try:
-        config = load_config(config_path)
-    except FileNotFoundError:
-        return DEFAULT_REMINDER_LIST
-    defaults = get_defaults(config)
-    return defaults.get("default_reminder_list", DEFAULT_REMINDER_LIST)
 
 
 def _reminder_sync_dates(*, target_date: date, start_date: date, forced_range: bool) -> list[date]:

@@ -43,10 +43,11 @@ LLM provider 选择见 [`docs/llm.md`](docs/llm.md)。
 2. `nudge --dry-run "..."` lets you inspect parsing before any Apple write.
 3. `nudge "..."` writes confirmed Calendar / Reminders / Notes / Clock actions.
 4. `nudge log ...` records what actually happened.
-5. `nudge daily sync --json` reconciles Reminders completions, HealthExport data, and documentation audit results.
-6. `nudge review weekly --adapt --dry-run` turns the week into safe adjustment suggestions.
-7. `scripts/bootstrap_launchd.sh` optionally automates morning brief, daily sync, evening brief, and the daemon.
-8. `nudge skills start <skill-id>` runs the skill assessment, personalizes the plan, and writes the first week into Calendar/Reminders; `nudge skills adapt <plan-id> --apply` materializes the next week using your real check-in data.
+5. `nudge feedback interview` closes overdue feedback in one structured TTY session; GPT follow-ups are optional and the final SQLite write is atomic.
+6. `nudge daily sync --json` reconciles Reminders completions, HealthExport data, and documentation audit results.
+7. `nudge review weekly --adapt --dry-run` turns the week into safe adjustment suggestions.
+8. `scripts/bootstrap_launchd.sh` optionally automates morning brief, daily sync, evening brief, and the daemon.
+9. `nudge skills start <skill-id>` runs the skill assessment, personalizes the plan, and writes the first week into Calendar/Reminders; `nudge skills adapt <plan-id> --apply` materializes the next week using your real check-in data.
 
 ## Capability Map
 
@@ -55,7 +56,7 @@ Nudge exposes both a human-friendly CLI and machine-friendly agent/MCP entrypoin
 | Area | Commands | Typical use | Writes |
 | --- | --- | --- | --- |
 | Natural-language actions | `nudge "..."`, `nudge do`, `nudge chat`, `nudge schedule` | Turn a request into Calendar / Reminders / Notes / Clock actions; find and optionally book calendar slots. | Apple apps when not using `--dry-run`; SQLite action log for executed writes |
-| Reminders and completion tracking | `nudge reminders sync-completed`, `nudge reminders backfill-ids`, `nudge log`, `nudge check-in` | Reconcile Reminders completions, backfill external IDs, and record outcomes/metrics. | SQLite; Reminders only for explicit mutation paths |
+| Reminders and completion tracking | `nudge reminders sync-completed`, `nudge reminders backfill-ids`, `nudge log`, `nudge check-in`, `nudge feedback interview` | Reconcile one or more Reminders lists, backfill external IDs, and record outcomes/metrics. Repeat `--list` or configure `[reminders].sync_lists`; use the interview for bounded structured overdue feedback. | SQLite; Reminders only for explicit mutation paths |
 | Health, habits, daily review | `nudge health import/daily`, `nudge habits`, `nudge daily sync`, `nudge review`, `nudge failures`, `nudge dogfood`, `nudge briefing` | Import Apple Health exports, inspect habits/streaks, generate daily/weekly review context, and surface stale or failed actions. | SQLite; notifications only when explicitly requested |
 | Skills and trainer | `nudge skills list/show/validate/dry-run/start/status/adapt/create/update/delete`, `nudge trainer plan/log/status` | Run deterministic skill templates such as `strength-basics-12w`, adapt future weeks from logged metrics, and keep trainer compatibility. | SQLite and Apple apps for `start`/`adapt --apply` / trainer writes; dry-run paths are read-only |
 | Agent / MCP automation | `nudge agent apply/status`, `nudge mcp serve` | Let trusted local automation submit structured action JSON or expose MCP tools. | Apple apps and SQLite after optional local-auth checks; dry-run paths are safe previews |

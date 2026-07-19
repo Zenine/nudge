@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERIFY = ROOT / "scripts" / "verify.sh"
+WORKFLOW = ROOT / ".github" / "workflows" / "verify.yml"
 
 
 def test_verify_script_resolves_python_312_before_running_checks():
@@ -18,6 +19,22 @@ def test_verify_script_resolves_python_312_before_running_checks():
     assert '"$PYTHON_BIN" -m compileall -q nudge' in content
     assert "python3 -m pytest tests/ -q" not in content
     assert "python3 -m compileall -q nudge" not in content
+
+
+def test_verify_script_uses_ephemeral_nudge_state_dir():
+    content = VERIFY.read_text(encoding="utf-8")
+
+    assert 'mktemp -d "${TMPDIR:-/tmp}/nudge-verify.XXXXXX"' in content
+    assert 'export NUDGE_STATE_DIR="$VERIFY_STATE_DIR"' in content
+    assert "trap cleanup_verify_state EXIT" in content
+
+
+def test_ci_workflow_guards_repository_local_runtime_state():
+    content = WORKFLOW.read_text()
+
+    assert "scripts/verify.sh" in content
+    assert "test ! -e .nudge/nudge.db" in content
+    assert "test ! -e nudge.db" in content
 
 
 def test_verify_script_reports_python_version_before_import_errors(tmp_path):

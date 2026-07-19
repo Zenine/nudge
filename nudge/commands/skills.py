@@ -233,6 +233,7 @@ def _materialize_actions(actions, *, plan_id, config, quiet: bool = False) -> tu
                 scheduled_at=_action_scheduled_at(action),
                 external_id=action.get("_external_id"),
                 plan_id=plan_id,
+                reminder_list=action.get("_reminder_list"),
             )
             action["action_id"] = action_id
             created.append(action)

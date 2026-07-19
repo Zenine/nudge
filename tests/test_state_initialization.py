@@ -92,6 +92,64 @@ def test_actions_query_indexes_exist(monkeypatch, tmp_path):
     assert ACTION_INDEXES <= index_names
 
 
+def test_reminder_action_persists_target_list(monkeypatch, tmp_path):
+    import nudge.state as state
+
+    _isolate_state(monkeypatch, tmp_path, state)
+
+    action_id = state.log_action(
+        "reminder",
+        "跨列表同步",
+        scheduled_at="2026-07-18 09:00",
+        reminder_list="Focus",
+    )
+
+    action = next(item for item in state.get_actions() if item["id"] == action_id)
+    assert action["reminder_list"] == "Focus"
+
+
+def test_existing_actions_table_adds_reminder_list_column(monkeypatch, tmp_path):
+    import nudge.state as state
+
+    _isolate_state(monkeypatch, tmp_path, state)
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(state.DB_PATH))
+    try:
+        conn.execute(
+            """
+            CREATE TABLE actions (
+                id TEXT PRIMARY KEY,
+                plan_id TEXT,
+                type TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                scheduled_at TEXT,
+                completed_at TEXT,
+                status TEXT DEFAULT 'pending',
+                external_id TEXT,
+                feedback TEXT,
+                created_at TEXT
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO actions (id, type, summary, status) VALUES (?, ?, ?, ?)",
+            ("legacy", "reminder", "旧提醒", "pending"),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    actions = state.get_actions()
+
+    assert actions[0]["reminder_list"] is None
+    conn = sqlite3.connect(str(state.DB_PATH))
+    try:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info('actions')")}
+    finally:
+        conn.close()
+    assert "reminder_list" in columns
+
+
 def test_legacy_state_json_migration_still_imports_habits(monkeypatch, tmp_path):
     import nudge.state as state
 

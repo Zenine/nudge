@@ -582,6 +582,7 @@ def execute_action(
             remind = None
             if action.get("remind_date"):
                 remind = _parse_datetime(action["remind_date"], "remind date")
+            action["_reminder_list"] = rlist
             result = apple_backends.reminders.create_reminder(
                 name=action["name"],
                 due_date=due,
@@ -757,6 +758,7 @@ def do_command(message, file_path, dry_run, config_path, json_output):
                 summary=_action_summary(action),
                 scheduled_at=_scheduled_at(action),
                 external_id=action.get("_external_id"),
+                reminder_list=action.get("_reminder_list"),
             )
         else:
             failed_indices.append(index)

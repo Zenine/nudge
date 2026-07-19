@@ -3,17 +3,33 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import sys
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import click
 
+from nudge.config import DEFAULT_LLM_CONFIG, load_config
 from nudge.feedback import STATUS_ALLOWED, STATUS_NEXT_ACTIONS, STATUS_REASONS, build_feedback
+from nudge.feedback_interview import (
+    FEEDBACK_INTERVIEW_DEFAULT_LIMIT,
+    FEEDBACK_INTERVIEW_DEFAULT_SCOPE,
+    FEEDBACK_INTERVIEW_PROTOCOL_VERSION,
+    FeedbackQuestionBuildResult,
+    build_gpt_followup_questions,
+    normalize_interview_response,
+    plan_sleep_derived_effects,
+    sanitize_terminal_text,
+    select_feedback_candidates,
+)
 from nudge.json_contract import versioned_payload
+from nudge.llm import get_model_for_task
 from nudge.state import (
+    FeedbackInterviewConflictError,
+    apply_feedback_interview_batch,
     complete_action,
     get_action,
     get_actions,
@@ -23,6 +39,7 @@ from nudge.state import (
 )
 
 _PENDING_STATUSES = {"created", "pending"}
+_INTERVIEW_RESOLUTIONS = ("done", "partial", "skipped", "deferred", "blocked", "unconfirmed")
 
 
 @dataclass(frozen=True)
@@ -68,6 +85,307 @@ def today_command(json_output: bool):
         click.echo(f"  done: {item['quick_commands']['done']}")
         click.echo(f"  partial: {item['quick_commands']['partial']}")
         click.echo(f"  skipped: {item['quick_commands']['skipped']}")
+
+
+@feedback_command.command("interview")
+@click.option(
+    "--scope",
+    type=click.Choice(["week-overdue", "today", "all-overdue"], case_sensitive=False),
+    default=FEEDBACK_INTERVIEW_DEFAULT_SCOPE,
+    show_default=True,
+    help="Candidate scope for this interview batch",
+)
+@click.option(
+    "--limit",
+    type=click.IntRange(1, 50),
+    default=FEEDBACK_INTERVIEW_DEFAULT_LIMIT,
+    show_default=True,
+    help="Maximum actions in this interview batch",
+)
+def interview_command(scope: str, limit: int):
+    """Collect structured feedback in one TTY interview and atomic commit."""
+    if not _is_interactive_terminal():
+        raise click.ClickException(
+            "FEEDBACK_INTERVIEW_TTY_REQUIRED: feedback interview requires an interactive terminal"
+        )
+    try:
+        _run_feedback_interview(scope=scope, limit=limit)
+    except click.Abort:
+        click.echo("FEEDBACK_INTERVIEW_CANCELLED: 已取消，数据库未写入。", err=True)
+        raise click.exceptions.Exit(130)
+
+
+def _run_feedback_interview(*, scope: str, limit: int) -> None:
+    now = _interview_now()
+    all_actions = get_actions()
+    batch = select_feedback_candidates(all_actions, scope=scope, now=now, limit=limit)
+    if not batch.items:
+        click.echo("FEEDBACK_INTERVIEW_EMPTY: 当前 scope 没有待反馈 action。")
+        return
+
+    click.echo(f"本批 {len(batch.items)} / 总候选 {batch.total} / 剩余 {batch.remaining}")
+    normal_actions = [action for action in batch.items if action.get("risk") == "normal"]
+    high_risk_actions = [action for action in batch.items if action.get("risk") == "high"]
+    results = []
+
+    if normal_actions:
+        click.echo("\n普通分组")
+        for action in normal_actions:
+            results.append(_interview_one_action(action, allow_gpt=True, now=now))
+
+    allow_high_risk_gpt = False
+    if high_risk_actions:
+        provider, model = _configured_fast_model()
+        click.echo("\n高风险分组：不预选、不自动判断。")
+        click.echo(f"provider={sanitize_terminal_text(provider)} model={sanitize_terminal_text(model)}")
+        click.echo("发送字段：summary, type, scheduled_at, risk, core")
+        allow_high_risk_gpt = click.confirm("允许本组使用 GPT 追问？", default=False)
+        for action in high_risk_actions:
+            results.append(
+                _interview_one_action(
+                    action,
+                    allow_gpt=allow_high_risk_gpt,
+                    now=now,
+                )
+            )
+
+    updates = [_interview_result_update(result, scope=scope) for result in results]
+    derived = plan_sleep_derived_effects(all_actions, updates)
+    _render_interview_summary(results, derived)
+    if any(result["action"].get("type") == "reminder" for result in results):
+        click.echo("提示：本次只更新 Nudge SQLite；Apple Reminder 如仍存在，需要另行同步或人工处理。")
+    if not click.confirm("确认一次性写入以上全部反馈？", default=False):
+        click.echo("FEEDBACK_INTERVIEW_CANCELLED: 已取消，数据库未写入。", err=True)
+        raise click.exceptions.Exit(130)
+
+    action_by_id = {str(action.get("id") or ""): action for action in all_actions}
+    snapshots = {str(result["action"]["id"]): result["action"] for result in results}
+    atomic_updates = []
+    for result, update in zip(results, updates):
+        action = result["action"]
+        resolution = result["core"]["resolution"]
+        atomic_updates.append({
+            "id": action["id"],
+            "status": action.get("status") if resolution == "unconfirmed" else resolution,
+            "completed_at": update.get("completed_at"),
+            "feedback": update["feedback"],
+        })
+    for effect in derived:
+        effect_id = str(effect["id"])
+        if effect_id not in action_by_id:
+            raise click.ClickException(f"FEEDBACK_INTERVIEW_SCHEMA_INVALID: missing derived action {effect_id}")
+        snapshots[effect_id] = action_by_id[effect_id]
+        atomic_updates.append({
+            "id": effect_id,
+            "status": effect["status"],
+            "completed_at": effect.get("completed_at"),
+            "feedback": effect["feedback"],
+        })
+
+    try:
+        applied = apply_feedback_interview_batch(atomic_updates, snapshots=snapshots)
+    except FeedbackInterviewConflictError as exc:
+        ids = ", ".join(exc.action_ids)
+        raise click.ClickException(
+            f"FEEDBACK_INTERVIEW_CONFLICT: action 已在访谈期间变化，请重新运行：{ids}"
+        ) from None
+    except ValueError:
+        raise click.ClickException(
+            "FEEDBACK_INTERVIEW_SCHEMA_INVALID: 最终反馈结构无效，整批未写入。"
+        ) from None
+    except sqlite3.Error:
+        raise click.ClickException(
+            "FEEDBACK_INTERVIEW_WRITE_FAILED: SQLite 整批写入失败，已回滚。"
+        ) from None
+    click.echo(f"已写入 {len(applied)} 条本地状态（主反馈 {len(results)}，睡眠派生 {len(derived)}）。")
+
+
+def _interview_one_action(action: dict, *, allow_gpt: bool, now: datetime) -> dict[str, Any]:
+    summary = sanitize_terminal_text(action.get("summary"))
+    scheduled = sanitize_terminal_text(action.get("scheduled_at"))
+    click.echo(f"\n- {summary} · {scheduled}")
+    resolution = click.prompt(
+        "结果",
+        type=click.Choice(list(_INTERVIEW_RESOLUTIONS), case_sensitive=False),
+        show_choices=True,
+    ).lower()
+    core: dict[str, Any] = {"resolution": resolution}
+
+    if resolution == "partial":
+        core["note"] = _prompt_required_text("补充说明")
+        core["next_action"] = _prompt_choice("下一步", STATUS_NEXT_ACTIONS)
+    elif resolution in {"skipped", "deferred", "blocked"}:
+        core["reason"] = _prompt_choice("原因", STATUS_REASONS)
+        core["next_action"] = _prompt_choice("下一步", STATUS_NEXT_ACTIONS)
+        note = _prompt_optional_text("补充说明（可留空）")
+        if note:
+            core["note"] = note
+    elif resolution == "unconfirmed":
+        note = _prompt_optional_text("无法确认的说明（可留空）")
+        if note:
+            core["note"] = note
+
+    if allow_gpt:
+        question_result = build_gpt_followup_questions(action, core)
+    else:
+        question_result = FeedbackQuestionBuildResult(questions=[], mode="core_only")
+    if question_result.warning_code:
+        click.echo(f"{question_result.warning_code}: 当前 action 已降级为固定核心题。")
+    responses = [_prompt_gpt_response(question) for question in question_result.questions]
+    return {
+        "action": action,
+        "core": core,
+        "question_mode": question_result.mode,
+        "responses": responses,
+        "completed_at": now.strftime("%Y-%m-%d %H:%M") if resolution in {"done", "partial"} else action.get("completed_at"),
+    }
+
+
+def _interview_result_update(result: dict, *, scope: str) -> dict[str, Any]:
+    action = result["action"]
+    core = result["core"]
+    feedback = build_feedback(
+        source="nudge feedback interview",
+        channel="cli.feedback.interview",
+        source_type="subjective",
+        note=core.get("note"),
+        reason=core.get("reason"),
+        next_action=core.get("next_action"),
+        extra={
+            "interview": {
+                "protocol_version": FEEDBACK_INTERVIEW_PROTOCOL_VERSION,
+                "scope": scope,
+                "resolution": core["resolution"],
+                "question_mode": result["question_mode"],
+                "responses": result["responses"],
+            }
+        },
+    )
+    return {
+        "id": action["id"],
+        "resolution": core["resolution"],
+        "completed_at": result.get("completed_at"),
+        "sleep_event_at": action.get("scheduled_at") if core["resolution"] == "done" else None,
+        "feedback": feedback,
+    }
+
+
+def _prompt_gpt_response(question: dict) -> dict[str, Any]:
+    click.echo(f"GPT 追问：{sanitize_terminal_text(question['prompt'])}")
+    question_type = question["type"]
+    options = question.get("options") or []
+    if question_type in {"single_choice", "multi_choice"}:
+        for index, option in enumerate(options, start=1):
+            click.echo(f"  {index}. {sanitize_terminal_text(option)}")
+    while True:
+        raw = _prompt_optional_text("回答（留空跳过）")
+        if not raw:
+            return normalize_interview_response(question, None, skipped=True)
+        try:
+            if question_type == "boolean":
+                normalized = raw.strip().lower()
+                if normalized in {"是", "yes", "y", "true", "1"}:
+                    answer: object = True
+                elif normalized in {"否", "no", "n", "false", "0"}:
+                    answer = False
+                else:
+                    raise ValueError("请输入是或否")
+            elif question_type == "single_choice":
+                index = int(raw)
+                if not 1 <= index <= len(options):
+                    raise ValueError("选项编号超出范围")
+                answer = options[index - 1]
+            elif question_type == "multi_choice":
+                indexes = [int(value.strip()) for value in raw.replace("，", ",").split(",")]
+                if any(not 1 <= index <= len(options) for index in indexes):
+                    raise ValueError("选项编号超出范围")
+                answer = [options[index - 1] for index in indexes]
+            else:
+                answer = raw
+            user_text = None
+            if question_type in {"single_choice", "boolean", "multi_choice"}:
+                user_text = _prompt_optional_text("补充文字（可留空）") or None
+            return normalize_interview_response(question, answer, user_text=user_text)
+        except (ValueError, IndexError):
+            click.echo("输入无效，请按题目要求重试。")
+
+
+def _render_interview_summary(results: list[dict], derived: list[dict]) -> None:
+    click.echo("\n统一确认摘要")
+    for risk, label in (("normal", "普通分组"), ("high", "高风险分组")):
+        grouped = [result for result in results if result["action"].get("risk") == risk]
+        if not grouped:
+            continue
+        click.echo(f"{label}（确认）")
+        for result in grouped:
+            action = result["action"]
+            resolution = result["core"]["resolution"]
+            summary = sanitize_terminal_text(action.get("summary"))
+            scheduled = sanitize_terminal_text(action.get("scheduled_at"))
+            click.echo(f"- {summary} · {scheduled} -> {resolution}")
+            for key in ("reason", "next_action", "note"):
+                value = result["core"].get(key)
+                if value:
+                    click.echo(f"  {key}: {sanitize_terminal_text(value)}")
+            click.echo(f"  question_mode: {result['question_mode']}")
+            for response in result["responses"]:
+                prompt = sanitize_terminal_text(response.get("prompt"))
+                answer = sanitize_terminal_text(_format_interview_answer(response))
+                click.echo(f"  GPT：{prompt} -> {answer}")
+                if response.get("user_text"):
+                    click.echo(f"    补充文字：{sanitize_terminal_text(response['user_text'])}")
+            if resolution == "unconfirmed":
+                click.echo("  仍需人工确认")
+    if derived:
+        click.echo("睡眠派生变更")
+        for effect in derived:
+            click.echo(f"- {sanitize_terminal_text(effect.get('summary'))} -> {effect['status']}")
+            reason = (effect.get("feedback") or {}).get("note")
+            if reason:
+                click.echo(f"  原因：{sanitize_terminal_text(reason)}")
+
+
+def _format_interview_answer(response: dict[str, Any]) -> str:
+    if response.get("skipped"):
+        return "已跳过"
+    answer = response.get("answer")
+    if isinstance(answer, bool):
+        return "是" if answer else "否"
+    if isinstance(answer, list):
+        return "、".join(str(value) for value in answer)
+    return str(answer if answer is not None else "")
+
+
+def _prompt_choice(label: str, values: set[str]) -> str:
+    return click.prompt(label, type=click.Choice(sorted(values), case_sensitive=False)).lower()
+
+
+def _prompt_required_text(label: str) -> str:
+    return click.prompt(label, type=str).strip()
+
+
+def _prompt_optional_text(label: str) -> str:
+    return click.prompt(label, default="", show_default=False, type=str).strip()
+
+
+def _configured_fast_model() -> tuple[str, str]:
+    try:
+        config = load_config()
+    except (FileNotFoundError, OSError):
+        config = {}
+    llm_config = config.get("llm") if isinstance(config, dict) else None
+    llm_config = llm_config if isinstance(llm_config, dict) else {}
+    provider = str(llm_config.get("provider") or DEFAULT_LLM_CONFIG["provider"])
+    return provider, get_model_for_task("fast", llm_config)
+
+
+def _is_interactive_terminal() -> bool:
+    return bool(sys.stdin.isatty() and sys.stdout.isatty())
+
+
+def _interview_now() -> datetime:
+    return datetime.now()
+
 
 
 @feedback_command.command("apply")

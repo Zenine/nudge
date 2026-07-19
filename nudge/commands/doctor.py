@@ -62,7 +62,11 @@ def _configured_reminder_lists(config: dict) -> list[str]:
     if default_list:
         names.append(default_list)
 
-    names.extend(config.get("reminders", {}).values())
+    for value in config.get("reminders", {}).values():
+        if isinstance(value, str) and value:
+            names.append(value)
+        elif isinstance(value, (list, tuple)):
+            names.extend(item for item in value if isinstance(item, str) and item)
     for member in config.get("family", {}).values():
         if member.get("reminder_list"):
             names.append(member["reminder_list"])

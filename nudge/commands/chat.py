@@ -116,6 +116,7 @@ def chat_command():
                             summary=a.get("summary") or a.get("name", ""),
                             scheduled_at=a.get("start") or a.get("due_date"),
                             external_id=a.get("_external_id"),
+                            reminder_list=a.get("_reminder_list"),
                         )
 
         history.append({"role": "user", "content": user_input})

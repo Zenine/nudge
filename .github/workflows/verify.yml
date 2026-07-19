@@ -38,3 +38,8 @@ jobs:
         env:
           NUDGE_PYTHON: python
         run: scripts/verify.sh
+
+      - name: Guard repository-local runtime state
+        run: |
+          test ! -e .nudge/nudge.db
+          test ! -e nudge.db
