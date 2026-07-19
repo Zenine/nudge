@@ -198,8 +198,10 @@ sync_lists = ["Tasks", "Habits", "Fitness Tasks", "Family Tasks"]
 - key 是 Nudge 内部用途名，value 是 Apple Reminders 里的列表名。
 - `[general].default_reminder_list` 仍是缺省写入列表。
 - 已支持用途映射的命令会使用这里的列表；未支持的路径会回退到默认列表。
-- `sync_lists` 是 `reminders sync-completed` 与 `daily sync` 默认读取的列表集合；命令行重复传入 `--list` 时会覆盖该集合并按给定顺序去重。
+- `sync_lists` 是 `reminders sync-completed`、`daily sync` 与 `reminders backfill-lists` 默认读取的列表集合；命令行重复传入 `--list` 时会完全覆盖该集合，并按给定顺序去重。
 - 新建 reminder action 会把实际目标列表保存到 SQLite，后续同步和 ID backfill 会先按该归属过滤；升级前没有列表字段的旧 action 保持兼容，仍需命中 Apple 的明确完成记录才会写回。
+- `reminders backfill-lists` 默认只读检查缺少 `reminder_list` 的开放 action；`--apply` 也只更新本地 SQLite 的列表归属，不修改 Apple Reminders。它要求现有数据库已通过当前版本的常规状态初始化/迁移且没有非空 WAL；dry-run 不会替你创建、迁移或修复数据库，条件不满足时会安全失败。请先完成正常升级流程并确保没有活跃状态写入，再重新预览。
+- 确认 apply 后，命令会二次核验 Apple 候选、创建权限为 `0600` 且通过完整性检查的数据库备份，并在单个事务中写入；任何查询或并发冲突都会阻止整批更新。
 
 ## 最小安全配置
 

@@ -55,6 +55,7 @@ run bin/nudge daemon --help >/dev/null
 run bin/nudge docs --help >/dev/null
 run bin/nudge docs audit --help >/dev/null
 run bin/nudge feedback interview --help >/dev/null
+run bin/nudge reminders backfill-lists --help >/dev/null
 run bin/nudge mcp --help >/dev/null
 
 echo

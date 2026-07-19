@@ -28,7 +28,7 @@
 | `nudge health` | 导入/查看 Apple Health 汇总 | 否 | `import --apply` 写 SQLite | 不直接需要 Apple 权限；需要本地 Health 导出文件 |
 | `nudge habits` | 查看 streak 或记录今日习惯 | 否 | `habits log <name>` 写 SQLite | 不需要 Apple 权限 |
 | `nudge schedule` | 查找本周日历空档 | 否 | 否 | 读取 Calendar，需要 Calendar 权限 |
-| `nudge reminders` | 将 Apple Reminders 状态同步回 Nudge | `backfill-ids --apply` 会更新 Reminders；`sync-completed --apply` 不创建新提醒但会写本地状态 | `--apply` 写 SQLite | 读取/更新 Reminders 需要 Reminders 权限 |
+| `nudge reminders` | 同步完成状态，或回填旧 action 的外部 ID / 列表归属 | `backfill-ids --apply` 会更新 Reminders；`sync-completed` 和 `backfill-lists` 不写 Apple | 各子命令的 `--apply` 可写 SQLite；`backfill-lists` 只更新 `reminder_list` | 所有路径需读取 Reminders；仅 `backfill-ids --apply` 需要更新权限 |
 | `nudge agent` | 本地 agent 结构化 Apple 动作入口 | `apply` 真实执行会写 Apple；`--dry-run` 不写 | `apply`/`status` 真实执行写 SQLite（actions/tracking） | Apple 写入需要对应权限 |
 | `nudge mcp` | 本地 MCP stdio server | 工具调用 `apply_apple_actions` 真实执行会写 Apple | 状态回写工具可写 SQLite | 由 MCP client 触发；Apple 写入需要权限 |
 | `nudge daemon` | 本地队列运行时、launchd 和健康辅助 app | `run` 处理 `agent.apply` 队列时可能写 Apple | 队列、恢复、重试、运行状态写 SQLite；launchd/app 子命令写本机用户级文件 | launchd/app 仅 macOS；Apple 写入取决于队列内容 |
@@ -261,6 +261,16 @@ nudge schedule "深度工作" --duration 120 --book --slot 1 --title "Deep Work"
 
 - `reminders sync-completed`：同步一个或多个 Apple Reminders 列表。新 action 会记录目标列表，并在同步和 ID backfill 前先按已知列表归属过滤；旧 action 没有列表字段时仍会进入明确匹配流程以保持兼容。所有 action 都必须在当前列表找到明确完成匹配后才会写回，不能仅凭“该列表里不存在”推断完成，因此移动列表不会造成误完成。睡眠派生完成会使用每条 action 自己记录的目标列表。`--apply` 写 SQLite，并可能静默后续睡眠提醒。
 - `reminders backfill-ids`：为旧 Apple Reminders 附加稳定 Nudge ID。`--apply` 会写 Apple Reminders 和 SQLite。
+- `reminders backfill-lists`：检查升级前缺少列表归属的 reminder action，默认只读预览；`--apply` 只回填本地 SQLite 的 `reminder_list`，不会修改、完成或移动任何 Apple Reminder。
+
+`backfill-lists` 的匹配与写入边界：
+
+- 未传 `--list` 时读取 `[reminders].sync_lists`；重复传入 `--list` 会完全覆盖配置范围。只选择状态为 `created` / `pending` 且 `reminder_list IS NULL` 的 reminder action。
+- 对每个候选日期读取所选所有列表中的已完成和未完成 Reminder。到期时间必须与 action 的 `YYYY-MM-DD HH:MM` 严格匹配到分钟；标题必须精确相同，或只能去除尾部重复的日期/时间后缀后相同。
+- 匹配在所有列表之间执行全局一对一判定。`missing`、`ambiguous`、`invalid` 只报告、不自动修复；任一列表或日期查询失败都会禁止整批 apply。
+- dry-run 严格不初始化或迁移 SQLite。数据库带有非空 WAL、尚未包含当前 `reminder_list` 字段，或读取期间发生变化时会安全失败，不会就地修复状态库。
+- `--apply` 在 TTY 中使用默认答案为“否”的整批确认；非 TTY 或 `--json` 模式必须显式加 `--yes`。确认后会再次查询 Apple 并核对候选未变化，再自动创建权限为 `0600` 且通过完整性检查的数据库完整备份，最后用单个 SQLite 事务只更新 `reminder_list`。
+- Apple 数据在整个 `backfill-lists` 流程中保持零修改；若二次核验、备份、快照或并发状态出现冲突，整批回滚，不留下部分更新。
 
 示例：
 
@@ -269,9 +279,12 @@ nudge reminders sync-completed --date 2026-07-04 --json
 nudge reminders sync-completed --list Tasks --list Health --list GPT --json
 nudge reminders sync-completed --apply
 nudge reminders backfill-ids --from 2026-07-01 --to 2026-07-05 --apply
+nudge reminders backfill-lists --json
+nudge reminders backfill-lists --list Tasks --list Health --from 2026-07-01 --to 2026-08-01 --json
+nudge reminders backfill-lists --apply
 ```
 
-未传 `--list` 时，优先读取 `[reminders].sync_lists`；未配置该数组时回退到 `[general].default_reminder_list`。`daily sync` 使用同一规则。
+`reminders sync-completed`、`reminders backfill-lists` 和 `daily sync` 未传 `--list` 时，优先读取 `[reminders].sync_lists`；未配置该数组时回退到 `[general].default_reminder_list`。显式 `--list` 会完全覆盖配置范围，并按给定顺序去重。
 
 ### `nudge agent`
 
