@@ -13,6 +13,14 @@ func sanitize(_ value: String) -> String {
         .replacingOccurrences(of: "\r", with: " ")
 }
 
+struct AllDueRow: Encodable {
+    let name: String
+    let due_time: String
+    let list: String
+    let completed_at: String?
+    let due_date: String
+}
+
 let args = Array(CommandLine.arguments.dropFirst())
 let listOnly = args.count == 1 && args[0] == "--lists"
 let requestedListName = args.first
@@ -131,6 +139,7 @@ if requestedMode == "completed" {
 
 let semaphore = DispatchSemaphore(value: 0)
 var rows: [String] = []
+var allDueRows: [AllDueRow] = []
 
 let formatter = DateFormatter()
 formatter.dateFormat = "HH:mm"
@@ -149,8 +158,8 @@ completedFormatter.timeZone = TimeZone.current
 
 store.fetchReminders(matching: predicate) { reminders in
     for reminder in reminders ?? [] {
-        let title = sanitize(reminder.title ?? "")
-        let list = sanitize(reminder.calendar.title)
+        let title = requestedMode == "all-due" ? (reminder.title ?? "") : sanitize(reminder.title ?? "")
+        let list = requestedMode == "all-due" ? reminder.calendar.title : sanitize(reminder.calendar.title)
         let dueDate = reminder.dueDateComponents?.date
         if requestedMode == "all-due" {
             guard let dueDate else {
@@ -163,7 +172,16 @@ store.fetchReminders(matching: predicate) { reminders in
 
         let dueTime = dueDate.map { formatter.string(from: $0) } ?? ""
         let dueAt = dueDate.map { dueFormatter.string(from: $0) } ?? ""
-        if requestedMode == "completed" || requestedMode == "all-due" {
+        if requestedMode == "all-due" {
+            let completedAt = reminder.completionDate.map { completedFormatter.string(from: $0) }
+            allDueRows.append(AllDueRow(
+                name: title,
+                due_time: dueTime,
+                list: list,
+                completed_at: completedAt,
+                due_date: dueAt
+            ))
+        } else if requestedMode == "completed" {
             let completedAt: String
             if let completionDate = reminder.completionDate {
                 completedAt = completedFormatter.string(from: completionDate)
@@ -182,4 +200,16 @@ if semaphore.wait(timeout: .now() + 15) == .timedOut {
     fail("EventKit fetchReminders timed out", code: 5)
 }
 
-print(rows.joined(separator: "\n"))
+if requestedMode == "all-due" {
+    do {
+        let data = try JSONEncoder().encode(allDueRows)
+        guard let output = String(data: data, encoding: .utf8) else {
+            fail("Cannot encode EventKit all-due output", code: 6)
+        }
+        print(output)
+    } catch {
+        fail("Cannot encode EventKit all-due output: \(error)", code: 6)
+    }
+} else {
+    print(rows.joined(separator: "\n"))
+}

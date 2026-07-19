@@ -1,8 +1,11 @@
 """Safety tests for AppleScript reminder mutation fallbacks."""
 
+import json
 import subprocess
 from datetime import date
 from types import SimpleNamespace
+
+import pytest
 
 from nudge.apple import reminders
 
@@ -22,10 +25,22 @@ def test_query_all_due_on_date_reads_completed_and_incomplete_reminders(monkeypa
         calls.append({"cmd": cmd, **kwargs})
         return SimpleNamespace(
             returncode=0,
-            stdout=(
-                "Finished task\t09:00\tTasks\t2026-07-18 10:15\t2026-07-18 09:00\n"
-                "Open task\t11:30\tTasks\t\t2026-07-18 11:30\n"
-            ),
+            stdout=json.dumps([
+                {
+                    "name": "Finished task",
+                    "due_time": "09:00",
+                    "list": "Tasks",
+                    "completed_at": "2026-07-18 10:15",
+                    "due_date": "2026-07-18 09:00",
+                },
+                {
+                    "name": "Open task",
+                    "due_time": "11:30",
+                    "list": "Tasks",
+                    "completed_at": None,
+                    "due_date": "2026-07-18 11:30",
+                },
+            ]),
             stderr="",
         )
 
@@ -63,6 +78,110 @@ def test_query_all_due_on_date_reads_completed_and_incomplete_reminders(monkeypa
             "due_at": "2026-07-18 11:30",
         },
     ]
+
+
+def test_query_all_due_on_date_preserves_structured_text_losslessly(monkeypatch) -> None:
+    name = "  Keep\tthis\nline  "
+    list_name = "  项目\t列表\n第二行  "
+    monkeypatch.setattr(
+        reminders.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps([{
+                "name": name,
+                "due_time": "09:07",
+                "list": list_name,
+                "completed_at": None,
+                "due_date": "2026-07-18 09:07",
+            }], ensure_ascii=False),
+            stderr="",
+        ),
+    )
+
+    ok, rows = reminders.query_all_due_on_date(list_name, date(2026, 7, 18))
+
+    assert ok is True
+    assert rows == [{
+        "name": name,
+        "due_time": "09:07",
+        "list": list_name,
+        "due_at": "2026-07-18 09:07",
+    }]
+
+
+def test_query_all_due_on_date_rejects_valid_data_mixed_with_malformed_output(monkeypatch) -> None:
+    valid = json.dumps({
+        "name": "Duplicate",
+        "due_time": "09:00",
+        "list": "Tasks",
+        "completed_at": None,
+        "due_date": "2026-07-18 09:00",
+    })
+    monkeypatch.setattr(
+        reminders.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout=f"[{valid}, malformed-row]",
+            stderr="",
+        ),
+    )
+
+    ok, error = reminders.query_all_due_on_date("Tasks", date(2026, 7, 18))
+
+    assert ok is False
+    assert error == "Invalid EventKit all-due output"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"name": 7, "due_time": "09:00", "list": "Tasks", "completed_at": None, "due_date": "2026-07-18 09:00"},
+        {"name": "Task", "due_time": None, "list": "Tasks", "completed_at": None, "due_date": "2026-07-18 09:00"},
+        {"name": "Task", "due_time": "09:00", "list": ["Tasks"], "completed_at": None, "due_date": "2026-07-18 09:00"},
+        {"name": "Task", "due_time": "09:00", "list": "Tasks", "completed_at": False, "due_date": "2026-07-18 09:00"},
+        {"name": "Task", "due_time": "09:00", "list": "Tasks", "completed_at": None, "due_date": 20260718},
+    ],
+)
+def test_query_all_due_on_date_rejects_missing_or_invalid_fields(monkeypatch, payload) -> None:
+    monkeypatch.setattr(
+        reminders.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps([payload]),
+            stderr="",
+        ),
+    )
+
+    assert reminders.query_all_due_on_date("Tasks", date(2026, 7, 18)) == (
+        False,
+        "Invalid EventKit all-due output",
+    )
+
+
+def test_original_eventkit_modes_keep_tab_separated_output_compatibility(monkeypatch) -> None:
+    monkeypatch.setattr(
+        reminders.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="Original task\t08:30\tTasks\t\t2026-07-18 08:30\n",
+            stderr="",
+        ),
+    )
+
+    ok, rows = reminders.query_due_today_eventkit("Tasks")
+
+    assert ok is True
+    assert rows == [{
+        "name": "Original task",
+        "due_time": "08:30",
+        "list": "Tasks",
+        "due_at": "2026-07-18 08:30",
+    }]
 
 
 def test_query_all_due_on_date_rejects_non_date_values() -> None:
@@ -123,6 +242,14 @@ def test_eventkit_all_due_mode_is_read_only_and_preserves_existing_predicates() 
     assert "eventkit_reminders_mutate" not in source
     assert "store.save(" not in source
     assert "store.remove(" not in source
+
+
+def test_eventkit_all_due_mode_uses_lossless_json_transport() -> None:
+    source = reminders.EVENTKIT_DUE_TODAY_SCRIPT.read_text()
+
+    assert "JSONEncoder()" in source
+    assert 'requestedMode == "all-due" ? (reminder.title ?? "") : sanitize' in source
+    assert 'requestedMode == "all-due" ? reminder.calendar.title : sanitize' in source
 
 
 def test_eventkit_lists_flag_does_not_shadow_a_reminder_list_name() -> None:

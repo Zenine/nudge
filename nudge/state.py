@@ -923,10 +923,14 @@ def get_actions_readonly() -> list[dict]:
     database_identity = _readonly_db_identity(DB_PATH)
     wal_path = DB_PATH.with_name(f"{DB_PATH.name}-wal")
     shm_path = DB_PATH.with_name(f"{DB_PATH.name}-shm")
+    journal_path = DB_PATH.with_name(f"{DB_PATH.name}-journal")
     wal_identity = _readonly_optional_identity(wal_path)
     shm_identity = _readonly_optional_identity(shm_path)
+    journal_identity = _readonly_optional_identity(journal_path)
     if wal_identity is not None and wal_identity[2] > 0:
         raise sqlite3.OperationalError("read-only state has a non-empty WAL")
+    if journal_identity is not None and journal_identity[2] > 0:
+        raise sqlite3.OperationalError("read-only state has a non-empty rollback journal")
 
     database_uri = f"{DB_PATH.resolve().as_uri()}?mode=ro&immutable=1"
     conn = sqlite3.connect(database_uri, uri=True)
@@ -948,6 +952,7 @@ def get_actions_readonly() -> list[dict]:
         _readonly_db_identity(DB_PATH) != database_identity
         or _readonly_optional_identity(wal_path) != wal_identity
         or _readonly_optional_identity(shm_path) != shm_identity
+        or _readonly_optional_identity(journal_path) != journal_identity
     ):
         raise sqlite3.OperationalError("read-only state changed during read")
     return actions

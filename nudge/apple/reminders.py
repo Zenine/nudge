@@ -1,5 +1,6 @@
 """Apple Reminders integration via AppleScript."""
 
+import json
 import subprocess
 from datetime import date, datetime
 from pathlib import Path
@@ -135,6 +136,34 @@ def query_due_today_eventkit(
     return True, _parse_due_today_rows(result.stdout)
 
 
+def _parse_all_due_rows(raw: str) -> list[dict]:
+    """Strictly parse lossless JSON emitted by EventKit's all-due mode."""
+    payload = json.loads(raw)
+    if not isinstance(payload, list):
+        raise ValueError("all-due output must be a JSON array")
+
+    reminders = []
+    for item in payload:
+        if not isinstance(item, dict):
+            raise ValueError("all-due row must be an object")
+        if any(not isinstance(item.get(field), str) for field in ("name", "due_time", "list", "due_date")):
+            raise ValueError("all-due row has missing or invalid string fields")
+        completed_at = item.get("completed_at")
+        if completed_at is not None and not isinstance(completed_at, str):
+            raise ValueError("all-due row has invalid completed_at")
+
+        reminder = {
+            "name": item["name"],
+            "due_time": item["due_time"],
+            "list": item["list"],
+            "due_at": item["due_date"],
+        }
+        if completed_at:
+            reminder["completed_at"] = completed_at
+        reminders.append(reminder)
+    return reminders
+
+
 def query_due_on_date(
     list_name: str,
     target_date,
@@ -219,7 +248,10 @@ def query_all_due_on_date(
         error = result.stderr.strip() or result.stdout.strip() or f"swift exited with code {result.returncode}"
         return False, error
 
-    return True, _parse_due_today_rows(result.stdout)
+    try:
+        return True, _parse_all_due_rows(result.stdout)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return False, "Invalid EventKit all-due output"
 
 
 def _parse_due_today_rows(raw: str) -> list[dict]:

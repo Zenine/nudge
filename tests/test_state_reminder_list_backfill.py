@@ -233,6 +233,50 @@ def test_get_actions_readonly_rejects_nonempty_wal_without_touching_files(monkey
         writer.close()
 
 
+def test_get_actions_readonly_rejects_nonempty_rollback_journal_without_recovery(monkeypatch, tmp_path):
+    state_dir = tmp_path / "rollback-pending"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    _create_minimal_actions_database(db_path).close()
+    journal_path = state_dir / "nudge.db-journal"
+    journal_path.write_bytes(b"simulated hot rollback journal")
+    _isolate_state(monkeypatch, state_dir)
+    before = _directory_snapshot(state_dir)
+
+    with pytest.raises(sqlite3.OperationalError, match="non-empty rollback journal"):
+        state.get_actions_readonly()
+
+    assert _directory_snapshot(state_dir) == before
+
+
+def test_get_actions_readonly_rejects_rollback_journal_change_during_read(monkeypatch, tmp_path):
+    state_dir = tmp_path / "rollback-changed"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    _create_minimal_actions_database(db_path).close()
+    journal_path = state_dir / "nudge.db-journal"
+    journal_path.touch()
+    _isolate_state(monkeypatch, state_dir)
+    original_optional_identity = state._readonly_optional_identity
+    journal_identity = original_optional_identity(journal_path)
+    changed_journal_identity = (*journal_identity[:-1], journal_identity[-1] + 1)
+    journal_calls = 0
+
+    def changing_optional_identity(path):
+        nonlocal journal_calls
+        if path == journal_path:
+            journal_calls += 1
+            return journal_identity if journal_calls == 1 else changed_journal_identity
+        return original_optional_identity(path)
+
+    monkeypatch.setattr(state, "_readonly_optional_identity", changing_optional_identity)
+
+    with pytest.raises(sqlite3.OperationalError, match="changed"):
+        state.get_actions_readonly()
+
+    assert journal_calls == 2
+
+
 def test_get_actions_readonly_rejects_database_change_during_read(monkeypatch, tmp_path):
     state_dir = tmp_path / "changed-during-read"
     state_dir.mkdir()

@@ -3,6 +3,7 @@
 import hashlib
 import inspect
 import json
+import os
 import sqlite3
 import unicodedata
 from datetime import date
@@ -989,6 +990,81 @@ def test_backup_without_initialize_never_opens_state_connection_and_cleans_parti
             command.backup_database(partial, initialize=False)
     assert not partial.exists()
     assert not list(partial.parent.glob(f".{partial.name}.partial-*"))
+
+
+def test_backup_without_initialize_rejects_hot_rollback_journal_without_recovery(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+        conn.execute("INSERT INTO sample (id) VALUES (1)")
+    journal_path = state_dir / "nudge.db-journal"
+    journal_path.write_bytes(b"simulated hot rollback journal")
+    monkeypatch.setattr(state, "STATE_DIR", state_dir)
+    monkeypatch.setattr(state, "DB_PATH", db_path)
+    destination = tmp_path / "backup.db"
+    before = _state_directory_snapshot(state_dir)
+
+    with pytest.raises(sqlite3.OperationalError, match="non-empty rollback journal"):
+        command.backup_database(destination, initialize=False)
+
+    assert _state_directory_snapshot(state_dir) == before
+    assert not destination.exists()
+    assert not list(tmp_path.glob(".backup.db.partial-*"))
+
+
+def test_backup_without_initialize_opens_source_immutable_and_fails_on_identity_change(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+    monkeypatch.setattr(state, "STATE_DIR", state_dir)
+    monkeypatch.setattr(state, "DB_PATH", db_path)
+    destination = tmp_path / "backup.db"
+    original_connect = sqlite3.connect
+    source_calls = []
+
+    class ChangingSource:
+        def __init__(self, connection):
+            self.connection = connection
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            self.connection.close()
+
+        def backup(self, target):
+            self.connection.backup(target)
+            source_stat = db_path.stat()
+            os.utime(
+                db_path,
+                ns=(source_stat.st_atime_ns, source_stat.st_mtime_ns + 1),
+            )
+
+    def recording_connect(database, *args, **kwargs):
+        if kwargs.get("uri"):
+            source_calls.append((database, kwargs.copy()))
+            return ChangingSource(original_connect(database, *args, **kwargs))
+        return original_connect(database, *args, **kwargs)
+
+    monkeypatch.setattr(db_commands.sqlite3, "connect", recording_connect)
+
+    with pytest.raises(sqlite3.OperationalError, match="changed"):
+        command.backup_database(destination, initialize=False)
+
+    assert source_calls == [
+        (f"{db_path.resolve().as_uri()}?mode=ro&immutable=1", {"uri": True}),
+    ]
+    assert not destination.exists()
 
 
 def test_backup_without_initialize_preserves_existing_destination_on_failure(

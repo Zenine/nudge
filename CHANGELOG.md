@@ -14,6 +14,8 @@
 
 ### Fixed
 
+- `all-due` EventKit 读取改用严格、无损的结构化 JSON；标题和列表名中的前后空格、tab 与换行不再被传输层改写，任何畸形输出或字段都会使整次查询失败，避免丢弃异常行后把重复 Reminder 误判为唯一候选。其它 EventKit 读取模式继续兼容原 TSV 输出。
+- Reminder 列表回填的 immutable 只读快照和未初始化备份现在也拒绝非空 SQLite rollback journal，并在关键读取/备份边界复核数据库、WAL、SHM 与 journal 身份；未初始化备份以 `mode=ro&immutable=1` 打开源库，避免隐式 recovery。
 - 修复结构化反馈访谈的复核问题：家庭列表及常见付款/出行标题现在保守进入高风险组；10 秒调用显式关闭 provider SDK 内建重试；最终确认页展示完整 GPT 答案与风险/Reminder/睡眠派生上下文；选择题拒绝 0、负数及越界编号；非法最终 payload 使用稳定 schema 错误且整批零写入。
 - 隔离 pytest 与项目验证的可变状态：测试模块导入前以及 `scripts/verify.sh` 全流程都会把 `NUDGE_STATE_DIR` 指向退出后清理的临时目录，避免继承用户主状态路径后写入测试 action、日志或 evaluation。
 - 修复指定某个 Reminders 列表同步或执行 ID backfill 时，已知属于其它列表的本地 action 仍会进入当前列表候选的问题；睡眠派生完成也改为使用每条 action 自己保存的目标列表。升级前未记录列表的旧 action 仍保持兼容，但必须命中明确的 Apple 完成记录；dry-run / apply 均不再把“目标列表中不存在”当作完成证据。

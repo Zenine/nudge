@@ -82,10 +82,13 @@ def restore_command(source: str, yes: bool, json_output: bool):
 
 def backup_database(output: Path | None = None, *, initialize: bool = True) -> Path:
     """Create a consistent .db copy using SQLite's online backup API."""
+    source_identity = None
     if initialize:
         _ensure_db_exists()
     elif not state.DB_PATH.is_file():
         raise FileNotFoundError(state.DB_PATH)
+    else:
+        source_identity = _backup_source_identity()
     destination = output or (
         state.STATE_DIR / "backups" / f"nudge-{_timestamp()}-{uuid4().hex}.db"
     )
@@ -109,8 +112,17 @@ def backup_database(output: Path | None = None, *, initialize: bool = True) -> P
         staging_created = True
         os.close(staging_fd)
         os.chmod(staging, 0o600)
-        with sqlite3.connect(str(state.DB_PATH)) as source, sqlite3.connect(str(staging)) as target:
+        source_database = str(state.DB_PATH)
+        source_connect_kwargs = {}
+        if source_identity is not None:
+            source_database = f"{state.DB_PATH.resolve().as_uri()}?mode=ro&immutable=1"
+            source_connect_kwargs = {"uri": True}
+        with sqlite3.connect(source_database, **source_connect_kwargs) as source, sqlite3.connect(str(staging)) as target:
+            if source_identity is not None:
+                _assert_backup_source_unchanged(source_identity)
             source.backup(target)
+            if source_identity is not None:
+                _assert_backup_source_unchanged(source_identity)
 
         if _integrity_check(staging) != "ok":
             raise RuntimeError(f"backup integrity check failed: {destination}")
@@ -119,6 +131,27 @@ def backup_database(output: Path | None = None, *, initialize: bool = True) -> P
         if staging_created and staging.exists():
             staging.unlink()
     return destination
+
+
+def _backup_source_identity() -> tuple:
+    """Snapshot the source DB and sidecars without opening or recovering SQLite."""
+    wal_path = state.DB_PATH.with_name(f"{state.DB_PATH.name}-wal")
+    shm_path = state.DB_PATH.with_name(f"{state.DB_PATH.name}-shm")
+    journal_path = state.DB_PATH.with_name(f"{state.DB_PATH.name}-journal")
+    database_identity = state._readonly_db_identity(state.DB_PATH)
+    wal_identity = state._readonly_optional_identity(wal_path)
+    shm_identity = state._readonly_optional_identity(shm_path)
+    journal_identity = state._readonly_optional_identity(journal_path)
+    if wal_identity is not None and wal_identity[2] > 0:
+        raise sqlite3.OperationalError("backup source has a non-empty WAL")
+    if journal_identity is not None and journal_identity[2] > 0:
+        raise sqlite3.OperationalError("backup source has a non-empty rollback journal")
+    return database_identity, wal_identity, shm_identity, journal_identity
+
+
+def _assert_backup_source_unchanged(expected: tuple) -> None:
+    if _backup_source_identity() != expected:
+        raise sqlite3.OperationalError("backup source changed during backup")
 
 
 def export_database(output: Path | None = None) -> Path:
