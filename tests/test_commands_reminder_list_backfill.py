@@ -635,6 +635,155 @@ def test_apply_yes_backs_up_before_atomic_write_with_complete_snapshots(monkeypa
     assert snapshot == _action("legacy")
 
 
+def test_apply_yes_requeries_stable_apple_plan_twice_before_backup(monkeypatch) -> None:
+    calls = _install_read_only_spies(monkeypatch, actions=[_action("legacy")])
+    events: list[object] = []
+
+    def query(list_name, target_date):
+        events.append(("query", list_name, target_date))
+        return (
+            True,
+            [{
+                "name": "Buy milk",
+                "due_time": "09:00",
+                "due_at": "2026-07-01 09:00",
+                "list": list_name,
+            }] if list_name == "Tasks" else [],
+        )
+
+    monkeypatch.setattr(command, "query_all_due_on_date", query)
+    monkeypatch.setattr(
+        command,
+        "backup_database",
+        lambda **kwargs: events.append("backup") or Path("/tmp/backup.db"),
+    )
+    monkeypatch.setattr(
+        command,
+        "apply_reminder_list_backfill",
+        lambda updates, *, snapshots: events.append("apply") or ["legacy"],
+    )
+
+    result = CliRunner().invoke(
+        reminders_command,
+        ["backfill-lists", "--apply", "--yes", "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert [event[0] for event in events[:4]] == ["query"] * 4
+    assert events[4:] == ["backup", "apply"]
+    assert calls["backup"] == 0
+    assert calls["apply"] == 0
+
+
+def test_apply_yes_rejects_changed_second_apple_plan_before_backup(monkeypatch) -> None:
+    calls = _install_read_only_spies(monkeypatch, actions=[_action("legacy")])
+    query_calls = 0
+
+    def query(list_name, target_date):
+        nonlocal query_calls
+        query_calls += 1
+        round_number = (query_calls - 1) // 2
+        if list_name == "Tasks" and round_number == 0:
+            return True, [{
+                "name": "Buy milk", "due_time": "09:00",
+                "due_at": "2026-07-01 09:00", "list": "Tasks",
+            }]
+        return True, []
+
+    monkeypatch.setattr(command, "query_all_due_on_date", query)
+
+    result = CliRunner().invoke(
+        reminders_command,
+        ["backfill-lists", "--apply", "--yes", "--json"],
+    )
+
+    assert result.exit_code == 1, result.output
+    payload = json.loads(result.output)
+    assert payload["errors"][-1]["code"] == "REMINDER_LIST_BACKFILL_CONFLICT"
+    assert payload["updated"] == 0
+    assert payload["backup"] is None
+    assert query_calls == 4
+    assert calls["backup"] == 0
+    assert calls["apply"] == 0
+
+
+@pytest.mark.parametrize("mutation", ["deleted", "moved", "renamed"])
+def test_tty_confirmation_rejects_apple_changes_during_prompt_before_backup(
+    monkeypatch,
+    mutation,
+) -> None:
+    calls = _install_read_only_spies(monkeypatch, actions=[_action("legacy")])
+    monkeypatch.setattr(command, "_is_interactive_terminal", lambda: True, raising=False)
+    query_calls = 0
+
+    def query(list_name, target_date):
+        nonlocal query_calls
+        query_calls += 1
+        round_number = (query_calls - 1) // 2
+        if round_number == 0 and list_name == "Tasks":
+            name = "Buy milk"
+        elif round_number == 1 and mutation == "moved" and list_name == "Health":
+            name = "Buy milk"
+        elif round_number == 1 and mutation == "renamed" and list_name == "Tasks":
+            name = "Renamed milk"
+        else:
+            return True, []
+        return True, [{
+            "name": name,
+            "due_time": "09:00",
+            "due_at": "2026-07-01 09:00",
+            "list": list_name,
+        }]
+
+    monkeypatch.setattr(command, "query_all_due_on_date", query)
+
+    result = CliRunner().invoke(
+        reminders_command,
+        ["backfill-lists", "--apply"],
+        input="y\n",
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "REMINDER_LIST_BACKFILL_CONFLICT" in result.output
+    assert query_calls == 4
+    assert calls["backup"] == 0
+    assert calls["apply"] == 0
+
+
+def test_second_apple_query_failure_stops_before_backup(monkeypatch) -> None:
+    calls = _install_read_only_spies(monkeypatch, actions=[_action("legacy")])
+    query_calls = 0
+
+    def query(list_name, target_date):
+        nonlocal query_calls
+        query_calls += 1
+        round_number = (query_calls - 1) // 2
+        if round_number == 1 and list_name == "Tasks":
+            return False, []
+        return (
+            True,
+            [{
+                "name": "Buy milk", "due_time": "09:00",
+                "due_at": "2026-07-01 09:00", "list": "Tasks",
+            }] if list_name == "Tasks" else [],
+        )
+
+    monkeypatch.setattr(command, "query_all_due_on_date", query)
+
+    result = CliRunner().invoke(
+        reminders_command,
+        ["backfill-lists", "--apply", "--yes", "--json"],
+    )
+
+    assert result.exit_code == 1, result.output
+    payload = json.loads(result.output)
+    assert payload["errors"][-1]["code"] == "REMINDER_LIST_BACKFILL_QUERY_FAILED"
+    assert payload["updated"] == 0
+    assert payload["backup"] is None
+    assert calls["backup"] == 0
+    assert calls["apply"] == 0
+
+
 def test_text_apply_reports_candidates_update_and_verified_backup_without_notes(
     monkeypatch,
 ) -> None:
@@ -744,6 +893,38 @@ def test_conflict_and_write_failure_keep_verified_backup_and_zero_updates(monkey
         assert payload["updated"] == 0
         assert payload["backup"] == {"path": str(backup_path), "integrity": "ok"}
         assert "private" not in result.output
+
+
+@pytest.mark.parametrize(
+    "applied",
+    [[], ["legacy", "extra"], ["legacy", "legacy"]],
+)
+def test_apply_rejects_incomplete_extra_or_duplicate_applied_ids(monkeypatch, applied) -> None:
+    _install_single_candidate_plan(monkeypatch)
+    monkeypatch.setattr(
+        command,
+        "backup_database",
+        lambda **kwargs: Path("/tmp/nudge-test-backup.db"),
+    )
+    monkeypatch.setattr(
+        command,
+        "apply_reminder_list_backfill",
+        lambda updates, *, snapshots: applied,
+    )
+
+    result = CliRunner().invoke(
+        reminders_command,
+        ["backfill-lists", "--apply", "--yes", "--json"],
+    )
+
+    assert result.exit_code == 1, result.output
+    payload = json.loads(result.output)
+    assert payload["errors"][-1] == {
+        "code": "REMINDER_LIST_BACKFILL_WRITE_FAILED",
+        "message": "Unable to update Nudge reminder list ownership.",
+    }
+    assert payload["updated"] == 0
+    assert payload["backup"]["integrity"] == "ok"
 
 
 def test_backup_without_initialize_never_opens_state_connection_and_cleans_partial(
@@ -856,7 +1037,7 @@ def test_backup_without_initialize_preserves_existing_destination_on_failure(
 
     with pytest.MonkeyPatch.context() as cleanup_patch:
         cleanup_patch.setattr(db_commands.sqlite3, "connect", failing_connect)
-        with pytest.raises(sqlite3.Error):
+        with pytest.raises(FileExistsError):
             command.backup_database(destination, initialize=False)
 
     assert destination.read_bytes() == existing
@@ -879,6 +1060,107 @@ def test_backup_without_initialize_missing_source_creates_nothing(monkeypatch, t
 
     assert not state_dir.exists()
     assert not destination.exists()
+
+
+def test_default_backup_names_are_unique_even_when_timestamp_is_frozen(monkeypatch, tmp_path) -> None:
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+    monkeypatch.setattr(state, "STATE_DIR", state_dir)
+    monkeypatch.setattr(state, "DB_PATH", db_path)
+    monkeypatch.setattr(db_commands, "_timestamp", lambda: "20260719-120000")
+
+    first = command.backup_database(initialize=False)
+    second = command.backup_database(initialize=False)
+
+    assert first != second
+    assert first.exists()
+    assert second.exists()
+
+
+def test_backup_refuses_existing_destination_without_changing_it(monkeypatch, tmp_path) -> None:
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+    monkeypatch.setattr(state, "STATE_DIR", state_dir)
+    monkeypatch.setattr(state, "DB_PATH", db_path)
+    destination = tmp_path / "existing.db"
+    destination.write_bytes(b"existing backup")
+    before = hashlib.sha256(destination.read_bytes()).hexdigest()
+
+    with pytest.raises(FileExistsError):
+        command.backup_database(destination, initialize=False)
+
+    assert hashlib.sha256(destination.read_bytes()).hexdigest() == before
+
+
+@pytest.mark.parametrize("link_kind", ["same_path", "symlink", "hardlink"])
+def test_backup_refuses_source_database_as_destination(monkeypatch, tmp_path, link_kind) -> None:
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+    monkeypatch.setattr(state, "STATE_DIR", state_dir)
+    monkeypatch.setattr(state, "DB_PATH", db_path)
+    destination = db_path
+    if link_kind == "symlink":
+        destination = tmp_path / "source-link.db"
+        destination.symlink_to(db_path)
+    elif link_kind == "hardlink":
+        destination = tmp_path / "source-hardlink.db"
+        destination.hardlink_to(db_path)
+    before_stat = db_path.stat()
+    before_hash = hashlib.sha256(db_path.read_bytes()).hexdigest()
+
+    with pytest.raises(ValueError, match="source"):
+        command.backup_database(destination, initialize=False)
+
+    after_stat = db_path.stat()
+    assert (after_stat.st_dev, after_stat.st_ino) == (before_stat.st_dev, before_stat.st_ino)
+    assert hashlib.sha256(db_path.read_bytes()).hexdigest() == before_hash
+
+
+def test_backup_does_not_delete_preexisting_staging_collision(monkeypatch, tmp_path) -> None:
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+    monkeypatch.setattr(state, "STATE_DIR", state_dir)
+    monkeypatch.setattr(state, "DB_PATH", db_path)
+
+    class FixedUuid:
+        hex = "fixed"
+
+    monkeypatch.setattr(db_commands, "uuid4", lambda: FixedUuid())
+    destination = tmp_path / "backup.db"
+    staging = tmp_path / ".backup.db.partial-fixed"
+    staging.write_bytes(b"preexisting staging sentinel")
+
+    with pytest.raises(FileExistsError):
+        command.backup_database(destination, initialize=False)
+
+    assert staging.read_bytes() == b"preexisting staging sentinel"
+    assert not destination.exists()
+
+
+def test_backup_files_have_owner_only_permissions(monkeypatch, tmp_path) -> None:
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+    monkeypatch.setattr(state, "STATE_DIR", state_dir)
+    monkeypatch.setattr(state, "DB_PATH", db_path)
+
+    destination = command.backup_database(initialize=False)
+
+    assert destination.stat().st_mode & 0o777 == 0o600
 
 
 def test_reminder_list_backfill_command_has_no_apple_mutation_imports() -> None:
@@ -1110,6 +1392,52 @@ def test_json_output_sanitizes_all_public_strings_without_leaking_notes() -> Non
     assert "中文" in parsed["lists"][0]
     assert parsed["limit"] == 100
     assert parsed["backup"] is not None
+
+
+def test_json_output_preserves_normal_whitespace_and_long_strings_exactly() -> None:
+    list_name = "Work  Tasks"
+    long_backup_path = "/tmp/" + "备" * 700 + ".db"
+    payload = {
+        "schema_version": "nudge.cli.v1",
+        "ok": True,
+        "dry_run": False,
+        "apply_allowed": True,
+        "lists": [list_name],
+        "range": {"from": None, "to": None},
+        "limit": 100,
+        "total_eligible": 1,
+        "remaining": 0,
+        "candidates": [{
+            "id": "legacy  id",
+            "summary": "普通  中文",
+            "scheduled_at": "2026-07-01 09:00",
+            "status": "pending",
+            "current_reminder_list": None,
+            "target_list": list_name,
+            "match_type": "exact_title",
+        }],
+        "missing": [],
+        "ambiguous": [],
+        "invalid": [],
+        "updated": 1,
+        "backup": {"path": long_backup_path, "integrity": "ok"},
+        "conflicts": [],
+        "errors": [],
+    }
+
+    @click.command()
+    def emit_payload() -> None:
+        command._emit(payload, json_output=True)
+
+    result = CliRunner().invoke(emit_payload)
+
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert parsed["lists"] == [list_name]
+    assert parsed["candidates"][0]["id"] == "legacy  id"
+    assert parsed["candidates"][0]["summary"] == "普通  中文"
+    assert parsed["candidates"][0]["target_list"] == list_name
+    assert parsed["backup"]["path"] == long_backup_path
 
 
 def test_programming_errors_are_not_mislabeled_as_sqlite_failures(monkeypatch) -> None:

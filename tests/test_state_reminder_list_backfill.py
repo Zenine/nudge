@@ -290,6 +290,101 @@ def test_backfill_changes_only_reminder_list_and_returns_applied_ids(monkeypatch
     }
 
 
+@pytest.mark.parametrize("outcome", ["success", "conflict", "write_error"])
+def test_backfill_existing_write_never_initializes_or_migrates_legacy_state(
+    monkeypatch,
+    tmp_path,
+    outcome,
+):
+    state_dir = tmp_path / "legacy-state"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    legacy_path = state_dir / "state.json"
+    legacy_contents = (
+        '{"habits":{"private-habit":{"last_logged":"2026-07-18","streak":7}}}'
+    )
+    legacy_path.write_text(legacy_contents, encoding="utf-8")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE actions (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                scheduled_at TEXT,
+                completed_at TEXT,
+                status TEXT,
+                external_id TEXT,
+                reminder_list TEXT,
+                feedback TEXT,
+                created_at TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO actions (
+                id, type, summary, scheduled_at, status, reminder_list, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "legacy", "reminder", "Buy milk", "2026-07-01 09:00",
+                "pending", None, "2026-07-01 08:00",
+            ),
+        )
+        if outcome == "write_error":
+            conn.execute(
+                """
+                CREATE TRIGGER abort_legacy_backfill
+                BEFORE UPDATE OF reminder_list ON actions
+                BEGIN
+                    SELECT RAISE(ABORT, 'legacy backfill rejected');
+                END
+                """
+            )
+    _isolate_state(monkeypatch, state_dir)
+    snapshot = {
+        "id": "legacy",
+        "type": "reminder",
+        "summary": "Stale title" if outcome == "conflict" else "Buy milk",
+        "scheduled_at": "2026-07-01 09:00",
+        "status": "pending",
+        "reminder_list": None,
+    }
+
+    if outcome == "conflict":
+        with pytest.raises(state.ReminderListBackfillConflictError):
+            state.apply_reminder_list_backfill(
+                [{"id": "legacy", "target_list": "Tasks"}],
+                snapshots={"legacy": snapshot},
+            )
+    elif outcome == "write_error":
+        with pytest.raises(sqlite3.IntegrityError, match="legacy backfill rejected"):
+            state.apply_reminder_list_backfill(
+                [{"id": "legacy", "target_list": "Tasks"}],
+                snapshots={"legacy": snapshot},
+            )
+    else:
+        assert state.apply_reminder_list_backfill(
+            [{"id": "legacy", "target_list": "Tasks"}],
+            snapshots={"legacy": snapshot},
+        ) == ["legacy"]
+
+    assert legacy_path.read_text(encoding="utf-8") == legacy_contents
+    assert not (state_dir / "state.json.bak").exists()
+    with sqlite3.connect(db_path) as conn:
+        tables = {
+            row[0]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+        reminder_list = conn.execute(
+            "SELECT reminder_list FROM actions WHERE id = 'legacy'"
+        ).fetchone()[0]
+    assert "habit_logs" not in tables
+    assert "state_migrations" not in tables
+    assert reminder_list == ("Tasks" if outcome == "success" else None)
+
+
 def test_stale_second_snapshot_rejects_entire_batch(monkeypatch, tmp_path):
     _isolate_state(monkeypatch, tmp_path)
     _insert_action("first")

@@ -86,19 +86,37 @@ def backup_database(output: Path | None = None, *, initialize: bool = True) -> P
         _ensure_db_exists()
     elif not state.DB_PATH.is_file():
         raise FileNotFoundError(state.DB_PATH)
-    destination = output or state.STATE_DIR / "backups" / f"nudge-{_timestamp()}.db"
+    destination = output or (
+        state.STATE_DIR / "backups" / f"nudge-{_timestamp()}-{uuid4().hex}.db"
+    )
+    source_resolved = state.DB_PATH.resolve()
+    destination_resolved = destination.resolve()
+    if destination_resolved == source_resolved:
+        raise ValueError("backup destination must differ from source database")
+    if os.path.lexists(destination):
+        try:
+            if os.path.samefile(destination, state.DB_PATH):
+                raise ValueError("backup destination must differ from source database")
+        except FileNotFoundError:
+            pass
+        raise FileExistsError(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     staging = destination.with_name(f".{destination.name}.partial-{uuid4().hex}")
+    staging_created = False
 
     try:
+        staging_fd = os.open(staging, os.O_CREAT | os.O_EXCL | os.O_RDWR, 0o600)
+        staging_created = True
+        os.close(staging_fd)
+        os.chmod(staging, 0o600)
         with sqlite3.connect(str(state.DB_PATH)) as source, sqlite3.connect(str(staging)) as target:
             source.backup(target)
 
         if _integrity_check(staging) != "ok":
             raise RuntimeError(f"backup integrity check failed: {destination}")
-        os.replace(staging, destination)
+        os.link(staging, destination)
     finally:
-        if staging.exists():
+        if staging_created and staging.exists():
             staging.unlink()
     return destination
 
@@ -186,7 +204,7 @@ def _integrity_check(path: Path) -> str:
 
 
 def _timestamp() -> str:
-    return datetime.now().strftime("%Y%m%d-%H%M%S")
+    return datetime.now().strftime("%Y%m%d-%H%M%S-%f")
 
 
 def _emit(payload: dict, json_output: bool) -> None:

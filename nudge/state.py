@@ -138,6 +138,16 @@ def _get_conn() -> sqlite3.Connection:
     return conn
 
 
+def _get_existing_write_conn() -> sqlite3.Connection:
+    """Open the configured database for writes without setup or migration."""
+    if not DB_PATH.is_file():
+        raise sqlite3.OperationalError("state database is unavailable")
+    database_uri = f"{DB_PATH.resolve().as_uri()}?mode=rw"
+    conn = sqlite3.connect(database_uri, uri=True)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 @contextmanager
 def _db():
     """Context manager for database connections — auto-closes on exit."""
@@ -781,7 +791,7 @@ def apply_reminder_list_backfill(
             "snapshot": {field: snapshot[field] for field in snapshot_fields},
         })
 
-    conn = _get_conn()
+    conn = _get_existing_write_conn()
     try:
         conn.execute("BEGIN IMMEDIATE")
         placeholders = ",".join("?" for _ in prepared)

@@ -136,45 +136,8 @@ def backfill_lists_command(
         limit=parsed_limit,
     )
 
-    apple_rows: list[dict] = []
-    errors: list[dict] = []
-    row_number = 0
-    seen_queries: set[tuple[str, date]] = set()
     query_dates = tuple(dict.fromkeys(batch.query_dates))
-    for list_name in reminder_lists:
-        for target_date in query_dates:
-            query_key = (list_name, target_date)
-            if query_key in seen_queries:
-                continue
-            seen_queries.add(query_key)
-            try:
-                ok, rows = query_all_due_on_date(list_name, target_date)
-            except Exception:
-                ok, rows = False, []
-
-            query_invalid = not ok or not isinstance(rows, list)
-            if isinstance(rows, list):
-                for row in rows:
-                    current_number = row_number
-                    row_number += 1
-                    if not _valid_query_row(row, list_name, target_date):
-                        query_invalid = True
-                        continue
-                    apple_rows.append({
-                        "row_key": current_number,
-                        "name": row["name"],
-                        "due_at": row["due_at"],
-                        "list": list_name,
-                    })
-            if query_invalid:
-                errors.append({
-                    "code": QUERY_FAILED,
-                    "list": list_name,
-                    "date": target_date.isoformat(),
-                    "message": "Unable to query this Reminder list and date.",
-                })
-
-    plan = plan_list_backfill(batch.actions, apple_rows)
+    plan, errors = _query_and_plan(batch.actions, query_dates, reminder_lists)
     snapshots = {
         action["id"]: dict(action)
         for action in batch.actions
@@ -235,6 +198,33 @@ def backfill_lists_command(
                 json_output=False,
             )
 
+    revalidated_plan, revalidation_errors = _query_and_plan(
+        batch.actions,
+        query_dates,
+        reminder_lists,
+    )
+    if revalidation_errors:
+        failed = dict(payload)
+        failed["ok"] = False
+        failed["apply_allowed"] = False
+        failed["updated"] = 0
+        failed["errors"] = revalidation_errors
+        _finish(failed, json_output)
+    if _plan_fingerprint(revalidated_plan) != _plan_fingerprint(plan):
+        failed = _with_error(
+            payload,
+            code=CONFLICT,
+            message="Reminder data changed after planning; re-run to review current candidates.",
+        )
+        failed["conflicts"] = sorted({
+            item["id"]
+            for current_plan in (plan, revalidated_plan)
+            for category in ("candidates", "missing", "ambiguous")
+            for item in current_plan.get(category, [])
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+        })
+        _finish(failed, json_output)
+
     try:
         backup_path = backup_database(initialize=False)
     except Exception:
@@ -255,6 +245,15 @@ def backfill_lists_command(
     ]
     try:
         applied = apply_reminder_list_backfill(updates, snapshots=snapshots)
+        requested_ids = [update["id"] for update in updates]
+        if (
+            not isinstance(applied, list)
+            or any(not isinstance(action_id, str) for action_id in applied)
+            or len(applied) != len(requested_ids)
+            or len(set(applied)) != len(applied)
+            or set(applied) != set(requested_ids)
+        ):
+            raise ValueError("applied reminder list backfill IDs do not match request")
     except ReminderListBackfillConflictError as exc:
         failed = _with_error(
             payload,
@@ -317,6 +316,59 @@ def _valid_query_row(row: object, list_name: str, target_date: date) -> bool:
     if not isinstance(due_time, str) or len(due_time) != 5:
         return False
     return due_time == due_at.strftime("%H:%M")
+
+
+def _query_and_plan(
+    actions: list[dict],
+    query_dates: tuple[date, ...],
+    reminder_lists: list[str],
+) -> tuple[dict, list[dict]]:
+    """Query the fixed Apple scope and produce a deterministic safe plan."""
+    apple_rows: list[dict] = []
+    errors: list[dict] = []
+    row_number = 0
+    for list_name in reminder_lists:
+        for target_date in query_dates:
+            try:
+                ok, rows = query_all_due_on_date(list_name, target_date)
+            except Exception:
+                ok, rows = False, []
+
+            query_invalid = not ok or not isinstance(rows, list)
+            if isinstance(rows, list):
+                for row in rows:
+                    current_number = row_number
+                    row_number += 1
+                    if not _valid_query_row(row, list_name, target_date):
+                        query_invalid = True
+                        continue
+                    apple_rows.append({
+                        "row_key": current_number,
+                        "name": row["name"],
+                        "due_at": row["due_at"],
+                        "list": list_name,
+                    })
+            if query_invalid:
+                errors.append({
+                    "code": QUERY_FAILED,
+                    "list": list_name,
+                    "date": target_date.isoformat(),
+                    "message": "Unable to query this Reminder list and date.",
+                })
+    return plan_list_backfill(actions, apple_rows), errors
+
+
+def _plan_fingerprint(plan: dict) -> str:
+    stable_plan = {
+        category: plan.get(category, [])
+        for category in ("candidates", "missing", "ambiguous")
+    }
+    return json.dumps(
+        stable_plan,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
 
 
 def _error_payload(
@@ -429,12 +481,22 @@ def _public_payload(payload: dict) -> dict:
 
 def _sanitize_public_strings(value):
     if isinstance(value, str):
-        return _safe_text(value)
+        return _safe_json_text(value)
     if isinstance(value, list):
         return [_sanitize_public_strings(item) for item in value]
     if isinstance(value, dict):
         return {key: _sanitize_public_strings(item) for key, item in value.items()}
     return value
+
+
+def _safe_json_text(value: str) -> str:
+    text = _OSC_RE.sub("", value)
+    text = _ANSI_RE.sub("", text)
+    return "".join(
+        character
+        for character in text
+        if not unicodedata.category(character).startswith("C")
+    )
 
 
 def _public_items(payload: dict, key: str, allowed: tuple[str, ...]) -> list[dict]:
