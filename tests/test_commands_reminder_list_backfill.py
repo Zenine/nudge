@@ -1,5 +1,6 @@
 """CLI contracts for legacy Reminder list ownership backfill."""
 
+import hashlib
 import json
 import sqlite3
 import unicodedata
@@ -12,6 +13,7 @@ from click.testing import CliRunner
 from nudge.commands import reminder_list_backfill as command
 from nudge.commands.reminders import reminders_command
 from nudge.reminder_lists import ReminderListBackfillBatch
+import nudge.state as state
 
 
 def test_backfill_lists_command_is_registered() -> None:
@@ -36,6 +38,18 @@ def _action(
         "status": "pending",
         "reminder_list": None,
         "notes": "private SQLite note",
+    }
+
+
+def _state_directory_snapshot(directory) -> dict:
+    return {
+        path.name: (
+            path.stat().st_size,
+            path.stat().st_mtime_ns,
+            hashlib.sha256(path.read_bytes()).hexdigest(),
+        )
+        for path in directory.iterdir()
+        if path.is_file()
     }
 
 
@@ -676,3 +690,78 @@ def test_programming_errors_are_not_mislabeled_as_sqlite_failures(monkeypatch) -
     assert result.exit_code == 1
     assert isinstance(result.exception, RuntimeError)
     assert "REMINDER_LIST_BACKFILL_WRITE_FAILED" not in result.output
+
+
+def test_unmigrated_actions_schema_fails_before_apple_query_without_file_changes(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.delenv("NUDGE_STATE_DIR", raising=False)
+    state_dir = tmp_path / "old-state"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE actions (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                scheduled_at TEXT,
+                completed_at TEXT,
+                status TEXT,
+                external_id TEXT,
+                feedback TEXT,
+                created_at TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO actions (
+                id, type, summary, scheduled_at, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "legacy", "reminder", "Looks eligible", "2026-07-01 09:00",
+                "pending", "2026-07-01 08:00",
+            ),
+        )
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f'[state]\ndir = "{state_dir}"\n[reminders]\nsync_lists = ["Tasks"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(state, "STATE_DIR", state.STATE_DIR)
+    monkeypatch.setattr(state, "DB_PATH", state.DB_PATH)
+    monkeypatch.setattr(state, "LEGACY_JSON", state.LEGACY_JSON)
+    query_calls = []
+
+    def unexpected_query(*args):
+        query_calls.append(args)
+        return True, []
+
+    monkeypatch.setattr(command, "query_all_due_on_date", unexpected_query)
+    before = _state_directory_snapshot(state_dir)
+
+    result = CliRunner().invoke(
+        reminders_command,
+        ["backfill-lists", "--config", str(config_path), "--json"],
+    )
+
+    assert result.exit_code == 1, result.output
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert payload["apply_allowed"] is False
+    assert payload["candidates"] == []
+    assert payload["errors"] == [{
+        "code": "REMINDER_LIST_BACKFILL_WRITE_FAILED",
+        "message": "Unable to read Nudge actions.",
+    }]
+    assert query_calls == []
+    assert str(state_dir) not in result.output
+    assert "reminder_list" not in result.output
+    assert _state_directory_snapshot(state_dir) == before
+    with sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True) as conn:
+        columns = [row[1] for row in conn.execute("PRAGMA table_info(actions)")]
+    assert "reminder_list" not in columns

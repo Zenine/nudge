@@ -182,12 +182,8 @@ def test_get_actions_readonly_preserves_database_files_and_legacy_json(monkeypat
         "type": "reminder",
         "summary": "Buy milk",
         "scheduled_at": "2026-07-01 09:00",
-        "completed_at": None,
         "status": "pending",
-        "external_id": None,
         "reminder_list": None,
-        "feedback": None,
-        "created_at": "2026-07-01 08:00",
     }]
     assert db_path.stat().st_mtime_ns == before_mtime
     assert {path.name for path in state_dir.iterdir()} == before_files
@@ -230,7 +226,7 @@ def test_get_actions_readonly_rejects_nonempty_wal_without_touching_files(monkey
     before = _directory_snapshot(state_dir)
 
     try:
-        with pytest.raises(sqlite3.OperationalError, match="WAL"):
+        with pytest.raises(sqlite3.OperationalError, match="non-empty WAL"):
             state.get_actions_readonly()
         assert _directory_snapshot(state_dir) == before
     finally:

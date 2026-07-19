@@ -916,14 +916,20 @@ def get_actions_readonly() -> list[dict]:
     wal_identity = _readonly_optional_identity(wal_path)
     shm_identity = _readonly_optional_identity(shm_path)
     if wal_identity is not None and wal_identity[2] > 0:
-        raise sqlite3.OperationalError("read-only state has an uncheckpointed WAL")
+        raise sqlite3.OperationalError("read-only state has a non-empty WAL")
 
     database_uri = f"{DB_PATH.resolve().as_uri()}?mode=ro&immutable=1"
     conn = sqlite3.connect(database_uri, uri=True)
     conn.row_factory = sqlite3.Row
     try:
         conn.execute("PRAGMA query_only = ON")
-        rows = conn.execute("SELECT * FROM actions ORDER BY created_at DESC").fetchall()
+        rows = conn.execute(
+            """
+            SELECT id, type, summary, scheduled_at, status, reminder_list
+            FROM actions
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
         actions = [dict(row) for row in rows]
     finally:
         conn.close()
