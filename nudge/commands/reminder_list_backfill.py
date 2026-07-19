@@ -218,10 +218,14 @@ def backfill_lists_command(
                 json_output,
             )
         _emit(payload, json_output=False)
-        if not click.confirm(
-            "确认仅回填以上 Nudge SQLite reminder_list？",
-            default=False,
-        ):
+        try:
+            confirmed = click.confirm(
+                "确认仅回填以上 Nudge SQLite reminder_list？",
+                default=False,
+            )
+        except click.Abort:
+            confirmed = False
+        if not confirmed:
             _finish(
                 _with_error(
                     payload,
@@ -389,7 +393,7 @@ def _public_payload(payload: dict) -> dict:
                 if key in conflict
             })
 
-    return {
+    public = {
         "schema_version": payload.get("schema_version"),
         "ok": bool(payload.get("ok")),
         "dry_run": bool(payload.get("dry_run")),
@@ -420,6 +424,17 @@ def _public_payload(payload: dict) -> dict:
         "conflicts": conflicts,
         "errors": _public_items(payload, "errors", ("code", "list", "date", "message")),
     }
+    return _sanitize_public_strings(public)
+
+
+def _sanitize_public_strings(value):
+    if isinstance(value, str):
+        return _safe_text(value)
+    if isinstance(value, list):
+        return [_sanitize_public_strings(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _sanitize_public_strings(item) for key, item in value.items()}
+    return value
 
 
 def _public_items(payload: dict, key: str, allowed: tuple[str, ...]) -> list[dict]:

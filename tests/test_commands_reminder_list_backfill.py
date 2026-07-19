@@ -566,6 +566,41 @@ def test_tty_confirmation_no_cancels_after_final_summary_without_backup(monkeypa
     assert calls["apply"] == 0
 
 
+def test_tty_confirmation_eof_is_stable_cancelled_without_backup(monkeypatch) -> None:
+    calls = _install_single_candidate_plan(monkeypatch)
+    monkeypatch.setattr(command, "_is_interactive_terminal", lambda: True, raising=False)
+
+    result = CliRunner().invoke(
+        reminders_command,
+        ["backfill-lists", "--apply"],
+        input="",
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "REMINDER_LIST_BACKFILL_CANCELLED" in result.output
+    assert "Aborted!" not in result.output
+    assert calls["backup"] == 0
+    assert calls["apply"] == 0
+
+
+def test_tty_confirmation_ctrl_c_is_stable_cancelled_without_backup(monkeypatch) -> None:
+    calls = _install_single_candidate_plan(monkeypatch)
+    monkeypatch.setattr(command, "_is_interactive_terminal", lambda: True, raising=False)
+    monkeypatch.setattr(
+        command.click,
+        "confirm",
+        lambda *args, **kwargs: (_ for _ in ()).throw(click.Abort()),
+    )
+
+    result = CliRunner().invoke(reminders_command, ["backfill-lists", "--apply"])
+
+    assert result.exit_code == 1, result.output
+    assert "REMINDER_LIST_BACKFILL_CANCELLED" in result.output
+    assert "Aborted!" not in result.output
+    assert calls["backup"] == 0
+    assert calls["apply"] == 0
+
+
 def test_apply_yes_backs_up_before_atomic_write_with_complete_snapshots(monkeypatch) -> None:
     _install_single_candidate_plan(monkeypatch)
     events: list[object] = []
@@ -1000,6 +1035,81 @@ def test_text_output_removes_terminal_controls_and_truncates_untrusted_fields() 
     assert "[31m" not in result.output
     assert "8;;https://bad" not in result.output
     assert "X" * 501 not in result.output
+
+
+def test_json_output_sanitizes_all_public_strings_without_leaking_notes() -> None:
+    injection = (
+        "safe\x7f\x85\u202e\u2066\x1b[31mRED\x1b[0m"
+        "\x1b]8;;https://bad\x07OSC\x1b]8;;\x07中文"
+    )
+    payload = {
+        "schema_version": "nudge.cli.v1",
+        "ok": False,
+        "dry_run": False,
+        "apply_allowed": False,
+        "lists": [injection],
+        "range": {"from": injection, "to": None},
+        "limit": 100,
+        "total_eligible": 1,
+        "remaining": 0,
+        "candidates": [{
+            "id": injection,
+            "summary": injection,
+            "scheduled_at": injection,
+            "status": injection,
+            "current_reminder_list": None,
+            "target_list": injection,
+            "match_type": injection,
+            "notes": "private candidate note",
+        }],
+        "missing": [],
+        "ambiguous": [],
+        "invalid": [],
+        "updated": 0,
+        "backup": {"path": injection, "integrity": injection, "notes": "private backup"},
+        "conflicts": [injection, {"id": injection, "reason": injection, "notes": "private"}],
+        "errors": [{
+            "code": injection,
+            "message": injection,
+            "list": injection,
+            "date": injection,
+            "notes": "private error note",
+        }],
+    }
+
+    @click.command()
+    def emit_payload() -> None:
+        command._emit(payload, json_output=True)
+
+    result = CliRunner().invoke(emit_payload)
+
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+
+    def public_strings(value):
+        if isinstance(value, str):
+            yield value
+        elif isinstance(value, list):
+            for item in value:
+                yield from public_strings(item)
+        elif isinstance(value, dict):
+            for item in value.values():
+                yield from public_strings(item)
+
+    strings = list(public_strings(parsed))
+    assert all(
+        not unicodedata.category(character).startswith("C")
+        for value in strings
+        for character in value
+    )
+    assert all("[31m" not in value and "8;;https://bad" not in value for value in strings)
+    assert "\x7f" not in result.output
+    assert "\x85" not in result.output
+    assert "\u202e" not in result.output
+    assert "private" not in result.output
+    assert "中文" in parsed["lists"][0]
+    assert parsed["limit"] == 100
+    assert parsed["backup"] is not None
 
 
 def test_programming_errors_are_not_mislabeled_as_sqlite_failures(monkeypatch) -> None:
