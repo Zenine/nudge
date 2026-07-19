@@ -200,8 +200,22 @@ sync_lists = ["Tasks", "Habits", "Fitness Tasks", "Family Tasks"]
 - 已支持用途映射的命令会使用这里的列表；未支持的路径会回退到默认列表。
 - `sync_lists` 是 `reminders sync-completed`、`daily sync` 与 `reminders backfill-lists` 默认读取的列表集合；命令行重复传入 `--list` 时会完全覆盖该集合，并按给定顺序去重。
 - 新建 reminder action 会把实际目标列表保存到 SQLite，后续同步和 ID backfill 会先按该归属过滤；升级前没有列表字段的旧 action 保持兼容，仍需命中 Apple 的明确完成记录才会写回。
-- `reminders backfill-lists` 默认只读检查缺少 `reminder_list` 的开放 action；`--apply` 也只更新本地 SQLite 的列表归属，不修改 Apple Reminders。它要求现有数据库已通过当前版本的常规状态初始化/迁移且没有非空 WAL；dry-run 不会替你创建、迁移或修复数据库，条件不满足时会安全失败。请先完成正常升级流程并确保没有活跃状态写入，再重新预览。
+- `reminders backfill-lists` 默认只读检查缺少 `reminder_list` 的开放 action；`--apply` 也只更新本地 SQLite 的列表归属，不修改 Apple Reminders。它要求现有数据库已通过当前版本的标准状态初始化/迁移且没有非空 WAL；dry-run 不会替你创建、迁移或修复数据库，条件不满足时会安全失败。
 - 确认 apply 后，命令会二次核验 Apple 候选、创建权限为 `0600` 且通过完整性检查的数据库备份，并在单个事务中写入；任何查询或并发冲突都会阻止整批更新。
+
+升级旧 schema 时，先停止 `nudge daemon run`、相关 LaunchAgent 和其它状态写入进程，等待正在执行的 Nudge 命令退出；不要手工删除 `.db-wal` 或 `.db-shm`。然后用不访问 Apple 的 `skills status` 入口打开目标状态库，再运行 backfill dry-run：
+
+```bash
+# 默认配置
+nudge skills status --json
+nudge reminders backfill-lists --json
+
+# 自定义配置：两个命令必须使用同一个配置文件
+nudge skills status --config ./config.custom.toml --json
+nudge reminders backfill-lists --config ./config.custom.toml --json
+```
+
+`skills status` 的业务输出是只读的，但首次打开旧数据库时会执行 Nudge 现有的 SQLite schema 初始化/迁移。使用自定义配置时不要在两步之间改变 `NUDGE_STATE_DIR`，确保 `[state].dir` 始终解析到同一个状态库。若仍报告非空 WAL 或旧 schema，请保持停止写入并重新排查持有数据库的进程，不要强行 apply。
 
 ## 最小安全配置
 

@@ -272,6 +272,24 @@ nudge schedule "深度工作" --duration 120 --book --slot 1 --title "Deep Work"
 - `--apply` 在 TTY 中使用默认答案为“否”的整批确认；非 TTY 或 `--json` 模式必须显式加 `--yes`。确认后会再次查询 Apple 并核对候选未变化，再自动创建权限为 `0600` 且通过完整性检查的数据库完整备份，最后用单个 SQLite 事务只更新 `reminder_list`。
 - Apple 数据在整个 `backfill-lists` 流程中保持零修改；若二次核验、备份、快照或并发状态出现冲突，整批回滚，不留下部分更新。
 
+旧 schema 或非空 WAL 的安全前置步骤：
+
+1. 停止 `nudge daemon run`、相关 LaunchAgent 和其它可能写状态库的 Nudge 进程，并等待正在执行的命令退出；不要手工删除 `.db-wal` 或 `.db-shm`。
+2. 对目标状态库运行现有的只读状态入口 `nudge skills status --json`。该命令不访问 Apple，但会通过 Nudge 的标准状态初始化/迁移流程打开 SQLite，使旧 `actions` 表补齐当前字段并让 SQLite 正常处理 WAL。
+3. 使用自定义配置时，两步必须传入同一个 `--config`，且不要在两步之间改变 `NUDGE_STATE_DIR`，否则可能升级和检查不同的数据库：
+
+```bash
+# 默认配置
+nudge skills status --json
+nudge reminders backfill-lists --json
+
+# 自定义配置
+nudge skills status --config ./config.custom.toml --json
+nudge reminders backfill-lists --config ./config.custom.toml --json
+```
+
+如果完成上述步骤后仍报告非空 WAL 或旧 schema，请保持停止写入，不要强行 apply 或删除 SQLite sidecar 文件；先确认没有其它进程持有状态库，再重新运行同一配置的 `skills status` 和 dry-run。
+
 示例：
 
 ```bash
