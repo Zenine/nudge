@@ -908,6 +908,18 @@ def get_actions(
     return [dict(row) for row in rows]
 
 
+def get_actions_readonly() -> list[dict]:
+    """Read all actions without creating or migrating any local state."""
+    database_uri = f"{DB_PATH.resolve().as_uri()}?mode=ro"
+    conn = sqlite3.connect(database_uri, uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute("SELECT * FROM actions ORDER BY created_at DESC").fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
 def get_action(action_id: str) -> dict | None:
     """Return one action by id."""
     if not action_id:

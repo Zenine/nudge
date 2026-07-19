@@ -77,6 +77,77 @@ def _snapshot(action_id):
     return {field: action[field] for field in SNAPSHOT_FIELDS}
 
 
+def test_get_actions_readonly_missing_database_creates_nothing(monkeypatch, tmp_path):
+    state_dir = tmp_path / "missing-state"
+    _isolate_state(monkeypatch, state_dir)
+
+    with pytest.raises(sqlite3.OperationalError):
+        state.get_actions_readonly()
+
+    assert not state_dir.exists()
+    assert not (state_dir / "nudge.db").exists()
+    assert not (state_dir / "state.json").exists()
+
+
+def test_get_actions_readonly_preserves_database_files_and_legacy_json(monkeypatch, tmp_path):
+    state_dir = tmp_path / "readonly-state"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    legacy_path = state_dir / "state.json"
+    legacy_contents = '{"habits": {"private": {"streak": 1}}}'
+    legacy_path.write_text(legacy_contents, encoding="utf-8")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE actions (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                scheduled_at TEXT,
+                completed_at TEXT,
+                status TEXT,
+                external_id TEXT,
+                reminder_list TEXT,
+                feedback TEXT,
+                created_at TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO actions (
+                id, type, summary, scheduled_at, status, reminder_list, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "legacy", "reminder", "Buy milk", "2026-07-01 09:00",
+                "pending", None, "2026-07-01 08:00",
+            ),
+        )
+    _isolate_state(monkeypatch, state_dir)
+    before_files = {path.name for path in state_dir.iterdir()}
+    before_mtime = db_path.stat().st_mtime_ns
+
+    actions = state.get_actions_readonly()
+
+    assert actions == [{
+        "id": "legacy",
+        "type": "reminder",
+        "summary": "Buy milk",
+        "scheduled_at": "2026-07-01 09:00",
+        "completed_at": None,
+        "status": "pending",
+        "external_id": None,
+        "reminder_list": None,
+        "feedback": None,
+        "created_at": "2026-07-01 08:00",
+    }]
+    assert db_path.stat().st_mtime_ns == before_mtime
+    assert {path.name for path in state_dir.iterdir()} == before_files
+    assert legacy_path.read_text(encoding="utf-8") == legacy_contents
+    assert not (state_dir / "state.json.bak").exists()
+
+
 def test_backfill_changes_only_reminder_list_and_returns_applied_ids(monkeypatch, tmp_path):
     _isolate_state(monkeypatch, tmp_path)
     _insert_action(

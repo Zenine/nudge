@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import re
+import sqlite3
 import tomllib
+import unicodedata
 from datetime import date
 
 import click
@@ -21,7 +24,7 @@ from nudge.reminder_lists import (
 from nudge.state import (
     apply_reminder_list_backfill,
     configure_state,
-    get_actions,
+    get_actions_readonly,
 )
 
 
@@ -30,6 +33,9 @@ RANGE_INVALID = "REMINDER_LIST_BACKFILL_RANGE_INVALID"
 CONFIG_INVALID = "REMINDER_LIST_BACKFILL_CONFIG_INVALID"
 QUERY_FAILED = "REMINDER_LIST_BACKFILL_QUERY_FAILED"
 WRITE_FAILED = "REMINDER_LIST_BACKFILL_WRITE_FAILED"
+_OSC_RE = re.compile(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
+_ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+_TEXT_LIMIT = 500
 
 
 @click.command("backfill-lists")
@@ -66,6 +72,18 @@ def backfill_lists_command(
         )
         _finish(payload, json_output)
 
+    if apply_changes:
+        payload = _error_payload(
+            code=WRITE_FAILED,
+            message="Apply is unavailable until the write path is connected.",
+            dry_run=False,
+            list_names=list_names,
+            from_text=from_text,
+            to_text=to_text,
+            limit=None,
+        )
+        _finish(payload, json_output)
+
     try:
         date_from = _parse_date(from_text)
         date_to = _parse_date(to_text)
@@ -89,6 +107,7 @@ def backfill_lists_command(
 
     try:
         config = load_config(config_path)
+        _validate_config(config)
         configure_state(config)
         reminder_lists = resolve_sync_lists(list_names, config)
     except (OSError, tomllib.TOMLDecodeError, ValueError):
@@ -104,14 +123,8 @@ def backfill_lists_command(
         _finish(payload, json_output)
 
     try:
-        actions = get_actions()
-        batch = select_list_backfill_actions(
-            actions,
-            date_from=date_from,
-            date_to=date_to,
-            limit=parsed_limit,
-        )
-    except Exception:
+        actions = get_actions_readonly()
+    except (FileNotFoundError, sqlite3.Error, OSError):
         payload = _error_payload(
             code=WRITE_FAILED,
             message="Unable to read Nudge actions.",
@@ -122,6 +135,12 @@ def backfill_lists_command(
             limit=parsed_limit,
         )
         _finish(payload, json_output)
+    batch = select_list_backfill_actions(
+        actions,
+        date_from=date_from,
+        date_to=date_to,
+        limit=parsed_limit,
+    )
 
     apple_rows: list[dict] = []
     errors: list[dict] = []
@@ -140,16 +159,11 @@ def backfill_lists_command(
                 ok, rows = False, []
 
             query_invalid = not ok or not isinstance(rows, list)
-            query_message = (
-                rows.strip()
-                if not ok and isinstance(rows, str) and rows.strip()
-                else "Unable to query this Reminder list and date."
-            )
             if isinstance(rows, list):
                 for row in rows:
                     current_number = row_number
                     row_number += 1
-                    if not _valid_query_row(row, list_name):
+                    if not _valid_query_row(row, list_name, target_date):
                         query_invalid = True
                         continue
                     apple_rows.append({
@@ -163,7 +177,7 @@ def backfill_lists_command(
                     "code": QUERY_FAILED,
                     "list": list_name,
                     "date": target_date.isoformat(),
-                    "message": query_message,
+                    "message": "Unable to query this Reminder list and date.",
                 })
 
     plan = plan_list_backfill(batch.actions, apple_rows)
@@ -219,13 +233,27 @@ def _parse_limit(value: str) -> int:
     return parsed
 
 
-def _valid_query_row(row: object, list_name: str) -> bool:
+def _validate_config(config: object) -> None:
+    if not isinstance(config, dict):
+        raise ValueError("config must be an object")
+    for section in ("reminders", "general", "state"):
+        if section in config and not isinstance(config[section], dict):
+            raise ValueError(f"[{section}] must be a table")
+
+
+def _valid_query_row(row: object, list_name: str, target_date: date) -> bool:
     if not isinstance(row, dict) or row.get("list") != list_name:
         return False
     name = row.get("name")
     if not isinstance(name, str) or not name.strip():
         return False
-    return parse_strict_minute(row.get("due_at")) is not None
+    due_at = parse_strict_minute(row.get("due_at"))
+    due_time = row.get("due_time")
+    if due_at is None or due_at.date() != target_date:
+        return False
+    if not isinstance(due_time, str) or len(due_time) != 5:
+        return False
+    return due_time == due_at.strftime("%H:%M")
 
 
 def _error_payload(
@@ -337,55 +365,84 @@ def _emit(payload: dict, json_output: bool) -> None:
         return
 
     status = "DRY-RUN" if public["dry_run"] else "APPLY"
-    click.echo(f"{status} Reminder list backfill · {', '.join(public['lists'])}")
+    click.echo(
+        f"{status} Reminder list backfill · "
+        f"{', '.join(_safe_text(item) for item in public['lists'])}"
+    )
     click.echo(
         "  eligible: "
-        f"{public['total_eligible']} · candidates: {len(public['candidates'])}"
+        f"{_safe_text(public['total_eligible'])} · candidates: {len(public['candidates'])}"
         f" · missing: {len(public['missing'])} · ambiguous: {len(public['ambiguous'])}"
-        f" · invalid: {len(public['invalid'])} · remaining: {public['remaining']}"
+        f" · invalid: {len(public['invalid'])} · remaining: {_safe_text(public['remaining'])}"
     )
-    click.echo(f"  updated: {public['updated']}")
+    click.echo(f"  updated: {_safe_text(public['updated'])}")
     if public["backup"] is not None:
         click.echo(
-            f"  backup: {public['backup'].get('path')}"
-            f" · integrity: {public['backup'].get('integrity')}"
+            f"  backup: {_safe_text(public['backup'].get('path'))}"
+            f" · integrity: {_safe_text(public['backup'].get('integrity'))}"
         )
     for conflict in public["conflicts"]:
         if isinstance(conflict, str):
-            click.echo(f"  conflict: {conflict}")
+            click.echo(f"  conflict: {_safe_text(conflict)}")
         else:
             click.echo(
-                f"  conflict: {conflict.get('id', '')}"
-                f" · reason: {conflict.get('reason', '')}"
+                f"  conflict: {_safe_text(conflict.get('id', ''))}"
+                f" · reason: {_safe_text(conflict.get('reason', ''))}"
             )
     for item in public["candidates"]:
         click.echo(
-            f"  candidate: {item.get('id')} · {item.get('scheduled_at')}"
-            f" · {item.get('summary')} · target: {item.get('target_list')}"
-            f" · match_type: {item.get('match_type')}"
+            f"  candidate: {_safe_text(item.get('id'))}"
+            f" · {_safe_text(item.get('scheduled_at'))}"
+            f" · {_safe_text(item.get('summary'))}"
+            f" · target: {_safe_text(item.get('target_list'))}"
+            f" · match_type: {_safe_text(item.get('match_type'))}"
         )
     for item in public["missing"]:
         click.echo(
-            f"  missing: {item.get('id')} · {item.get('scheduled_at')}"
-            f" · {item.get('summary')}"
+            f"  missing: {_safe_text(item.get('id'))}"
+            f" · {_safe_text(item.get('scheduled_at'))}"
+            f" · {_safe_text(item.get('summary'))}"
         )
     for item in public["ambiguous"]:
         matched_lists = item.get("matched_lists") or []
         click.echo(
-            f"  ambiguous: {item.get('id')} · {item.get('scheduled_at')}"
-            f" · {item.get('summary')} · matches: {item.get('matches')}"
-            f" · matched_lists: {', '.join(matched_lists)}"
+            f"  ambiguous: {_safe_text(item.get('id'))}"
+            f" · {_safe_text(item.get('scheduled_at'))}"
+            f" · {_safe_text(item.get('summary'))}"
+            f" · matches: {_safe_text(item.get('matches'))}"
+            f" · matched_lists: {', '.join(_safe_text(value) for value in matched_lists)}"
         )
     for item in public["invalid"]:
         click.echo(
-            f"  invalid: {item.get('id')} · {item.get('scheduled_at')}"
-            f" · {item.get('summary')} · reason: {item.get('reason')}"
+            f"  invalid: {_safe_text(item.get('id'))}"
+            f" · {_safe_text(item.get('scheduled_at'))}"
+            f" · {_safe_text(item.get('summary'))}"
+            f" · reason: {_safe_text(item.get('reason'))}"
         )
     for error in public["errors"]:
         context = ""
         if error.get("list") or error.get("date"):
-            context = f" · {error.get('list', '')} · {error.get('date', '')}"
+            context = (
+                f" · {_safe_text(error.get('list', ''))}"
+                f" · {_safe_text(error.get('date', ''))}"
+            )
         click.echo(
-            f"  error: {error.get('code')} · {error.get('message')}{context}",
+            f"  error: {_safe_text(error.get('code'))}"
+            f" · {_safe_text(error.get('message'))}{context}",
             err=True,
         )
+
+
+def _safe_text(value: object) -> str:
+    """Make one bounded terminal-safe line from an untrusted display value."""
+    text = "" if value is None else str(value)
+    text = _OSC_RE.sub("", text)
+    text = _ANSI_RE.sub("", text)
+    text = "".join(
+        " " if unicodedata.category(character).startswith("C") else character
+        for character in text
+    )
+    text = " ".join(text.split())
+    if len(text) > _TEXT_LIMIT:
+        return f"{text[:_TEXT_LIMIT - 1]}…"
+    return text
