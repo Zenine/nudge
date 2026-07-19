@@ -35,7 +35,7 @@
 - Create: `docs/superpowers/plans/2026-07-19-reminder-list-backfill.md`
 - Modify: `docs/superpowers/specs/2026-07-19-reminder-list-backfill-design.md:1-7`
 
-- [ ] **Step 1: 确认设计状态已进入待执行**
+- [x] **Step 1: 确认设计状态已进入待执行**
 
 The design header must contain this exact status:
 
@@ -43,16 +43,17 @@ The design header must contain this exact status:
 - 状态：整体设计已批准，实施计划已完成，待执行
 ```
 
-- [ ] **Step 2: 运行文档审计和 diff 检查**
+- [x] **Step 2: 运行文档审计和工作树 diff 检查**
 
 Run: `bin/nudge docs audit --json && git diff --check`
 
 Expected: docs audit has zero errors; the existing historical TODO warning may remain; diff check exits with code 0.
 
-- [ ] **Step 3: 提交计划文档**
+- [x] **Step 3: 暂存、检查 staged diff 并提交计划文档**
 
 ```bash
 git add docs/superpowers/plans/2026-07-19-reminder-list-backfill.md docs/superpowers/specs/2026-07-19-reminder-list-backfill-design.md
+git diff --cached --check
 git commit -m "docs: plan reminder list ownership backfill"
 ```
 
@@ -102,6 +103,7 @@ def test_select_list_backfill_actions_keeps_only_open_null_list_actions():
     )
 
     assert [item["id"] for item in batch.actions] == ["b"]
+    assert batch.query_dates == (date(2026, 7, 1),)
     assert batch.total_eligible == 2
     assert batch.remaining == 1
     assert [item["id"] for item in batch.invalid] == ["invalid"]
@@ -133,6 +135,34 @@ def test_select_list_backfill_actions_defaults_to_100_and_allows_500():
     assert default_batch.remaining == 401
     assert len(max_batch.actions) == 500
     assert max_batch.remaining == 1
+
+
+@pytest.mark.parametrize(
+    "scheduled_at",
+    [
+        " 2026-07-20 09:00",
+        "2026-07-20 09:00 ",
+        "2026-07-20 09:00 trailing",
+        "2026-07-20 09:00:00",
+        "2026-07-20 09:00+08:00",
+        "2026-07-20T09:00Z",
+    ],
+)
+def test_select_list_backfill_actions_rejects_noncanonical_minutes(scheduled_at):
+    action = {
+        "id": "invalid-minute",
+        "type": "reminder",
+        "summary": "Legacy",
+        "scheduled_at": scheduled_at,
+        "status": "pending",
+        "reminder_list": None,
+    }
+
+    batch = select_list_backfill_actions([action], date_from=None, date_to=None)
+
+    assert batch.actions == []
+    assert batch.query_dates == ()
+    assert [item["id"] for item in batch.invalid] == ["invalid-minute"]
 ```
 
 - [ ] **Step 2: 运行选择器测试并确认因模块不存在而失败**
@@ -158,6 +188,7 @@ from nudge.config import DEFAULT_REMINDER_LIST, get_defaults
 @dataclass(frozen=True)
 class ReminderListBackfillBatch:
     actions: list[dict[str, Any]]
+    query_dates: tuple[date, ...]
     invalid: list[dict[str, Any]]
     total_eligible: int
     remaining: int
@@ -198,7 +229,7 @@ def select_list_backfill_actions(
     if date_from and date_to and date_to <= date_from:
         raise ValueError("--to must be later than --from")
 
-    eligible: list[dict[str, Any]] = []
+    eligible: list[tuple[datetime, dict[str, Any]]] = []
     invalid: list[dict[str, Any]] = []
     for raw in actions:
         if not isinstance(raw, dict) or raw.get("type") != "reminder":
@@ -211,7 +242,7 @@ def select_list_backfill_actions(
         if action.get("reminder_list") == "":
             invalid.append(_invalid_item(action, "empty_reminder_list"))
             continue
-        scheduled = _parse_action_minute(action.get("scheduled_at"))
+        scheduled = parse_strict_minute(action.get("scheduled_at"))
         summary = action.get("summary")
         if scheduled is None or not isinstance(summary, str) or not summary.strip():
             invalid.append(_invalid_item(action, "invalid_summary_or_scheduled_at"))
@@ -221,11 +252,13 @@ def select_list_backfill_actions(
             continue
         if date_to and scheduled_date >= date_to:
             continue
-        eligible.append(action)
+        eligible.append((scheduled, action))
 
-    eligible.sort(key=lambda item: (str(item.get("scheduled_at") or ""), str(item.get("id") or "")))
+    eligible.sort(key=lambda item: (item[0], str(item[1].get("id") or "")))
+    selected = eligible[:limit]
     return ReminderListBackfillBatch(
-        actions=eligible[:limit],
+        actions=[action for _, action in selected],
+        query_dates=tuple(sorted({scheduled.date() for scheduled, _ in selected})),
         invalid=invalid,
         total_eligible=len(eligible),
         remaining=max(0, len(eligible) - limit),
@@ -241,13 +274,14 @@ def _invalid_item(action: dict[str, Any], reason: str) -> dict[str, Any]:
     }
 
 
-def _parse_action_minute(value: object) -> datetime | None:
-    if not isinstance(value, str):
+def parse_strict_minute(value: object) -> datetime | None:
+    if not isinstance(value, str) or len(value) != 16:
         return None
     try:
-        return datetime.strptime(value.strip()[:16], "%Y-%m-%d %H:%M")
+        parsed = datetime.strptime(value, "%Y-%m-%d %H:%M")
     except ValueError:
         return None
+    return parsed if parsed.strftime("%Y-%m-%d %H:%M") == value else None
 ```
 
 - [ ] **Step 4: 把现有调用方改为共享解析函数并删除命令层副本**
@@ -348,6 +382,34 @@ def test_plan_list_backfill_requires_exact_minute():
 
     assert report["candidates"] == []
     assert report["missing"][0]["id"] == "a"
+
+
+@pytest.mark.parametrize(
+    "noncanonical",
+    [
+        " 2026-07-20 09:00",
+        "2026-07-20 09:00 ",
+        "2026-07-20 09:00 trailing",
+        "2026-07-20 09:00:00",
+        "2026-07-20 09:00+08:00",
+        "2026-07-20T09:00Z",
+    ],
+)
+def test_plan_list_backfill_rejects_noncanonical_action_and_apple_minutes(noncanonical):
+    canonical_action = _action("action", "Same", "2026-07-20 09:00")
+    canonical_row = _apple("Tasks:0", "Same", "2026-07-20 09:00", "Tasks")
+
+    bad_action = plan_list_backfill(
+        [{**canonical_action, "scheduled_at": noncanonical}],
+        [canonical_row],
+    )
+    bad_row = plan_list_backfill(
+        [canonical_action],
+        [{**canonical_row, "due_at": noncanonical}],
+    )
+
+    assert bad_action["candidates"] == []
+    assert bad_row["candidates"] == []
 ```
 
 - [ ] **Step 7: 运行匹配测试并确认因函数不存在而失败**
@@ -408,10 +470,12 @@ def plan_list_backfill(
 
 
 def _match_type(action: dict[str, Any], row: dict[str, Any]) -> str | None:
-    scheduled_at = str(action.get("scheduled_at") or "")[:16]
-    due_at = str(row.get("due_at") or "")[:16]
-    if not scheduled_at or due_at != scheduled_at:
+    scheduled = parse_strict_minute(action.get("scheduled_at"))
+    due = parse_strict_minute(row.get("due_at"))
+    if scheduled is None or due is None or due != scheduled:
         return None
+    scheduled_at = scheduled.strftime("%Y-%m-%d %H:%M")
+    due_at = due.strftime("%Y-%m-%d %H:%M")
     summary = str(action.get("summary") or "")
     name = str(row.get("name") or "")
     if name == summary:
@@ -438,7 +502,13 @@ Run: `python3 -m pytest tests/test_reminder_list_backfill.py tests/test_commands
 
 Expected: PASS.
 
-- [ ] **Step 10: 提交 Task 1**
+- [ ] **Step 10: 运行提交前完整验证**
+
+Run: `scripts/verify.sh`
+
+Expected: all pytest, compile, CLI smoke, docs audit, packaging and public-safe content checks PASS.
+
+- [ ] **Step 11: 提交 Task 1**
 
 ```bash
 git add nudge/reminder_lists.py nudge/commands/reminders.py nudge/commands/daily.py tests/test_reminder_list_backfill.py tests/test_commands_reminders_multi_list.py
@@ -605,7 +675,13 @@ Run: `python3 -m pytest tests/test_apple_reminders_safety.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 6: 提交 Task 2**
+- [ ] **Step 6: 运行提交前完整验证**
+
+Run: `scripts/verify.sh`
+
+Expected: all pytest, compile, CLI smoke, docs audit, packaging and public-safe content checks PASS.
+
+- [ ] **Step 7: 提交 Task 2**
 
 ```bash
 git add nudge/apple/eventkit_reminders_due_today.swift nudge/apple/reminders.py tests/test_apple_reminders_safety.py
@@ -814,7 +890,13 @@ Run: `python3 -m pytest tests/test_state_reminder_list_backfill.py tests/test_st
 
 Expected: PASS.
 
-- [ ] **Step 5: 提交 Task 3**
+- [ ] **Step 5: 运行提交前完整验证**
+
+Run: `scripts/verify.sh`
+
+Expected: all pytest, compile, CLI smoke, docs audit, packaging and public-safe content checks PASS.
+
+- [ ] **Step 6: 提交 Task 3**
 
 ```bash
 git add nudge/state.py tests/test_state_reminder_list_backfill.py
@@ -836,6 +918,7 @@ import json
 from pathlib import Path
 import sqlite3
 
+import click
 from click.testing import CliRunner
 
 from nudge.commands import reminder_list_backfill as command
@@ -881,6 +964,42 @@ def test_backfill_lists_dry_run_uses_configured_lists_and_writes_nothing(monkeyp
     assert payload["lists"] == ["Tasks", "Health"]
     assert payload["candidates"][0]["target_list"] == "Tasks"
     assert payload["updated"] == 0
+    assert "MUST_NOT_LEAK" not in result.output
+
+
+def test_emit_text_dry_run_shows_all_outcome_details_without_notes():
+    payload = {
+        "dry_run": True,
+        "lists": ["Tasks"],
+        "total_eligible": 4,
+        "remaining": 0,
+        "candidates": [{"id": "candidate-1", "summary": "Candidate", "scheduled_at": "2026-07-20 09:00", "target_list": "Tasks", "match_type": "exact_title", "notes": "MUST_NOT_LEAK"}],
+        "missing": [{"id": "missing-1", "summary": "Missing", "scheduled_at": "2026-07-20 10:00", "notes": "MUST_NOT_LEAK"}],
+        "ambiguous": [{"id": "ambiguous-1", "summary": "Ambiguous", "scheduled_at": "2026-07-20 11:00", "matches": 2, "matched_lists": ["Health", "Tasks"], "notes": "MUST_NOT_LEAK"}],
+        "invalid": [{"id": "invalid-1", "summary": "Invalid", "scheduled_at": "bad", "reason": "invalid_summary_or_scheduled_at", "notes": "MUST_NOT_LEAK"}],
+        "updated": 0,
+        "backup": None,
+        "conflicts": ["conflict-1"],
+        "errors": [],
+    }
+
+    @click.command()
+    def emit():
+        command._emit(payload, False)
+
+    result = CliRunner().invoke(emit)
+
+    assert result.exit_code == 0, result.output
+    for expected in (
+        "DRY-RUN Reminder list backfill",
+        "candidate id=candidate-1",
+        "missing id=missing-1",
+        "ambiguous id=ambiguous-1",
+        "invalid id=invalid-1",
+        "conflicts=conflict-1",
+        "updated=0",
+    ):
+        assert expected in result.output
     assert "MUST_NOT_LEAK" not in result.output
 
 
@@ -1049,9 +1168,8 @@ def _build_backfill_report(*, date_from, date_to, reminder_lists, limit):
     batch = select_list_backfill_actions(get_actions(), date_from=date_from, date_to=date_to, limit=limit)
     apple_rows: list[dict[str, Any]] = []
     errors = []
-    dates = sorted({date.fromisoformat(str(action["scheduled_at"])[:10]) for action in batch.actions})
     for list_name in reminder_lists:
-        for target_date in dates:
+        for target_date in batch.query_dates:
             ok, rows = query_all_due_on_date(list_name, target_date)
             if not ok:
                 errors.append({
@@ -1102,10 +1220,38 @@ def _emit(payload: dict, json_output: bool) -> None:
     click.echo(f"{mode} Reminder list backfill · lists={', '.join(payload.get('lists') or [])}")
     click.echo(
         f"  eligible={payload.get('total_eligible')} candidates={len(payload.get('candidates') or [])} "
-        f"missing={len(payload.get('missing') or [])} ambiguous={len(payload.get('ambiguous') or [])}"
+        f"missing={len(payload.get('missing') or [])} ambiguous={len(payload.get('ambiguous') or [])} "
+        f"invalid={len(payload.get('invalid') or [])} remaining={payload.get('remaining')}"
     )
+    click.echo(f"  updated={payload.get('updated', 0)}")
+    backup = payload.get("backup")
+    if backup:
+        click.echo(f"  backup={backup.get('path')} integrity={backup.get('integrity_check')}")
+    conflicts = payload.get("conflicts") or []
+    if conflicts:
+        click.echo(f"  conflicts={', '.join(str(item) for item in conflicts)}")
     for candidate in payload.get("candidates") or []:
-        click.echo(f"  - {candidate['id']} {candidate['scheduled_at']} -> {candidate['target_list']} ({candidate['match_type']})")
+        click.echo(
+            f"  candidate id={candidate.get('id')} scheduled_at={candidate.get('scheduled_at')} "
+            f"summary={candidate.get('summary')} target_list={candidate.get('target_list')} "
+            f"match_type={candidate.get('match_type')}"
+        )
+    for missing in payload.get("missing") or []:
+        click.echo(
+            f"  missing id={missing.get('id')} scheduled_at={missing.get('scheduled_at')} "
+            f"summary={missing.get('summary')}"
+        )
+    for ambiguous in payload.get("ambiguous") or []:
+        click.echo(
+            f"  ambiguous id={ambiguous.get('id')} scheduled_at={ambiguous.get('scheduled_at')} "
+            f"summary={ambiguous.get('summary')} matches={ambiguous.get('matches')} "
+            f"matched_lists={', '.join(ambiguous.get('matched_lists') or [])}"
+        )
+    for invalid in payload.get("invalid") or []:
+        click.echo(
+            f"  invalid id={invalid.get('id')} scheduled_at={invalid.get('scheduled_at')} "
+            f"summary={invalid.get('summary')} reason={invalid.get('reason')}"
+        )
     for error in payload.get("errors") or []:
         click.echo(f"  error {error['code']}: {error['message']}", err=True)
 ```
@@ -1126,7 +1272,13 @@ Run: `python3 -m pytest tests/test_commands_reminder_list_backfill.py -q`
 
 Expected: PASS for dry-run tests.
 
-- [ ] **Step 5: 提交 Task 4**
+- [ ] **Step 5: 运行提交前完整验证**
+
+Run: `scripts/verify.sh`
+
+Expected: all pytest, compile, CLI smoke, docs audit, packaging and public-safe content checks PASS.
+
+- [ ] **Step 6: 提交 Task 4**
 
 ```bash
 git add nudge/commands/reminder_list_backfill.py nudge/commands/reminders.py tests/test_commands_reminder_list_backfill.py
@@ -1149,7 +1301,7 @@ def _install_apply_fakes(monkeypatch, *, candidates=True):
     monkeypatch.setattr(
         command,
         "query_all_due_on_date",
-        lambda *args: (True, [{"name": "Legacy", "due_time": "09:00", "due_at": "2026-07-20 09:00", "list": "Tasks"}]),
+        lambda *args: (True, [{"name": "Legacy", "due_time": "09:00", "due_at": "2026-07-20 09:00", "list": "Tasks", "notes": "MUST_NOT_LEAK"}]),
     )
 
 
@@ -1177,6 +1329,23 @@ def test_backfill_lists_apply_backs_up_before_atomic_write(monkeypatch, tmp_path
     payload = json.loads(result.output)
     assert payload["updated"] == 1
     assert payload["backup"]["path"] == str(backup)
+
+
+def test_backfill_lists_text_apply_reports_candidate_update_and_backup_without_notes(monkeypatch, tmp_path):
+    _install_apply_fakes(monkeypatch)
+    backup = tmp_path / "nudge.db"
+    monkeypatch.setattr(command, "backup_database", lambda: backup)
+    monkeypatch.setattr(command, "apply_reminder_list_backfill", lambda updates, snapshots: ["legacy"])
+
+    result = CliRunner().invoke(reminders_command, ["backfill-lists", "--apply", "--yes"])
+
+    assert result.exit_code == 0, result.output
+    assert "APPLY Reminder list backfill" in result.output
+    assert "candidate id=legacy" in result.output
+    assert "updated=1" in result.output
+    assert f"backup={backup}" in result.output
+    assert "integrity=ok" in result.output
+    assert "MUST_NOT_LEAK" not in result.output
 
 
 def test_backfill_lists_backup_failure_writes_nothing(monkeypatch):
@@ -1333,24 +1502,27 @@ Run: `python3 -m pytest tests/test_commands_reminders_multi_list.py tests/test_a
 
 Expected: PASS.
 
-- [ ] **Step 6: 提交 Task 5**
+- [ ] **Step 6: 运行提交前完整验证**
+
+Run: `scripts/verify.sh`
+
+Expected: all pytest, compile, CLI smoke, docs audit, packaging and public-safe content checks PASS.
+
+- [ ] **Step 7: 提交 Task 5**
 
 ```bash
 git add nudge/commands/reminder_list_backfill.py tests/test_commands_reminder_list_backfill.py
 git commit -m "feat: confirm and back up reminder list backfill"
 ```
 
-### Task 6: 文档、TODO、CHANGELOG 与验证工作流收尾
+### Task 6: 能力文档与验证工作流
 
 **Files:**
 - Modify: `README.md`
 - Modify: `docs/commands.md`
 - Modify: `docs/configuration.md`
-- Modify: `CHANGELOG.md`
-- Modify: `TODO.md`
 - Modify: `scripts/verify.sh`
 - Modify: `tests/test_verify_script.py`
-- Modify: `docs/superpowers/specs/2026-07-19-reminder-list-backfill-design.md`
 
 - [ ] **Step 1: 写入 CLI smoke 失败测试**
 
@@ -1393,51 +1565,122 @@ nudge reminders backfill-lists --list Tasks --list Health --from 2026-07-01 --to
 nudge reminders backfill-lists --apply
 ```
 
-- [ ] **Step 5: 更新完成记录和设计状态**
+Do not remove the TODO, add the final CHANGELOG completion record, or mark the design fully verified in this task. Those completion claims belong to Task 7 only after full verification and read-only Dogfood pass.
 
-In `CHANGELOG.md` under `[Unreleased]`, record the new local-only backfill, all-due read mode, confirmation, backup, transaction and no-Apple-mutation boundary.
-
-Remove only this completed line from `TODO.md`:
-
-```markdown
-- [ ] 为升级前 `reminder_list IS NULL` 的旧 reminder action 设计只读候选与确认后 backfill 流程；在此之前，多列表完成同步只允许“明确 Apple 完成记录”作为写回证据，不根据列表中消失推断完成。
-```
-
-Keep the non-TTY structured feedback item unchanged. Change the design header to:
-
-```markdown
-- 状态：已实现并通过公开运行库完整验证
-```
-
-- [ ] **Step 6: 运行文档和验证脚本测试**
+- [ ] **Step 5: 运行文档和验证脚本测试**
 
 Run: `python3 -m pytest tests/test_verify_script.py -q && bin/nudge docs audit --json`
 
 Expected: tests PASS; docs audit has zero errors. The existing historical TODO warning may remain until its separate cleanup task.
 
-- [ ] **Step 7: 提交 Task 6**
-
-```bash
-git add README.md docs/commands.md docs/configuration.md CHANGELOG.md TODO.md scripts/verify.sh tests/test_verify_script.py docs/superpowers/specs/2026-07-19-reminder-list-backfill-design.md
-git commit -m "docs: document reminder list ownership backfill"
-```
-
-### Task 7: 完整验证与真实配置只读 Dogfood
-
-**Files:**
-- No production file changes expected.
-
-- [ ] **Step 1: 运行 diff 和敏感边界检查**
-
-Run: `git diff --check && git status --short`
-
-Expected: no whitespace errors; only intentional plan-progress changes, if any.
-
-- [ ] **Step 2: 运行完整项目验证**
+- [ ] **Step 6: 运行提交前完整验证**
 
 Run: `scripts/verify.sh`
 
 Expected: all pytest, compile, CLI smoke, docs audit, packaging and public-safe content checks PASS.
+
+- [ ] **Step 7: 提交 Task 6**
+
+```bash
+git add README.md docs/commands.md docs/configuration.md scripts/verify.sh tests/test_verify_script.py
+git commit -m "docs: document reminder list ownership backfill"
+```
+
+### Task 7: 完整验证、真实配置只读 Dogfood 与最终收尾
+
+**Files:**
+- Modify: `CHANGELOG.md`
+- Modify: `TODO.md`
+- Modify: `docs/superpowers/specs/2026-07-19-reminder-list-backfill-design.md`
+
+- [ ] **Step 1: 固定分支基线，检查完整分支 diff 与隐私边界**
+
+Run this from the repository root. `BASE` is the explicit integration-base commit for every later `BASE..HEAD` check:
+
+```bash
+BASE="$(git merge-base HEAD main)"
+test -n "$BASE"
+export BASE
+git diff --check "$BASE"..HEAD
+git status --short
+python3 - <<'PY'
+from pathlib import Path
+import os
+import re
+import subprocess
+
+base = os.environ["BASE"]
+diff_range = f"{base}..HEAD"
+names = subprocess.check_output(
+    ["git", "diff", "--name-only", "--diff-filter=ACMR", diff_range, "--"],
+    text=True,
+).splitlines()
+
+blocked_names = {
+    ".env",
+    "config" + ".toml",
+    "credentials" + ".json",
+    "secrets" + ".yaml",
+}
+blocked_suffixes = {".db", ".sqlite", ".sqlite3"}
+blocked_files = [
+    name
+    for name in names
+    if Path(name).name in blocked_names
+    or Path(name).name.startswith(".env.")
+    or Path(name).suffix.lower() in blocked_suffixes
+]
+
+raw_diff = subprocess.check_output(
+    ["git", "diff", "--no-ext-diff", "--unified=0", diff_range, "--"],
+    text=True,
+)
+added_text = "\n".join(
+    line[1:]
+    for line in raw_diff.splitlines()
+    if line.startswith("+") and not line.startswith("+++")
+)
+
+absolute_home = re.compile("/" + r"(?:Users|home)" + "/" + r"[^/\s\"']+/")
+private_markers = (
+    "nudge-" + "private",
+    "DB_" + "backup",
+    "百度" + "同步盘",
+    "niaite-" + "email",
+)
+credential_patterns = (
+    re.compile("A" + r"KIA[0-9A-Z]{16}"),
+    re.compile("sk" + r"-[A-Za-z0-9_-]{20,}"),
+    re.compile("gh" + r"[pousr]_[A-Za-z0-9]{30,}"),
+    re.compile("xox" + r"[abprs]-[A-Za-z0-9-]{20,}"),
+    re.compile("AIza" + r"[A-Za-z0-9_-]{30,}"),
+    re.compile(r"-----BEGIN " + r"(?:RSA |EC |OPENSSH )?" + "PRIVATE" + r" KEY-----"),
+)
+
+problems = []
+if blocked_files:
+    problems.append(f"tracked private artifacts: {blocked_files}")
+if absolute_home.search(added_text):
+    problems.append("absolute user home path found in added diff content")
+for marker in private_markers:
+    if marker in added_text:
+        problems.append(f"private directory marker found: {marker}")
+for pattern in credential_patterns:
+    if pattern.search(added_text):
+        problems.append(f"credential/private-key pattern found: {pattern.pattern}")
+if problems:
+    raise SystemExit("\n".join(problems))
+print(f"privacy scan passed for {diff_range}: {len(names)} changed files")
+PY
+```
+
+Expected: explicit `BASE..HEAD` whitespace check exits 0; the reproducible scan finds no absolute user path, private-directory marker, common live credential/private-key shape, or newly tracked DB/config/environment artifact. Pattern strings are assembled in pieces so this plan does not match its own scanner.
+
+- [ ] **Step 2: 运行首次完整项目验证**
+
+Run: `scripts/verify.sh`
+
+Expected: all pytest, compile, CLI smoke, docs audit, packaging and public-safe content checks PASS. Do not update completion records if this step fails.
 
 - [ ] **Step 3: 确认测试未创建仓库本地状态库**
 
@@ -1490,8 +1733,53 @@ Expected: the static Apple mutation boundary check exits with code 0.
 
 Report only counts for `candidates`、`missing`、`ambiguous`、`invalid` and query errors. If candidates exist, ask the user for a separate explicit confirmation before running `--apply`; implementation completion does not authorize changing the real database.
 
-- [ ] **Step 7: 确认分支状态**
+- [ ] **Step 7: 仅在以上验证全部通过后更新最终完成记录**
 
-Run: `git status --short --branch && git log -7 --oneline`
+In `CHANGELOG.md` under `[Unreleased]`, record the new local-only backfill, all-due read mode, confirmation, backup, transaction, successful public verification/read-only Dogfood, and no-Apple-mutation boundary.
 
-Expected: implementation branch contains the planned commits; no unrelated files are modified.
+Remove only this completed line from `TODO.md`:
+
+```markdown
+- [ ] 为升级前 `reminder_list IS NULL` 的旧 reminder action 设计只读候选与确认后 backfill 流程；在此之前，多列表完成同步只允许“明确 Apple 完成记录”作为写回证据，不根据列表中消失推断完成。
+```
+
+Keep the non-TTY structured feedback item unchanged. Change the design header to:
+
+```markdown
+- 状态：已实现并通过公开运行库完整验证
+```
+
+- [ ] **Step 8: 审计收尾文档**
+
+Run: `bin/nudge docs audit --json && git diff --check`
+
+Expected: docs audit has zero errors; the existing historical TODO warning may remain; worktree diff check exits 0.
+
+- [ ] **Step 9: 收尾提交前再次运行完整验证**
+
+Run: `scripts/verify.sh`
+
+Expected: all pytest, compile, CLI smoke, docs audit, packaging and public-safe content checks PASS with the final completion records present.
+
+- [ ] **Step 10: 暂存并提交最终收尾文档**
+
+```bash
+git add CHANGELOG.md TODO.md docs/superpowers/specs/2026-07-19-reminder-list-backfill-design.md
+git diff --cached --check
+git commit -m "docs: close reminder list ownership backfill"
+```
+
+- [ ] **Step 11: 用明确基线复核最终分支状态**
+
+```bash
+BASE="$(git merge-base HEAD main)"
+test -n "$BASE"
+export BASE
+git diff --check "$BASE"..HEAD
+git status --short --branch
+git log -8 --oneline
+```
+
+Then rerun the complete Python privacy-scan block from Step 1 against this final `BASE..HEAD` range so the closing documentation commit is covered too.
+
+Expected: final explicit `BASE..HEAD` diff check and repeated privacy scan both exit 0; the implementation branch contains the planned commits and no unrelated working-tree changes.
