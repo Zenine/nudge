@@ -9,12 +9,13 @@ from typing import Iterable
 
 import click
 
-from nudge.commands.reminders import resolve_sync_lists, sync_completed_for_date
+from nudge.commands.reminders import sync_completed_for_date
 from nudge.config import load_config
 from nudge.docs_audit import audit_docs
 from nudge.failures import build_failure_visibility_report
 from nudge.health import apply_health_import, parse_apple_health_export
 from nudge.json_contract import versioned_payload
+from nudge.reminder_lists import resolve_sync_lists
 from nudge.state import configure_state, get_actions, log_action
 
 

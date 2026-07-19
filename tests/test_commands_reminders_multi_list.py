@@ -8,6 +8,7 @@ from click.testing import CliRunner
 from nudge.commands import daily
 from nudge.commands import reminders
 from nudge.commands.doctor import _configured_reminder_lists
+from nudge.reminder_lists import resolve_sync_lists
 
 
 def test_resolve_sync_lists_uses_config_and_deduplicates() -> None:
@@ -18,8 +19,8 @@ def test_resolve_sync_lists_uses_config_and_deduplicates() -> None:
         },
     }
 
-    assert reminders.resolve_sync_lists((), config) == ["Tasks", "Health", "GPT"]
-    assert reminders.resolve_sync_lists(("GPT", "Tasks", "GPT"), config) == ["GPT", "Tasks"]
+    assert resolve_sync_lists((), config) == ["Tasks", "Health", "GPT"]
+    assert resolve_sync_lists(("GPT", "Tasks", "GPT"), config) == ["GPT", "Tasks"]
 
 
 def test_doctor_flattens_sync_lists_with_named_reminder_routes() -> None:

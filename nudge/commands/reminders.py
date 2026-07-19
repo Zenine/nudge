@@ -18,6 +18,7 @@ from nudge.apple.reminders import (
 from nudge.config import DEFAULT_REMINDER_LIST, get_defaults, load_config
 from nudge.feedback import build_feedback
 from nudge.json_contract import versioned_payload
+from nudge.reminder_lists import resolve_sync_lists
 from nudge.sleep_reminders import is_sleep_terminal_action
 from nudge.state import (
     complete_action,
@@ -76,31 +77,6 @@ def sync_completed_command(date_text, list_names, apply_changes, config_path, js
         )
         _emit(payload, json_output)
         raise click.exceptions.Exit(1)
-
-
-def resolve_sync_lists(explicit_names, config: dict) -> list[str]:
-    """Resolve an ordered, duplicate-free set of lists for completion sync."""
-    configured = (config.get("reminders") or {}).get("sync_lists")
-    if explicit_names:
-        raw_names = list(explicit_names)
-    elif configured is not None:
-        if not isinstance(configured, list):
-            raise ValueError("[reminders].sync_lists must be an array of list names")
-        raw_names = configured
-    else:
-        defaults = get_defaults(config)
-        raw_names = [defaults.get("default_reminder_list", DEFAULT_REMINDER_LIST)]
-
-    result: list[str] = []
-    for raw_name in raw_names:
-        if not isinstance(raw_name, str) or not raw_name.strip():
-            raise ValueError("reminder list names must be non-empty strings")
-        name = raw_name.strip()
-        if name not in result:
-            result.append(name)
-    if not result:
-        raise ValueError("at least one reminder list is required")
-    return result
 
 
 def sync_completed_for_lists(
