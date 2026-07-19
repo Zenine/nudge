@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Iterable
@@ -70,38 +71,52 @@ def select_list_backfill_actions(
     if date_from is not None and date_to is not None and date_to <= date_from:
         raise ValueError("--to must be later than --from")
 
-    eligible: list[tuple[datetime, dict]] = []
-    invalid: list[dict] = []
-    for action in actions:
+    eligible: list[tuple[datetime, int, dict]] = []
+    invalid: list[tuple[int, dict]] = []
+    for action_index, action in enumerate(actions):
         if action.get("type") != "reminder" or action.get("status") not in {"created", "pending"}:
             continue
+
+        scheduled = parse_strict_minute(action.get("scheduled_at"))
+        if scheduled is not None:
+            if date_from is not None and scheduled.date() < date_from:
+                continue
+            if date_to is not None and scheduled.date() >= date_to:
+                continue
 
         reminder_list = action.get("reminder_list")
         if reminder_list is not None:
             if reminder_list == "":
-                invalid.append(_invalid_action(action, "empty_reminder_list"))
+                invalid.append((action_index, _invalid_action(action, "empty_reminder_list")))
             continue
 
         summary = action.get("summary")
-        scheduled = parse_strict_minute(action.get("scheduled_at"))
         if not isinstance(summary, str) or not summary.strip() or scheduled is None:
-            invalid.append(_invalid_action(action, "invalid_summary_or_scheduled_at"))
+            invalid.append((action_index, _invalid_action(action, "invalid_summary_or_scheduled_at")))
             continue
-        if date_from is not None and scheduled.date() < date_from:
+        action_id = action.get("id")
+        if not isinstance(action_id, str) or not action_id.strip():
+            invalid.append((action_index, _invalid_action(action, "invalid_id")))
             continue
-        if date_to is not None and scheduled.date() >= date_to:
-            continue
-        eligible.append((scheduled, action))
+        eligible.append((scheduled, action_index, action))
 
-    eligible.sort(key=lambda item: (item[0], str(item[1].get("id") or "")))
-    selected = eligible[:limit]
-    selected_actions = [action for _, action in selected]
-    query_dates = tuple(sorted({scheduled.date() for scheduled, _ in selected}))
-    total_eligible = len(eligible)
+    id_counts = Counter(action["id"] for _, _, action in eligible)
+    unique_eligible: list[tuple[datetime, int, dict]] = []
+    for scheduled, action_index, action in eligible:
+        if id_counts[action["id"]] > 1:
+            invalid.append((action_index, _invalid_action(action, "duplicate_id")))
+        else:
+            unique_eligible.append((scheduled, action_index, action))
+
+    unique_eligible.sort(key=lambda item: (item[0], item[2]["id"]))
+    selected = unique_eligible[:limit]
+    selected_actions = [action for _, _, action in selected]
+    query_dates = tuple(sorted({scheduled.date() for scheduled, _, _ in selected}))
+    total_eligible = len(unique_eligible)
     return ReminderListBackfillBatch(
         actions=selected_actions,
         query_dates=query_dates,
-        invalid=invalid,
+        invalid=[item for _, item in sorted(invalid, key=lambda pair: pair[0])],
         total_eligible=total_eligible,
         remaining=total_eligible - len(selected_actions),
     )
@@ -138,7 +153,7 @@ def plan_list_backfill(
             continue
 
         if len(matches) != 1 or len(claimants_by_row[matches[0][0]]) != 1:
-            matched_lists = sorted({str(rows[row_index].get("list") or "") for row_index, _ in matches})
+            matched_lists = sorted({rows[row_index]["list"] for row_index, _ in matches})
             ambiguous.append({
                 **basic,
                 "matched_lists": matched_lists,
@@ -162,6 +177,13 @@ def plan_list_backfill(
 
 
 def _match_type(action: dict, apple_row: dict) -> str | None:
+    name = apple_row.get("name")
+    target_list = apple_row.get("list")
+    if not isinstance(name, str) or not name.strip():
+        return None
+    if not isinstance(target_list, str) or not target_list.strip():
+        return None
+
     scheduled_at = action.get("scheduled_at")
     due_at = apple_row.get("due_at")
     scheduled_minute = parse_strict_minute(scheduled_at)
@@ -170,13 +192,17 @@ def _match_type(action: dict, apple_row: dict) -> str | None:
         return None
 
     summary = action.get("summary")
-    name = apple_row.get("name")
     if isinstance(summary, str) and summary and summary == name:
         return "exact_title"
+    if not isinstance(summary, str) or not summary.strip():
+        return None
+    if summary != summary.strip() or name != name.strip():
+        return None
 
     normalized_summary = normalize_reminder_title(summary, scheduled_at)
     normalized_name = normalize_reminder_title(name, due_at)
-    if normalized_summary and normalized_summary == normalized_name:
+    title_changed = normalized_summary != summary or normalized_name != name
+    if title_changed and normalized_summary and normalized_summary == normalized_name:
         return "normalized_trailing_date"
     return None
 

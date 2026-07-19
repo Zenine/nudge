@@ -195,6 +195,57 @@ def test_select_list_backfill_actions_classifies_only_open_legacy_invalid_rows()
     ]
 
 
+def test_select_list_backfill_actions_rejects_invalid_and_duplicate_ids() -> None:
+    actions = [
+        _action(""),
+        _action("   "),
+        _action(123),  # type: ignore[arg-type]
+        _action("duplicate", scheduled_at="2026-07-01 09:01"),
+        _action("duplicate", scheduled_at="2026-07-01 09:02"),
+        _action("unique", scheduled_at="2026-07-01 09:03"),
+    ]
+
+    batch = select_list_backfill_actions(actions, date_from=None, date_to=None)
+
+    assert [item["id"] for item in batch.actions] == ["unique"]
+    assert batch.query_dates == (date(2026, 7, 1),)
+    assert batch.total_eligible == 1
+    assert batch.remaining == 0
+    assert [(item["id"], item["reason"]) for item in batch.invalid] == [
+        ("", "invalid_id"),
+        ("   ", "invalid_id"),
+        (123, "invalid_id"),
+        ("duplicate", "duplicate_id"),
+        ("duplicate", "duplicate_id"),
+    ]
+
+
+def test_select_list_backfill_actions_excludes_out_of_range_rows_before_invalid_checks() -> None:
+    actions = [
+        _action("before-empty-list", scheduled_at="2026-06-30 09:00", reminder_list=""),
+        _action("before-empty-summary", scheduled_at="2026-06-30 09:00", summary=""),
+        _action("at-to-empty-list", scheduled_at="2026-08-01 09:00", reminder_list=""),
+        _action("at-to-empty-summary", scheduled_at="2026-08-01 09:00", summary=""),
+        _action("unplaceable", scheduled_at="2026-07-01T09:00", summary=""),
+    ]
+
+    batch = select_list_backfill_actions(
+        actions,
+        date_from=date(2026, 7, 1),
+        date_to=date(2026, 8, 1),
+    )
+
+    assert batch.actions == []
+    assert batch.invalid == [
+        {
+            "id": "unplaceable",
+            "summary": "",
+            "scheduled_at": "2026-07-01T09:00",
+            "reason": "invalid_summary_or_scheduled_at",
+        }
+    ]
+
+
 @pytest.mark.parametrize("limit", [True, False, 0, -1, 501, 1.5, "100"])
 def test_select_list_backfill_actions_rejects_invalid_limits(limit: object) -> None:
     with pytest.raises(ValueError, match="limit"):
@@ -257,6 +308,33 @@ def test_plan_list_backfill_matches_only_trailing_duplicate_date_normalization()
 
     assert plan["candidates"][0]["match_type"] == "normalized_trailing_date"
     assert plan["candidates"][0]["target_list"] == "Inbox"
+
+
+@pytest.mark.parametrize(
+    ("action_title", "apple_title"),
+    [
+        ("Buy milk ", "Buy milk"),
+        (" Buy milk", "Buy milk"),
+        ("Buy milk", "Buy milk "),
+        ("Buy milk", " Buy milk"),
+        ("Buy milk,", "Buy milk"),
+    ],
+)
+def test_plan_list_backfill_normalization_does_not_match_whitespace_or_punctuation_only(
+    action_title: str,
+    apple_title: str,
+) -> None:
+    action = _action("strict-normalization", summary=action_title)
+    row = {
+        "name": apple_title,
+        "due_at": "2026-07-01 09:00",
+        "list": "Tasks",
+    }
+
+    plan = plan_list_backfill([action], [row])
+
+    assert plan["candidates"] == []
+    assert [item["id"] for item in plan["missing"]] == ["strict-normalization"]
 
 
 def test_plan_list_backfill_keeps_duplicate_rows_and_sorts_distinct_matched_lists() -> None:
@@ -372,6 +450,45 @@ def test_plan_list_backfill_outputs_only_contract_fields_when_apple_rows_have_ex
         "matched_lists",
         "matches",
     }
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        {"due_at": "2026-07-01 09:00", "list": "Tasks"},
+        {"name": "", "due_at": "2026-07-01 09:00", "list": "Tasks"},
+        {"name": "   ", "due_at": "2026-07-01 09:00", "list": "Tasks"},
+        {"name": {"secret_name": True}, "due_at": "2026-07-01 09:00", "list": "Tasks"},
+        {"name": "Buy milk", "due_at": "2026-07-01 09:00"},
+        {"name": "Buy milk", "due_at": "2026-07-01 09:00", "list": ""},
+        {"name": "Buy milk", "due_at": "2026-07-01 09:00", "list": "   "},
+        {
+            "name": "Buy milk",
+            "due_at": "2026-07-01 09:00",
+            "list": {"secret_list": True},
+        },
+        {"name": "Buy milk", "due_at": "2026-07-01 09:00", "list": ["secret_list"]},
+    ],
+)
+def test_plan_list_backfill_ignores_rows_with_malformed_name_or_list(row: dict) -> None:
+    action = _action("defensive-row", summary="Buy milk")
+
+    plan = plan_list_backfill([action], [row])
+
+    assert plan == {
+        "candidates": [],
+        "missing": [
+            {
+                "id": "defensive-row",
+                "summary": "Buy milk",
+                "scheduled_at": "2026-07-01 09:00",
+                "status": "pending",
+            }
+        ],
+        "ambiguous": [],
+    }
+    assert "secret_name" not in repr(plan)
+    assert "secret_list" not in repr(plan)
 
 
 @pytest.mark.parametrize(
