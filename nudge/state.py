@@ -735,10 +735,13 @@ def apply_reminder_list_backfill(
     """Atomically assign reminder lists when every action snapshot is current."""
     if not isinstance(updates, list) or not updates:
         raise ValueError("reminder list backfill updates must be a non-empty list")
+    if len(updates) > 500:
+        raise ValueError("reminder list backfill updates must contain at most 500 items")
     if not isinstance(snapshots, dict):
         raise ValueError("reminder list backfill snapshots must be an object")
 
     snapshot_fields = ("type", "summary", "scheduled_at", "status", "reminder_list")
+    required_snapshot_fields = ("id", *snapshot_fields)
     prepared = []
     seen_ids = set()
     for index, update in enumerate(updates, start=1):
@@ -756,11 +759,26 @@ def apply_reminder_list_backfill(
         snapshot = snapshots.get(action_id)
         if not isinstance(snapshot, dict):
             raise ValueError(f"missing snapshot for action: {action_id}")
+        missing_snapshot_fields = [
+            field for field in required_snapshot_fields if field not in snapshot
+        ]
+        if missing_snapshot_fields:
+            raise ValueError(
+                f"snapshot for action {action_id} is missing required fields: "
+                f"{', '.join(missing_snapshot_fields)}"
+            )
+        snapshot_id = snapshot["id"]
+        if (
+            not isinstance(snapshot_id, str)
+            or not snapshot_id.strip()
+            or snapshot_id != action_id
+        ):
+            raise ValueError(f"snapshot id must exactly match action id: {action_id}")
         seen_ids.add(action_id)
         prepared.append({
             "id": action_id,
             "target_list": target_list.strip(),
-            "snapshot": {field: snapshot.get(field) for field in snapshot_fields},
+            "snapshot": {field: snapshot[field] for field in snapshot_fields},
         })
 
     conn = _get_conn()

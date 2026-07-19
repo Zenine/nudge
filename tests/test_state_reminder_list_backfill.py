@@ -7,7 +7,18 @@ import pytest
 import nudge.state as state
 
 
-SNAPSHOT_FIELDS = ("type", "summary", "scheduled_at", "status", "reminder_list")
+SNAPSHOT_FIELDS = ("id", "type", "summary", "scheduled_at", "status", "reminder_list")
+
+
+def _valid_snapshot(action_id="first"):
+    return {
+        "id": action_id,
+        "type": "reminder",
+        "summary": action_id,
+        "scheduled_at": None,
+        "status": "pending",
+        "reminder_list": None,
+    }
 
 
 def _isolate_state(monkeypatch, tmp_path):
@@ -181,6 +192,7 @@ def test_backfill_rejects_invalid_target_list_before_opening_transaction(
             [{"id": "first", "target_list": target_list}],
             snapshots={
                 "first": {
+                    "id": "first",
                     "type": "reminder",
                     "summary": "first",
                     "scheduled_at": None,
@@ -204,7 +216,7 @@ def test_backfill_rejects_invalid_target_list_before_opening_transaction(
                 {"id": "first", "target_list": "Focus"},
                 {"id": "first", "target_list": "Tasks"},
             ],
-            {"first": {}},
+            {"first": _valid_snapshot()},
             r"updates\[2\]\.id",
         ),
         ([{"id": "first", "target_list": "Focus"}], None, "snapshots"),
@@ -229,3 +241,61 @@ def test_backfill_rejects_malformed_batch_before_opening_transaction(
 
     with pytest.raises(ValueError, match=message):
         state.apply_reminder_list_backfill(updates, snapshots=snapshots)
+
+
+@pytest.mark.parametrize("missing_field", SNAPSHOT_FIELDS)
+def test_backfill_rejects_snapshot_missing_required_field_before_opening_transaction(
+    monkeypatch, tmp_path, missing_field
+):
+    _isolate_state(monkeypatch, tmp_path)
+    snapshot = _valid_snapshot()
+    del snapshot[missing_field]
+    monkeypatch.setattr(
+        state,
+        "_get_conn",
+        lambda: pytest.fail("invalid input must not open a database connection"),
+    )
+
+    with pytest.raises(ValueError, match="snapshot"):
+        state.apply_reminder_list_backfill(
+            [{"id": "first", "target_list": "Focus"}],
+            snapshots={"first": snapshot},
+        )
+
+
+@pytest.mark.parametrize("snapshot_id", ["second", 123, "", "   ", None])
+def test_backfill_rejects_invalid_snapshot_id_before_opening_transaction(
+    monkeypatch, tmp_path, snapshot_id
+):
+    _isolate_state(monkeypatch, tmp_path)
+    snapshot = _valid_snapshot()
+    snapshot["id"] = snapshot_id
+    monkeypatch.setattr(
+        state,
+        "_get_conn",
+        lambda: pytest.fail("invalid input must not open a database connection"),
+    )
+
+    with pytest.raises(ValueError, match="snapshot.*id"):
+        state.apply_reminder_list_backfill(
+            [{"id": "first", "target_list": "Focus"}],
+            snapshots={"first": snapshot},
+        )
+
+
+def test_backfill_rejects_more_than_500_updates_before_validating_snapshots_or_opening_db(
+    monkeypatch, tmp_path
+):
+    _isolate_state(monkeypatch, tmp_path)
+    updates = [
+        {"id": f"action-{index}", "target_list": "Focus"}
+        for index in range(501)
+    ]
+    monkeypatch.setattr(
+        state,
+        "_get_conn",
+        lambda: pytest.fail("oversized input must not open a database connection"),
+    )
+
+    with pytest.raises(ValueError, match="500"):
+        state.apply_reminder_list_backfill(updates, snapshots={})
