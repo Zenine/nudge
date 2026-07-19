@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import sys
 import tomllib
 import unicodedata
 from datetime import date
@@ -22,6 +23,7 @@ from nudge.reminder_lists import (
     select_list_backfill_actions,
 )
 from nudge.state import (
+    ReminderListBackfillConflictError,
     apply_reminder_list_backfill,
     configure_state,
     get_actions_readonly,
@@ -29,6 +31,10 @@ from nudge.state import (
 
 
 CONFIRMATION_INVALID = "REMINDER_LIST_BACKFILL_CONFIRMATION_INVALID"
+CONFIRMATION_REQUIRED = "REMINDER_LIST_BACKFILL_CONFIRMATION_REQUIRED"
+CANCELLED = "REMINDER_LIST_BACKFILL_CANCELLED"
+BACKUP_FAILED = "REMINDER_LIST_BACKFILL_BACKUP_FAILED"
+CONFLICT = "REMINDER_LIST_BACKFILL_CONFLICT"
 RANGE_INVALID = "REMINDER_LIST_BACKFILL_RANGE_INVALID"
 CONFIG_INVALID = "REMINDER_LIST_BACKFILL_CONFIG_INVALID"
 QUERY_FAILED = "REMINDER_LIST_BACKFILL_QUERY_FAILED"
@@ -65,18 +71,6 @@ def backfill_lists_command(
             code=CONFIRMATION_INVALID,
             message="--yes requires --apply.",
             dry_run=dry_run,
-            list_names=list_names,
-            from_text=from_text,
-            to_text=to_text,
-            limit=None,
-        )
-        _finish(payload, json_output)
-
-    if apply_changes:
-        payload = _error_payload(
-            code=WRITE_FAILED,
-            message="Apply is unavailable until the write path is connected.",
-            dry_run=False,
             list_names=list_names,
             from_text=from_text,
             to_text=to_text,
@@ -186,8 +180,6 @@ def backfill_lists_command(
         for action in batch.actions
         if isinstance(action.get("id"), str)
     }
-    # Task 5 consumes these complete snapshots when the write path is connected.
-    _ = snapshots
     payload = versioned_payload({
         "ok": not errors,
         "dry_run": dry_run,
@@ -209,9 +201,76 @@ def backfill_lists_command(
         "conflicts": [],
         "errors": errors,
     })
-    _emit(payload, json_output)
     if not payload["ok"]:
-        raise click.exceptions.Exit(1)
+        _finish(payload, json_output)
+    if not apply_changes or not payload["candidates"]:
+        _emit(payload, json_output)
+        return
+
+    if not yes:
+        if json_output or not _is_interactive_terminal():
+            _finish(
+                _with_error(
+                    payload,
+                    code=CONFIRMATION_REQUIRED,
+                    message="Re-run with --yes after reviewing the final candidates.",
+                ),
+                json_output,
+            )
+        _emit(payload, json_output=False)
+        if not click.confirm(
+            "确认仅回填以上 Nudge SQLite reminder_list？",
+            default=False,
+        ):
+            _finish(
+                _with_error(
+                    payload,
+                    code=CANCELLED,
+                    message="Reminder list backfill was cancelled.",
+                ),
+                json_output=False,
+            )
+
+    try:
+        backup_path = backup_database(initialize=False)
+    except Exception:
+        _finish(
+            _with_error(
+                payload,
+                code=BACKUP_FAILED,
+                message="Unable to create a verified Nudge database backup.",
+            ),
+            json_output,
+        )
+
+    payload = dict(payload)
+    payload["backup"] = {"path": str(backup_path), "integrity": "ok"}
+    updates = [
+        {"id": candidate["id"], "target_list": candidate["target_list"]}
+        for candidate in payload["candidates"]
+    ]
+    try:
+        applied = apply_reminder_list_backfill(updates, snapshots=snapshots)
+    except ReminderListBackfillConflictError as exc:
+        failed = _with_error(
+            payload,
+            code=CONFLICT,
+            message="Reminder list backfill conflicts with current Nudge state.",
+        )
+        failed["conflicts"] = list(exc.action_ids)
+        _finish(failed, json_output)
+    except Exception:
+        _finish(
+            _with_error(
+                payload,
+                code=WRITE_FAILED,
+                message="Unable to update Nudge reminder list ownership.",
+            ),
+            json_output,
+        )
+
+    payload["updated"] = len(applied)
+    _emit(payload, json_output)
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -294,6 +353,20 @@ def _error_payload(
 def _finish(payload: dict, json_output: bool) -> None:
     _emit(payload, json_output)
     raise click.exceptions.Exit(1)
+
+
+def _with_error(payload: dict, *, code: str, message: str) -> dict:
+    """Return a failed copy containing only the approved public error fields."""
+    failed = dict(payload)
+    failed["ok"] = False
+    failed["apply_allowed"] = False
+    failed["updated"] = 0
+    failed["errors"] = [*payload.get("errors", []), {"code": code, "message": message}]
+    return failed
+
+
+def _is_interactive_terminal() -> bool:
+    return bool(sys.stdin.isatty() and sys.stdout.isatty())
 
 
 def _public_payload(payload: dict) -> dict:

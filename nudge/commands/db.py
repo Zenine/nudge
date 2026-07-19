@@ -7,6 +7,7 @@ import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 import click
 
@@ -79,17 +80,26 @@ def restore_command(source: str, yes: bool, json_output: bool):
     _emit(payload, json_output)
 
 
-def backup_database(output: Path | None = None) -> Path:
+def backup_database(output: Path | None = None, *, initialize: bool = True) -> Path:
     """Create a consistent .db copy using SQLite's online backup API."""
-    _ensure_db_exists()
+    if initialize:
+        _ensure_db_exists()
+    elif not state.DB_PATH.is_file():
+        raise FileNotFoundError(state.DB_PATH)
     destination = output or state.STATE_DIR / "backups" / f"nudge-{_timestamp()}.db"
     destination.parent.mkdir(parents=True, exist_ok=True)
+    staging = destination.with_name(f".{destination.name}.partial-{uuid4().hex}")
 
-    with sqlite3.connect(str(state.DB_PATH)) as source, sqlite3.connect(str(destination)) as target:
-        source.backup(target)
+    try:
+        with sqlite3.connect(str(state.DB_PATH)) as source, sqlite3.connect(str(staging)) as target:
+            source.backup(target)
 
-    if _integrity_check(destination) != "ok":
-        raise RuntimeError(f"backup integrity check failed: {destination}")
+        if _integrity_check(staging) != "ok":
+            raise RuntimeError(f"backup integrity check failed: {destination}")
+        os.replace(staging, destination)
+    finally:
+        if staging.exists():
+            staging.unlink()
     return destination
 
 

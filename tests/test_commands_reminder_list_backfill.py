@@ -1,15 +1,18 @@
 """CLI contracts for legacy Reminder list ownership backfill."""
 
 import hashlib
+import inspect
 import json
 import sqlite3
 import unicodedata
 from datetime import date
+from pathlib import Path
 
 import click
 import pytest
 from click.testing import CliRunner
 
+from nudge.commands import db as db_commands
 from nudge.commands import reminder_list_backfill as command
 from nudge.commands.reminders import reminders_command
 from nudge.reminder_lists import ReminderListBackfillBatch
@@ -500,35 +503,357 @@ def test_limit_is_manually_validated_with_stable_range_error(monkeypatch, limit)
     )
 
 
+def _install_single_candidate_plan(monkeypatch) -> dict:
+    calls = _install_read_only_spies(monkeypatch, actions=[_action("legacy")])
+    monkeypatch.setattr(
+        command,
+        "query_all_due_on_date",
+        lambda list_name, target_date: (
+            True,
+            [{
+                "name": "Buy milk",
+                "due_time": "09:00",
+                "due_at": "2026-07-01 09:00",
+                "list": list_name,
+            }] if list_name == "Tasks" else [],
+        ),
+    )
+    return calls
+
+
 @pytest.mark.parametrize(
     "arguments",
     [
         ["backfill-lists", "--apply"],
-        ["backfill-lists", "--apply", "--yes", "--json"],
+        ["backfill-lists", "--apply", "--json"],
     ],
 )
-def test_apply_is_unavailable_before_any_read_backup_or_write(monkeypatch, arguments) -> None:
-    calls = {"config": 0, "read": 0, "query": 0, "backup": 0, "write": 0}
-
-    def unexpected(name):
-        def fail(*args, **kwargs):
-            calls[name] += 1
-            raise AssertionError(f"{name} must not run")
-
-        return fail
-
-    monkeypatch.setattr(command, "load_config", unexpected("config"))
-    monkeypatch.setattr(command, "get_actions_readonly", unexpected("read"), raising=False)
-    monkeypatch.setattr(command, "query_all_due_on_date", unexpected("query"))
-    monkeypatch.setattr(command, "backup_database", unexpected("backup"))
-    monkeypatch.setattr(command, "apply_reminder_list_backfill", unexpected("write"))
+def test_apply_without_yes_requires_confirmation_after_planning_and_before_backup(
+    monkeypatch,
+    arguments,
+) -> None:
+    calls = _install_single_candidate_plan(monkeypatch)
+    monkeypatch.setattr(command, "_is_interactive_terminal", lambda: False, raising=False)
 
     result = CliRunner().invoke(reminders_command, arguments)
 
     assert result.exit_code == 1, result.output
-    assert "REMINDER_LIST_BACKFILL_WRITE_FAILED" in result.output
-    assert "unavailable" in result.output.lower()
-    assert calls == {"config": 0, "read": 0, "query": 0, "backup": 0, "write": 0}
+    assert "REMINDER_LIST_BACKFILL_CONFIRMATION_REQUIRED" in result.output
+    if "--json" in arguments:
+        payload = json.loads(result.output)
+        assert [item["id"] for item in payload["candidates"]] == ["legacy"]
+        assert payload["dry_run"] is False
+        assert payload["updated"] == 0
+    assert calls["backup"] == 0
+    assert calls["apply"] == 0
+
+
+def test_tty_confirmation_no_cancels_after_final_summary_without_backup(monkeypatch) -> None:
+    calls = _install_single_candidate_plan(monkeypatch)
+    monkeypatch.setattr(command, "_is_interactive_terminal", lambda: True, raising=False)
+
+    result = CliRunner().invoke(
+        reminders_command,
+        ["backfill-lists", "--apply"],
+        input="n\n",
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "candidate: legacy" in result.output
+    assert "确认仅回填以上 Nudge SQLite reminder_list？" in result.output
+    assert "REMINDER_LIST_BACKFILL_CANCELLED" in result.output
+    assert calls["backup"] == 0
+    assert calls["apply"] == 0
+
+
+def test_apply_yes_backs_up_before_atomic_write_with_complete_snapshots(monkeypatch) -> None:
+    _install_single_candidate_plan(monkeypatch)
+    events: list[object] = []
+    backup_path = Path("/tmp/nudge-test-backup.db")
+
+    def backup(*, initialize=True):
+        events.append(("backup", initialize))
+        return backup_path
+
+    def apply(updates, *, snapshots):
+        events.append(("apply", updates, snapshots))
+        return ["legacy"]
+
+    monkeypatch.setattr(command, "backup_database", backup)
+    monkeypatch.setattr(command, "apply_reminder_list_backfill", apply)
+
+    result = CliRunner().invoke(
+        reminders_command,
+        ["backfill-lists", "--apply", "--yes", "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["dry_run"] is False
+    assert payload["updated"] == 1
+    assert payload["backup"] == {"path": str(backup_path), "integrity": "ok"}
+    assert events[0] == ("backup", False)
+    assert events[1][0] == "apply"
+    assert events[1][1] == [{"id": "legacy", "target_list": "Tasks"}]
+    snapshot = events[1][2]["legacy"]
+    assert snapshot == _action("legacy")
+
+
+def test_text_apply_reports_candidates_update_and_verified_backup_without_notes(
+    monkeypatch,
+) -> None:
+    _install_single_candidate_plan(monkeypatch)
+    backup_path = Path("/tmp/nudge\x1b[31m-backup.db")
+    monkeypatch.setattr(command, "backup_database", lambda **kwargs: backup_path)
+    monkeypatch.setattr(
+        command,
+        "apply_reminder_list_backfill",
+        lambda updates, *, snapshots: ["legacy"],
+    )
+
+    result = CliRunner().invoke(
+        reminders_command,
+        ["backfill-lists", "--apply", "--yes"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "APPLY Reminder list backfill" in result.output
+    assert "candidate: legacy" in result.output
+    assert "updated: 1" in result.output
+    assert "backup: /tmp/nudge-backup.db" in result.output
+    assert "integrity: ok" in result.output
+    assert "private SQLite note" not in result.output
+    assert "[31m" not in result.output
+
+
+def test_apply_with_zero_candidates_skips_confirmation_backup_and_transaction(monkeypatch) -> None:
+    calls = _install_read_only_spies(monkeypatch, actions=[])
+    monkeypatch.setattr(command, "query_all_due_on_date", lambda *args: (True, []))
+    monkeypatch.setattr(
+        command,
+        "_is_interactive_terminal",
+        lambda: (_ for _ in ()).throw(AssertionError("must not inspect TTY")),
+        raising=False,
+    )
+
+    result = CliRunner().invoke(
+        reminders_command,
+        ["backfill-lists", "--apply", "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["dry_run"] is False
+    assert payload["candidates"] == []
+    assert payload["updated"] == 0
+    assert payload["backup"] is None
+    assert calls["backup"] == 0
+    assert calls["apply"] == 0
+
+
+def test_backup_failure_is_safe_and_never_calls_apply(monkeypatch) -> None:
+    calls = _install_single_candidate_plan(monkeypatch)
+
+    def fail_backup(*, initialize=True):
+        assert initialize is False
+        raise sqlite3.OperationalError("private backup path and schema")
+
+    monkeypatch.setattr(command, "backup_database", fail_backup)
+
+    result = CliRunner().invoke(
+        reminders_command,
+        ["backfill-lists", "--apply", "--yes", "--json"],
+    )
+
+    assert result.exit_code == 1, result.output
+    payload = json.loads(result.output)
+    assert payload["errors"] == [{
+        "code": "REMINDER_LIST_BACKFILL_BACKUP_FAILED",
+        "message": "Unable to create a verified Nudge database backup.",
+    }]
+    assert payload["updated"] == 0
+    assert payload["backup"] is None
+    assert "private" not in result.output
+    assert calls["apply"] == 0
+
+
+def test_conflict_and_write_failure_keep_verified_backup_and_zero_updates(monkeypatch) -> None:
+    backup_path = Path("/tmp/nudge-test-backup.db")
+
+    for failure, expected_code, expected_conflicts in (
+        (state.ReminderListBackfillConflictError(["legacy"]),
+         "REMINDER_LIST_BACKFILL_CONFLICT", ["legacy"]),
+        (sqlite3.OperationalError("private SQLite details"),
+         "REMINDER_LIST_BACKFILL_WRITE_FAILED", []),
+        (ValueError("private validation details"),
+         "REMINDER_LIST_BACKFILL_WRITE_FAILED", []),
+    ):
+        _install_single_candidate_plan(monkeypatch)
+        monkeypatch.setattr(command, "backup_database", lambda **kwargs: backup_path)
+
+        def fail_apply(*args, _failure=failure, **kwargs):
+            raise _failure
+
+        monkeypatch.setattr(command, "apply_reminder_list_backfill", fail_apply)
+        result = CliRunner().invoke(
+            reminders_command,
+            ["backfill-lists", "--apply", "--yes", "--json"],
+        )
+
+        assert result.exit_code == 1, result.output
+        payload = json.loads(result.output)
+        assert payload["errors"][0]["code"] == expected_code
+        assert payload["conflicts"] == expected_conflicts
+        assert payload["updated"] == 0
+        assert payload["backup"] == {"path": str(backup_path), "integrity": "ok"}
+        assert "private" not in result.output
+
+
+def test_backup_without_initialize_never_opens_state_connection_and_cleans_partial(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    _create_conn = sqlite3.connect(db_path)
+    try:
+        _create_conn.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+        _create_conn.execute("INSERT INTO sample (id) VALUES (1)")
+        _create_conn.commit()
+    finally:
+        _create_conn.close()
+    monkeypatch.setattr(state, "STATE_DIR", state_dir)
+    monkeypatch.setattr(state, "DB_PATH", db_path)
+    monkeypatch.setattr(
+        state,
+        "_get_conn",
+        lambda: (_ for _ in ()).throw(AssertionError("must not initialize or migrate")),
+    )
+
+    destination = state_dir / "backups" / "verified.db"
+    result = command.backup_database(destination, initialize=False)
+
+    assert result == destination
+    assert db_commands._integrity_check(destination) == "ok"
+    with sqlite3.connect(destination) as conn:
+        assert conn.execute("SELECT id FROM sample").fetchall() == [(1,)]
+
+    partial = state_dir / "backups" / "partial.db"
+    original_connect = sqlite3.connect
+
+    class FailingSource:
+        def __init__(self, connection):
+            self.connection = connection
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            self.connection.close()
+
+        def backup(self, target):
+            raise sqlite3.Error("failed")
+
+    connect_calls = 0
+
+    def failing_connect(path, *args, **kwargs):
+        nonlocal connect_calls
+        connect_calls += 1
+        connection = original_connect(path, *args, **kwargs)
+        if connect_calls == 1:
+            return FailingSource(connection)
+        return connection
+
+    with pytest.MonkeyPatch.context() as cleanup_patch:
+        cleanup_patch.setattr(db_commands.sqlite3, "connect", failing_connect)
+        with pytest.raises(sqlite3.Error):
+            command.backup_database(partial, initialize=False)
+    assert not partial.exists()
+    assert not list(partial.parent.glob(f".{partial.name}.partial-*"))
+
+
+def test_backup_without_initialize_preserves_existing_destination_on_failure(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+    monkeypatch.setattr(state, "STATE_DIR", state_dir)
+    monkeypatch.setattr(state, "DB_PATH", db_path)
+    monkeypatch.setattr(
+        state,
+        "_get_conn",
+        lambda: (_ for _ in ()).throw(AssertionError("must not initialize or migrate")),
+    )
+    destination = state_dir / "backups" / "existing.db"
+    destination.parent.mkdir()
+    existing = b"existing valid backup sentinel"
+    destination.write_bytes(existing)
+    original_connect = sqlite3.connect
+    connect_calls = 0
+
+    class FailingSource:
+        def __init__(self, connection):
+            self.connection = connection
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            self.connection.close()
+
+        def backup(self, target):
+            raise sqlite3.Error("private failure")
+
+    def failing_connect(path, *args, **kwargs):
+        nonlocal connect_calls
+        connect_calls += 1
+        connection = original_connect(path, *args, **kwargs)
+        if connect_calls == 1:
+            return FailingSource(connection)
+        return connection
+
+    with pytest.MonkeyPatch.context() as cleanup_patch:
+        cleanup_patch.setattr(db_commands.sqlite3, "connect", failing_connect)
+        with pytest.raises(sqlite3.Error):
+            command.backup_database(destination, initialize=False)
+
+    assert destination.read_bytes() == existing
+    assert not list(destination.parent.glob(f".{destination.name}.partial-*"))
+
+
+def test_backup_without_initialize_missing_source_creates_nothing(monkeypatch, tmp_path) -> None:
+    state_dir = tmp_path / "missing"
+    monkeypatch.setattr(state, "STATE_DIR", state_dir)
+    monkeypatch.setattr(state, "DB_PATH", state_dir / "nudge.db")
+    monkeypatch.setattr(
+        state,
+        "_get_conn",
+        lambda: (_ for _ in ()).throw(AssertionError("must not initialize or migrate")),
+    )
+    destination = tmp_path / "backup.db"
+
+    with pytest.raises(FileNotFoundError):
+        command.backup_database(destination, initialize=False)
+
+    assert not state_dir.exists()
+    assert not destination.exists()
+
+
+def test_reminder_list_backfill_command_has_no_apple_mutation_imports() -> None:
+    source = inspect.getsource(command)
+
+    for forbidden in (
+        "complete_reminder", "delete_reminder", "create_reminder",
+        "update_action_external_id", "set_external_id",
+    ):
+        assert forbidden not in source
 
 
 def test_cross_date_query_row_is_rejected_before_planning(monkeypatch) -> None:
