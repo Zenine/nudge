@@ -28,7 +28,7 @@
 | `nudge health` | 导入/查看 Apple Health 汇总 | 否 | `import --apply` 写 SQLite | 不直接需要 Apple 权限；需要本地 Health 导出文件 |
 | `nudge habits` | 查看 streak 或记录今日习惯 | 否 | `habits log <name>` 写 SQLite | 不需要 Apple 权限 |
 | `nudge schedule` | 查找本周日历空档 | 否 | 否 | 读取 Calendar，需要 Calendar 权限 |
-| `nudge reminders` | 同步完成状态，或回填旧 action 的外部 ID / 列表归属 | `backfill-ids --apply` 会更新 Reminders；`sync-completed` 和 `backfill-lists` 不写 Apple | 各子命令的 `--apply` 可写 SQLite；`backfill-lists` 只更新 `reminder_list` | 所有路径需读取 Reminders；仅 `backfill-ids --apply` 需要更新权限 |
+| `nudge reminders` | 同步完成状态，或回填旧 action 的外部 ID / 列表归属 | `backfill-lists` 永不写 Apple；`backfill-ids --apply` 会更新 Reminders；`sync-completed --apply` 的睡眠终止级联可能 best-effort 完成后续 Apple 睡眠提醒 | 各子命令的 `--apply` 可写 SQLite；`backfill-lists` 只更新 `reminder_list` | 所有路径需读取 Reminders；`backfill-ids --apply` 及 `sync-completed --apply` 的睡眠终止级联需要 Reminders 更新权限 |
 | `nudge agent` | 本地 agent 结构化 Apple 动作入口 | `apply` 真实执行会写 Apple；`--dry-run` 不写 | `apply`/`status` 真实执行写 SQLite（actions/tracking） | Apple 写入需要对应权限 |
 | `nudge mcp` | 本地 MCP stdio server | 工具调用 `apply_apple_actions` 真实执行会写 Apple | 状态回写工具可写 SQLite | 由 MCP client 触发；Apple 写入需要权限 |
 | `nudge daemon` | 本地队列运行时、launchd 和健康辅助 app | `run` 处理 `agent.apply` 队列时可能写 Apple | 队列、恢复、重试、运行状态写 SQLite；launchd/app 子命令写本机用户级文件 | launchd/app 仅 macOS；Apple 写入取决于队列内容 |
@@ -259,7 +259,7 @@ nudge schedule "深度工作" --duration 120 --book --slot 1 --title "Deep Work"
 
 子命令：
 
-- `reminders sync-completed`：同步一个或多个 Apple Reminders 列表。新 action 会记录目标列表，并在同步和 ID backfill 前先按已知列表归属过滤；旧 action 没有列表字段时仍会进入明确匹配流程以保持兼容。所有 action 都必须在当前列表找到明确完成匹配后才会写回，不能仅凭“该列表里不存在”推断完成，因此移动列表不会造成误完成。睡眠派生完成会使用每条 action 自己记录的目标列表。`--apply` 写 SQLite，并可能静默后续睡眠提醒。
+- `reminders sync-completed`：同步一个或多个 Apple Reminders 列表。新 action 会记录目标列表，并在同步和 ID backfill 前先按已知列表归属过滤；旧 action 没有列表字段时仍会进入明确匹配流程以保持兼容。所有 action 都必须在当前列表找到明确完成匹配后才会写回，不能仅凭“该列表里不存在”推断完成，因此移动列表不会造成误完成。睡眠派生完成会使用每条 action 自己记录的目标列表。`--apply` 的普通完成同步只回写 SQLite；若命中睡眠终止提醒，级联流程可能 best-effort 完成同日晚于它的 Apple 睡眠提醒。
 - `reminders backfill-ids`：为旧 Apple Reminders 附加稳定 Nudge ID。`--apply` 会写 Apple Reminders 和 SQLite。
 - `reminders backfill-lists`：检查升级前缺少列表归属的 reminder action，默认只读预览；`--apply` 只回填本地 SQLite 的 `reminder_list`，不会修改、完成或移动任何 Apple Reminder。
 
