@@ -75,6 +75,14 @@ class FeedbackInterviewConflictError(RuntimeError):
         super().__init__(f"feedback interview action conflict: {', '.join(self.action_ids)}")
 
 
+class ReminderListBackfillConflictError(RuntimeError):
+    """Raised when one or more reminder-list backfill snapshots are stale."""
+
+    def __init__(self, action_ids: list[str]):
+        self.action_ids = sorted(set(action_ids))
+        super().__init__(f"reminder list backfill action conflict: {', '.join(self.action_ids)}")
+
+
 def configure_state(config: dict | None = None) -> Path:
     """Re-resolve process state paths from an already-loaded config.
 
@@ -710,6 +718,105 @@ def apply_feedback_interview_batch(
             )
             if cursor.rowcount != 1:
                 raise FeedbackInterviewConflictError([item["id"]])
+        conn.commit()
+        return [item["id"] for item in prepared]
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def apply_reminder_list_backfill(
+    updates: list[dict],
+    *,
+    snapshots: dict[str, dict],
+) -> list[str]:
+    """Atomically assign reminder lists when every action snapshot is current."""
+    if not isinstance(updates, list) or not updates:
+        raise ValueError("reminder list backfill updates must be a non-empty list")
+    if not isinstance(snapshots, dict):
+        raise ValueError("reminder list backfill snapshots must be an object")
+
+    snapshot_fields = ("type", "summary", "scheduled_at", "status", "reminder_list")
+    prepared = []
+    seen_ids = set()
+    for index, update in enumerate(updates, start=1):
+        if not isinstance(update, dict):
+            raise ValueError(f"updates[{index}] must be an object")
+        raw_action_id = update.get("id")
+        if not isinstance(raw_action_id, str):
+            raise ValueError(f"updates[{index}].id is missing or duplicated")
+        action_id = raw_action_id.strip()
+        if not action_id or action_id in seen_ids:
+            raise ValueError(f"updates[{index}].id is missing or duplicated")
+        target_list = update.get("target_list")
+        if not isinstance(target_list, str) or not target_list.strip():
+            raise ValueError(f"updates[{index}].target_list must be a non-empty string")
+        snapshot = snapshots.get(action_id)
+        if not isinstance(snapshot, dict):
+            raise ValueError(f"missing snapshot for action: {action_id}")
+        seen_ids.add(action_id)
+        prepared.append({
+            "id": action_id,
+            "target_list": target_list.strip(),
+            "snapshot": {field: snapshot.get(field) for field in snapshot_fields},
+        })
+
+    conn = _get_conn()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        placeholders = ",".join("?" for _ in prepared)
+        rows = conn.execute(
+            f"""
+            SELECT id, type, summary, scheduled_at, status, reminder_list
+            FROM actions
+            WHERE id IN ({placeholders})
+            """,
+            tuple(item["id"] for item in prepared),
+        ).fetchall()
+        current = {row["id"]: dict(row) for row in rows}
+        conflicts = []
+        for item in prepared:
+            row = current.get(item["id"])
+            if (
+                row is None
+                or any(
+                    row[field] != item["snapshot"][field]
+                    for field in snapshot_fields
+                )
+                or row["type"] != "reminder"
+                or row["status"] not in {"created", "pending"}
+                or row["reminder_list"] is not None
+            ):
+                conflicts.append(item["id"])
+        if conflicts:
+            raise ReminderListBackfillConflictError(conflicts)
+
+        for item in prepared:
+            snapshot = item["snapshot"]
+            cursor = conn.execute(
+                """
+                UPDATE actions
+                SET reminder_list = ?
+                WHERE id = ?
+                  AND type IS ?
+                  AND summary IS ?
+                  AND scheduled_at IS ?
+                  AND status IS ?
+                  AND reminder_list IS NULL
+                """,
+                (
+                    item["target_list"],
+                    item["id"],
+                    snapshot["type"],
+                    snapshot["summary"],
+                    snapshot["scheduled_at"],
+                    snapshot["status"],
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise ReminderListBackfillConflictError([item["id"]])
         conn.commit()
         return [item["id"] for item in prepared]
     except Exception:
