@@ -124,6 +124,42 @@ def test_select_list_backfill_actions_keeps_stable_minute_and_id_order() -> None
     assert batch.remaining == 0
 
 
+@pytest.mark.parametrize(
+    ("date_from", "date_to"),
+    [
+        (date(2026, 7, 1), date(2026, 7, 1)),
+        (date(2026, 7, 2), date(2026, 7, 1)),
+    ],
+)
+def test_select_list_backfill_actions_requires_to_later_than_from(
+    date_from: date,
+    date_to: date,
+) -> None:
+    with pytest.raises(ValueError) as exc_info:
+        select_list_backfill_actions([], date_from=date_from, date_to=date_to)
+
+    assert str(exc_info.value) == "--to must be later than --from"
+
+
+def test_select_list_backfill_actions_enforces_default_and_maximum_batch_sizes() -> None:
+    actions = [_action(f"action-{index:03d}") for index in range(501)]
+
+    default_batch = select_list_backfill_actions(actions, date_from=None, date_to=None)
+    maximum_batch = select_list_backfill_actions(
+        actions,
+        date_from=None,
+        date_to=None,
+        limit=500,
+    )
+
+    assert len(default_batch.actions) == 100
+    assert default_batch.total_eligible == 501
+    assert default_batch.remaining == 401
+    assert len(maximum_batch.actions) == 500
+    assert maximum_batch.total_eligible == 501
+    assert maximum_batch.remaining == 1
+
+
 def test_select_list_backfill_actions_classifies_only_open_legacy_invalid_rows() -> None:
     actions = [
         _action("empty-list", reminder_list=""),
@@ -267,9 +303,75 @@ def test_plan_list_backfill_requires_equal_minutes() -> None:
             "summary": "Same",
             "scheduled_at": "2026-07-01 09:00",
             "status": "pending",
-            "current_reminder_list": None,
         }
     ]
+
+
+@pytest.mark.parametrize("apple_name", ["buy milk", "Buy"])
+def test_plan_list_backfill_does_not_casefold_or_substring_match(apple_name: str) -> None:
+    action = _action("strict-title", summary="Buy milk", scheduled_at="2026-07-01 09:00")
+    row = {"name": apple_name, "due_at": "2026-07-01 09:00", "list": "Tasks"}
+
+    plan = plan_list_backfill([action], [row])
+
+    assert plan["candidates"] == []
+    assert [item["id"] for item in plan["missing"]] == ["strict-title"]
+
+
+def test_plan_list_backfill_outputs_only_contract_fields_when_apple_rows_have_extras() -> None:
+    actions = [
+        _action("candidate", summary="Candidate", scheduled_at="2026-07-01 09:00"),
+        _action("missing", summary="Missing", scheduled_at="2026-07-01 10:00"),
+        _action("ambiguous", summary="Ambiguous", scheduled_at="2026-07-01 11:00"),
+    ]
+    rows = [
+        {
+            "name": "Candidate",
+            "due_at": "2026-07-01 09:00",
+            "list": "Tasks",
+            "notes": "private candidate note",
+            "other": {"secret": True},
+        },
+        {
+            "name": "Missing",
+            "due_at": "2026-07-01 10:01",
+            "list": "Tasks",
+            "notes": "private non-match note",
+        },
+        {
+            "name": "Ambiguous",
+            "due_at": "2026-07-01 11:00",
+            "list": "Alpha",
+            "notes": "private first note",
+        },
+        {
+            "name": "Ambiguous",
+            "due_at": "2026-07-01 11:00",
+            "list": "Zulu",
+            "notes": "private second note",
+        },
+    ]
+
+    plan = plan_list_backfill(actions, rows)
+
+    assert set(plan["candidates"][0]) == {
+        "id",
+        "summary",
+        "scheduled_at",
+        "status",
+        "current_reminder_list",
+        "target_list",
+        "match_type",
+    }
+    assert set(plan["missing"][0]) == {"id", "summary", "scheduled_at", "status"}
+    assert set(plan["ambiguous"][0]) == {
+        "id",
+        "summary",
+        "scheduled_at",
+        "status",
+        "matched_lists",
+        "matches",
+    }
 
 
 @pytest.mark.parametrize(

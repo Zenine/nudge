@@ -67,6 +67,8 @@ def select_list_backfill_actions(
     """Select a deterministic, bounded batch of unowned legacy reminders."""
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
         raise ValueError("limit must be an integer from 1 to 500")
+    if date_from is not None and date_to is not None and date_to <= date_from:
+        raise ValueError("--to must be later than --from")
 
     eligible: list[tuple[datetime, dict]] = []
     invalid: list[dict] = []
@@ -147,6 +149,7 @@ def plan_list_backfill(
         row_index, match_type = matches[0]
         candidates.append({
             **basic,
+            "current_reminder_list": None,
             "target_list": rows[row_index].get("list"),
             "match_type": match_type,
         })
@@ -184,7 +187,6 @@ def _backfill_action(action: dict) -> dict:
         "summary": action.get("summary"),
         "scheduled_at": action.get("scheduled_at"),
         "status": action.get("status"),
-        "current_reminder_list": None,
     }
 
 
