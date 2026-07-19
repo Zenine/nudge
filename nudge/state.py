@@ -910,14 +910,61 @@ def get_actions(
 
 def get_actions_readonly() -> list[dict]:
     """Read all actions without creating or migrating any local state."""
-    database_uri = f"{DB_PATH.resolve().as_uri()}?mode=ro"
+    database_identity = _readonly_db_identity(DB_PATH)
+    wal_path = DB_PATH.with_name(f"{DB_PATH.name}-wal")
+    shm_path = DB_PATH.with_name(f"{DB_PATH.name}-shm")
+    wal_identity = _readonly_optional_identity(wal_path)
+    shm_identity = _readonly_optional_identity(shm_path)
+    if wal_identity is not None and wal_identity[2] > 0:
+        raise sqlite3.OperationalError("read-only state has an uncheckpointed WAL")
+
+    database_uri = f"{DB_PATH.resolve().as_uri()}?mode=ro&immutable=1"
     conn = sqlite3.connect(database_uri, uri=True)
     conn.row_factory = sqlite3.Row
     try:
+        conn.execute("PRAGMA query_only = ON")
         rows = conn.execute("SELECT * FROM actions ORDER BY created_at DESC").fetchall()
-        return [dict(row) for row in rows]
+        actions = [dict(row) for row in rows]
     finally:
         conn.close()
+
+    if (
+        _readonly_db_identity(DB_PATH) != database_identity
+        or _readonly_optional_identity(wal_path) != wal_identity
+        or _readonly_optional_identity(shm_path) != shm_identity
+    ):
+        raise sqlite3.OperationalError("read-only state changed during read")
+    return actions
+
+
+def _readonly_db_identity(path: Path) -> tuple[int, int, int, int]:
+    """Return the stable filesystem identity used to guard a read-only query."""
+    try:
+        file_stat = path.stat()
+    except OSError as exc:
+        raise sqlite3.OperationalError("read-only state database is unavailable") from exc
+    return (
+        file_stat.st_dev,
+        file_stat.st_ino,
+        file_stat.st_size,
+        file_stat.st_mtime_ns,
+    )
+
+
+def _readonly_optional_identity(path: Path) -> tuple[int, int, int, int] | None:
+    """Return sidecar identity without creating or deleting the sidecar."""
+    try:
+        file_stat = path.stat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise sqlite3.OperationalError("read-only state sidecar is unavailable") from exc
+    return (
+        file_stat.st_dev,
+        file_stat.st_ino,
+        file_stat.st_size,
+        file_stat.st_mtime_ns,
+    )
 
 
 def get_action(action_id: str) -> dict | None:

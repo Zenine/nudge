@@ -1,5 +1,6 @@
 """Tests for atomic SQLite reminder-list ownership backfill."""
 
+import hashlib
 import sqlite3
 
 import pytest
@@ -77,6 +78,52 @@ def _snapshot(action_id):
     return {field: action[field] for field in SNAPSHOT_FIELDS}
 
 
+def _directory_snapshot(directory):
+    return {
+        path.name: (
+            path.stat().st_size,
+            path.stat().st_mtime_ns,
+            hashlib.sha256(path.read_bytes()).hexdigest(),
+        )
+        for path in directory.iterdir()
+        if path.is_file()
+    }
+
+
+def _create_minimal_actions_database(db_path, *, journal_mode="DELETE"):
+    conn = sqlite3.connect(db_path)
+    conn.execute(f"PRAGMA journal_mode={journal_mode}")
+    conn.execute(
+        """
+        CREATE TABLE actions (
+            id TEXT PRIMARY KEY,
+            type TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            scheduled_at TEXT,
+            completed_at TEXT,
+            status TEXT,
+            external_id TEXT,
+            reminder_list TEXT,
+            feedback TEXT,
+            created_at TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO actions (
+            id, type, summary, scheduled_at, status, reminder_list, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "legacy", "reminder", "Buy milk", "2026-07-01 09:00",
+            "pending", None, "2026-07-01 08:00",
+        ),
+    )
+    conn.commit()
+    return conn
+
+
 def test_get_actions_readonly_missing_database_creates_nothing(monkeypatch, tmp_path):
     state_dir = tmp_path / "missing-state"
     _isolate_state(monkeypatch, state_dir)
@@ -146,6 +193,77 @@ def test_get_actions_readonly_preserves_database_files_and_legacy_json(monkeypat
     assert {path.name for path in state_dir.iterdir()} == before_files
     assert legacy_path.read_text(encoding="utf-8") == legacy_contents
     assert not (state_dir / "state.json.bak").exists()
+
+
+def test_get_actions_readonly_checkpointed_wal_database_changes_no_files(monkeypatch, tmp_path):
+    state_dir = tmp_path / "wal-checkpointed"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    conn = _create_minimal_actions_database(db_path, journal_mode="WAL")
+    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    conn.close()
+    _isolate_state(monkeypatch, state_dir)
+    before = _directory_snapshot(state_dir)
+
+    actions = state.get_actions_readonly()
+
+    assert [action["id"] for action in actions] == ["legacy"]
+    assert _directory_snapshot(state_dir) == before
+    assert not (state_dir / "nudge.db-wal").exists()
+    assert not (state_dir / "nudge.db-shm").exists()
+
+
+def test_get_actions_readonly_rejects_nonempty_wal_without_touching_files(monkeypatch, tmp_path):
+    state_dir = tmp_path / "wal-pending"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    writer = _create_minimal_actions_database(db_path, journal_mode="WAL")
+    writer.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    writer.execute(
+        "INSERT INTO actions (id, type, summary, created_at) VALUES (?, ?, ?, ?)",
+        ("uncheckpointed", "reminder", "Pending WAL", "2026-07-02 08:00"),
+    )
+    writer.commit()
+    wal_path = state_dir / "nudge.db-wal"
+    assert wal_path.exists() and wal_path.stat().st_size > 0
+    _isolate_state(monkeypatch, state_dir)
+    before = _directory_snapshot(state_dir)
+
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="WAL"):
+            state.get_actions_readonly()
+        assert _directory_snapshot(state_dir) == before
+    finally:
+        writer.close()
+
+
+def test_get_actions_readonly_rejects_database_change_during_read(monkeypatch, tmp_path):
+    state_dir = tmp_path / "changed-during-read"
+    state_dir.mkdir()
+    db_path = state_dir / "nudge.db"
+    _create_minimal_actions_database(db_path).close()
+    _isolate_state(monkeypatch, state_dir)
+    stat_result = db_path.stat()
+    original = (
+        stat_result.st_dev,
+        stat_result.st_ino,
+        stat_result.st_size,
+        stat_result.st_mtime_ns,
+    )
+    changed = (*original[:-1], original[-1] + 1)
+    identities = iter((original, changed))
+    calls = []
+
+    def changing_identity(path):
+        calls.append(path)
+        return next(identities)
+
+    monkeypatch.setattr(state, "_readonly_db_identity", changing_identity, raising=False)
+
+    with pytest.raises(sqlite3.OperationalError, match="changed"):
+        state.get_actions_readonly()
+
+    assert calls == [db_path, db_path]
 
 
 def test_backfill_changes_only_reminder_list_and_returns_applied_ids(monkeypatch, tmp_path):
