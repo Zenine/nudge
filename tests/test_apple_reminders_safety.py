@@ -464,3 +464,45 @@ def test_complete_falls_back_to_due_date_limited_applescript_when_eventkit_fails
     assert ok is True
     assert message == "done"
     assert "due date of r = targetDueDate" in scripts[0]
+
+
+def test_update_reminder_notes_uses_precise_eventkit_match(monkeypatch) -> None:
+    calls: list[dict] = []
+
+    def fake_mutation(operation, name, list_name, **kwargs):
+        calls.append({
+            "operation": operation,
+            "name": name,
+            "list_name": list_name,
+            **kwargs,
+        })
+        return True, "matched=1 changed=1"
+
+    monkeypatch.setattr(reminders, "_run_eventkit_mutation", fake_mutation)
+
+    ok, message = reminders.update_reminder_notes(
+        "[通勤 GPT] 周一05:50：简历事实补齐",
+        "GPT 对话",
+        "2026-07-20 05:50",
+        "新的完整会话包正文",
+    )
+
+    assert ok is True
+    assert message == "matched=1 changed=1"
+    assert calls == [{
+        "operation": "update-notes",
+        "name": "[通勤 GPT] 周一05:50：简历事实补齐",
+        "list_name": "GPT 对话",
+        "timeout": 30,
+        "due_date": "2026-07-20 05:50",
+        "body": "新的完整会话包正文",
+    }]
+
+
+def test_eventkit_update_notes_replaces_body_but_preserves_nudge_id() -> None:
+    source = reminders.EVENTKIT_MUTATE_SCRIPT.read_text()
+
+    assert 'operation != "update-notes"' in source
+    assert 'operation == "update-notes"' in source
+    assert "reminder.notes = updatedNotes" in source
+    assert 'line.hasPrefix("Nudge-ID: ")' in source

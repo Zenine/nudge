@@ -296,7 +296,7 @@ def _run_eventkit_mutation(
     ]
     if due_date:
         cmd.append(due_date)
-    if operation == "create":
+    if operation in {"create", "update-notes"}:
         cmd.extend([
             str(priority),
             remind_date or "",
@@ -677,6 +677,31 @@ def set_reminder_external_id(
     if ok:
         return True, result
     return False, f"EventKit failed for reminder external_id backfill: {result}"
+
+
+def update_reminder_notes(
+    name: str,
+    list_name: str,
+    due_date: str,
+    body: str,
+    timeout: int = 30,
+) -> tuple[bool, str]:
+    """Replace one Reminder body after an exact title + due-minute match.
+
+    The EventKit helper preserves an existing ``Nudge-ID`` marker and leaves
+    the reminder title, due date, completion state, URL, and alarms unchanged.
+    """
+    ok, result = _run_eventkit_mutation(
+        "update-notes",
+        name,
+        list_name,
+        timeout=timeout,
+        due_date=due_date,
+        body=body,
+    )
+    if ok:
+        return True, result
+    return False, f"EventKit failed for reminder notes update: {result}"
 
 
 def delete_reminder(

@@ -7,7 +7,7 @@ func fail(_ message: String, code: Int32 = 1) -> Never {
 }
 
 if CommandLine.arguments.count < 4 {
-    fail("Usage: eventkit_reminders_mutate.swift <create|complete|complete-id|delete|set-id> <list-name> <title-or-external-id> [due-date YYYY-MM-DD HH:mm] [priority] [remind-date YYYY-MM-DD HH:mm] [external-id] [notes]")
+    fail("Usage: eventkit_reminders_mutate.swift <create|complete|complete-id|delete|set-id|update-notes> <list-name> <title-or-external-id> [due-date YYYY-MM-DD HH:mm] [priority] [remind-date YYYY-MM-DD HH:mm] [external-id] [notes]")
 }
 
 let operation = CommandLine.arguments[1]
@@ -19,7 +19,7 @@ let remindDateText = CommandLine.arguments.count >= 7 ? CommandLine.arguments[6]
 let externalIdText = CommandLine.arguments.count >= 8 ? CommandLine.arguments[7] : ""
 let notesText = CommandLine.arguments.count >= 9 ? CommandLine.arguments[8] : ""
 
-if operation != "create" && operation != "complete" && operation != "complete-id" && operation != "delete" && operation != "set-id" {
+if operation != "create" && operation != "complete" && operation != "complete-id" && operation != "delete" && operation != "set-id" && operation != "update-notes" {
     fail("Unsupported operation: \(operation)")
 }
 
@@ -256,6 +256,19 @@ for reminder in matches {
             } else {
                 reminder.notes = marker
             }
+            try store.save(reminder, commit: true)
+        } else if operation == "update-notes" {
+            let existingMarker = reminder.notes?
+                .split(separator: "\n", omittingEmptySubsequences: false)
+                .map(String.init)
+                .first { line in line.hasPrefix("Nudge-ID: ") }
+            var updatedNotes = notesText
+            if let existingMarker, !updatedNotes.contains(existingMarker) {
+                updatedNotes = updatedNotes.isEmpty
+                    ? existingMarker
+                    : updatedNotes + "\n\n" + existingMarker
+            }
+            reminder.notes = updatedNotes.isEmpty ? nil : updatedNotes
             try store.save(reminder, commit: true)
         } else {
             try store.remove(reminder, commit: true)
