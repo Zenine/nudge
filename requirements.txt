@@ -3,4 +3,3 @@ click
 defusedxml
 openai
 PyYAML
-pytest

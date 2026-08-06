@@ -30,6 +30,40 @@ def test_load_config_reads_explicit_public_safe_file(tmp_path):
     assert config["llm"]["provider"] == "qwen"
 
 
+def test_load_config_uses_nudge_config_env_when_no_explicit_path(monkeypatch, tmp_path):
+    path = tmp_path / "private-config.toml"
+    path.write_text(
+        "\n".join(
+            [
+                "[llm]",
+                'provider = "qwen"',
+                'model = "qwen-plus"',
+                'secrets_path = "~/private-secrets.yaml"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("NUDGE_CONFIG", str(path))
+
+    loaded = load_config()
+
+    assert loaded["llm"]["provider"] == "qwen"
+    assert loaded["llm"]["model"] == "qwen-plus"
+    assert loaded["llm"]["secrets_path"] == "~/private-secrets.yaml"
+
+
+def test_load_config_explicit_path_overrides_nudge_config_env(monkeypatch, tmp_path):
+    env_path = tmp_path / "env-config.toml"
+    env_path.write_text('[llm]\nprovider = "qwen"\n', encoding="utf-8")
+    explicit_path = tmp_path / "explicit-config.toml"
+    explicit_path.write_text('[llm]\nprovider = "ollama"\n', encoding="utf-8")
+    monkeypatch.setenv("NUDGE_CONFIG", str(env_path))
+
+    loaded = load_config(explicit_path)
+
+    assert loaded["llm"]["provider"] == "ollama"
+
+
 def test_get_defaults_uses_public_safe_values():
     defaults = get_defaults(
         {

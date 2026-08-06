@@ -10,6 +10,7 @@
 - **MCP/agent 是本地调用入口**：`agent apply`、`mcp serve` 和 `daemon run` 可代表其他本地 agent 执行结构化动作。真实 Apple 写入应先 dry-run；`daemon enqueue` 以 `request_id` 作为队列幂等键（直连 agent/MCP 写入的 `request_id` 仅作 trace，不做 replay 去重）；启用 `[security.local_auth]` 后还需在请求 JSON/tool arguments 中提供 `auth_token`。
 - **Apple Health 导入只信任自己的导出**：`health import` / `daily sync --health` 可解析 Apple Health 导出 ZIP 或 HealthExport JSON。请只导入自己可信来源的文件。
 - **裸自然语言等价于 `do`**：`nudge "自然语言"` 会被 CLI 自动转成 `nudge do "自然语言"`。从 stdin 输入且未指定子命令时，也会走 `do`。
+- **私有配置优先用 `NUDGE_CONFIG` 统一入口**：显式 `--config/-c` 会覆盖环境变量；但部分命令没有 `--config`，或会在根命令阶段先初始化 LLM。若使用私有 `[llm]`、`secrets_path` 或 `[state].dir`，建议在当前 shell 设置 `NUDGE_CONFIG` 后再运行。
 
 ## Quick table
 

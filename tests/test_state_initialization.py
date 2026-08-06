@@ -1,6 +1,7 @@
 """Tests for SQLite state initialization caching and migration."""
 
 import json
+import inspect
 import sqlite3
 from pathlib import Path
 
@@ -180,6 +181,16 @@ def test_legacy_state_json_migration_still_imports_habits(monkeypatch, tmp_path)
     finally:
         conn.close()
     assert rows == [("reading", "2026-07-03", 5)]
+
+
+def test_get_habit_streaks_uses_grouped_join_query():
+    import nudge.state as state
+
+    source = inspect.getsource(state.get_habit_streaks)
+
+    assert "WITH latest_habits" in source
+    assert "JOIN latest_habits" in source
+    assert "WHERE (habit_name, date) IN" not in source
 
 
 def test_invalid_legacy_state_json_is_left_for_retry(monkeypatch, tmp_path):

@@ -74,6 +74,26 @@ def test_default_action_type_is_calendar_event():
     assert result.actions[0]["end"] == "2026-07-06 08:30"
 
 
+
+def test_preferred_days_shorter_than_sessions_per_week_staggers_same_day_sessions():
+    skill = _minimal_skill()
+    skill["plan_template"]["defaults"]["sessions_per_week"] = 3
+    skill["plan_template"]["defaults"]["preferred_days"] = ["Monday"]
+
+    result = dry_run_skill(skill, _context(), weeks=1)
+
+    assert [action["scheduled_date"] for action in result.actions] == [
+        "2026-07-06",
+        "2026-07-06",
+        "2026-07-06",
+    ]
+    assert [action["start"] for action in result.actions] == [
+        "2026-07-06 08:00",
+        "2026-07-06 08:30",
+        "2026-07-06 09:00",
+    ]
+    assert len({action["start"] for action in result.actions}) == 3
+
 def test_session_action_type_reminder_outputs_reminder_contract_fields():
     result = dry_run_skill(
         _minimal_skill(session_action_type="reminder"),

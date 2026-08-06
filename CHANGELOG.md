@@ -6,6 +6,8 @@
 
 ### Changed
 
+- `get_habit_streaks()` 的最新习惯记录查询改为按习惯分组取最大日期后 join 回原表，不再使用 tuple `IN (SELECT MAX(...))` 形式；行为不变，降低后续 habit 历史增长后的查询计划风险。
+- 拆分运行时与开发依赖：`requirements.txt` 只保留运行时依赖，新增 `requirements-dev.txt` 组合运行时依赖、pytest 与 packaging 检查所需工具；GitHub Actions 和非 macOS 评估文档改用 dev requirements，避免 bootstrap/runtime 安装混入测试工具。
 - Reminder EventKit helper 新增按“列表 + 标题 + 到期分钟”唯一匹配的正文替换能力；更新时保留既有 `Nudge-ID`、URL、通知、到期时间和完成状态，拒绝 0 条或多条匹配，供已确认计划在不删除重建 Reminder 的情况下同步上下文。
 - 新增 `nudge reminders backfill-lists`：默认只读地为升级前 `reminder_list IS NULL` 的 open reminder action 生成列表归属候选；EventKit 新增包含已完成与未完成 Reminder 的 `all-due` 只读查询模式，真实回填必须统一确认、创建并校验 SQLite 备份，再以候选快照复核和单事务条件更新仅写入本地列表字段。
 - Reminder 列表归属回填已通过公开运行库完整验证与真实本机配置只读 Dogfood；dry-run 未创建备份且主数据库修改时间未变化。命令层静态边界不持有 Apple Reminder 创建、完成、删除或外部 ID 修改能力，整个流程不修改 Apple 数据。
@@ -15,6 +17,10 @@
 
 ### Fixed
 
+- `load_config()` 现在尊重 `NUDGE_CONFIG` 环境变量；根命令阶段初始化 Brain/LLM 时会读取同一份私有配置，避免 `doctor --config` 已通过但 `review weekly --adapt` 仍落到默认配置或错误环境 key。
+- agent dry-run confirmation secret 读取时会拒绝空文件；若首次创建在写入前崩溃残留 0 字节文件，下次会以同目录临时文件 + `os.replace` 原子重建非空 secret，并保持 `0600` 权限，避免空 HMAC 密钥。
+- Skills dry-run 在 `preferred_days` 少于 `sessions_per_week` 时，会把同日多节 session 从首选时间起按前一节结束时间顺延，不再生成同日同一时刻重叠动作；Reminder 输出同步使用错开的 due date。
+- `ErrorReport.render()` 现在只负责纯文本格式化，不再隐式写 runtime JSONL 日志，避免测试、预览或重复渲染时产生额外落盘副作用。
 - `resolve_state_dir()` 在缺少 `NUDGE_STATE_DIR` 和 `[state].dir` 时改为 fail-closed 报错，不再静默回退到源码树 `.nudge/` 或 XDG 默认目录，避免 stale / 空 SQLite 被误当作权威状态库。
 - `all-due` EventKit 读取改用严格、无损的结构化 JSON；标题和列表名中的前后空格、tab 与换行不再被传输层改写，任何畸形输出或字段都会使整次查询失败，避免丢弃异常行后把重复 Reminder 误判为唯一候选。其它 EventKit 读取模式继续兼容原 TSV 输出。
 - Reminder 列表回填的 immutable 只读快照和未初始化备份现在也拒绝非空 SQLite rollback journal，并在关键读取/备份边界复核数据库、WAL、SHM 与 journal 身份；未初始化备份以 `mode=ro&immutable=1` 打开源库，避免隐式 recovery。

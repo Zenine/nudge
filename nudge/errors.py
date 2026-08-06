@@ -4,7 +4,6 @@ import json
 from dataclasses import dataclass
 
 from nudge.config import DEFAULT_CLOCK_SHORTCUT_NAME, DEFAULT_SECRETS_PATH
-from nudge.runtime_log import log_error_report
 
 
 @dataclass(frozen=True)
@@ -19,7 +18,6 @@ class ErrorReport:
 
     def render(self, indent: str = "") -> str:
         """Render as concise Chinese text for terminal output."""
-        log_error_report("error.render", self)
         lines = [
             f"ERROR [{self.code}]: {self.title}",
             f"发生了什么：{self.detail}",

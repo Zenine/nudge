@@ -61,6 +61,15 @@ Nudge 的 `[llm.models]` 使用三层模型名，便于在同一个 provider 下
 
 公开文档和示例只能使用占位符，例如 `YOUR_PROVIDER_API_KEY` 或 `<PROVIDER_API_KEY>`。不要提交真实 API key、OAuth token、个人健康数据、本机私有路径、机器专属配置或真实家庭成员资料。
 
+日常使用私有配置时，建议同时设置 `NUDGE_CONFIG`，让根命令阶段和子命令阶段读取同一个 `[llm]`：
+
+```bash
+export NUDGE_CONFIG="$HOME/.config/nudge/config.toml"
+nudge review weekly --adapt --dry-run
+```
+
+这对没有 `--config` 选项、但会触发 LLM 初始化的命令尤其重要；否则 `nudge doctor --config ...` 可能通过，而后续复盘适配仍使用默认配置或错误环境 key。
+
 ## 公开安全的配置示例
 
 ### 云端 provider 示例

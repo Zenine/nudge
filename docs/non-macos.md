@@ -27,7 +27,7 @@ Nudge 的核心目标是把自然语言或结构化计划转换成 Apple Calenda
 python3.12 -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 ```
 
 如果系统命令只有 `python3`，请先确认版本满足项目要求：

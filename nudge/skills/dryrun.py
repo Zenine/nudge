@@ -90,6 +90,7 @@ def _generate_actions(skill: dict, context: dict, weeks: int) -> list[dict]:
 
     actions = []
     for week in range(1, weeks + 1):
+        next_start_by_date: dict[date, datetime] = {}
         for slot in range(sessions_per_week):
             session_info = sessions[((week - 1) * sessions_per_week + slot) % len(sessions)]
             phase = session_info["phase"]
@@ -100,7 +101,9 @@ def _generate_actions(skill: dict, context: dict, weeks: int) -> list[dict]:
                 f"{scheduled_date.isoformat()} {preferred_time}",
                 "%Y-%m-%d %H:%M",
             )
+            start_dt = max(start_dt, next_start_by_date.get(scheduled_date, start_dt))
             end_dt = start_dt + timedelta(minutes=duration)
+            next_start_by_date[scheduled_date] = end_dt
             summary = _summary(metadata, session)
             if "action_type" in session:
                 action_type = session["action_type"]

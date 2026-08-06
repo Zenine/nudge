@@ -477,11 +477,16 @@ def get_habit_streaks() -> dict[str, dict]:
     """Get current streak for all tracked habits."""
     with _db() as conn:
         rows = conn.execute("""
-            SELECT habit_name, date, streak
-            FROM habit_logs
-            WHERE (habit_name, date) IN (
-                SELECT habit_name, MAX(date) FROM habit_logs GROUP BY habit_name
+            WITH latest_habits AS (
+                SELECT habit_name, MAX(date) AS latest_date
+                FROM habit_logs
+                GROUP BY habit_name
             )
+            SELECT h.habit_name, h.date, h.streak
+            FROM habit_logs AS h
+            JOIN latest_habits AS latest
+              ON latest.habit_name = h.habit_name
+             AND latest.latest_date = h.date
         """).fetchall()
 
     result = {}

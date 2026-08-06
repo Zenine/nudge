@@ -26,12 +26,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _default_config_path() -> Path:
-    """Default config search: source-tree config.toml first, then XDG.
+    """Default config search: NUDGE_CONFIG, source-tree config.toml, then XDG.
 
     Anchoring on PROJECT_ROOT alone breaks pip/pipx installs, where PROJECT_ROOT
     is inside site-packages. Fall back to ``$XDG_CONFIG_HOME/nudge/config.toml``
     (``~/.config/nudge/config.toml``) so installed users have a real home for it.
     """
+    env_config = os.environ.get("NUDGE_CONFIG")
+    if env_config:
+        return Path(env_config).expanduser()
     project_config = PROJECT_ROOT / "config.toml"
     if project_config.exists():
         return project_config
@@ -40,7 +43,7 @@ def _default_config_path() -> Path:
 
 
 def load_config(path: str | Path | None = None) -> dict:
-    """Load config.toml. Searches source tree then XDG if no path given."""
+    """Load config.toml. Uses explicit path, then NUDGE_CONFIG, source tree, then XDG."""
     if path is None:
         path = _default_config_path()
     else:
@@ -51,7 +54,7 @@ def load_config(path: str | Path | None = None) -> dict:
     if not path.exists():
         raise FileNotFoundError(
             f"Config file not found: {path}\n"
-            "Create one by copying config.example.toml, or run with --config."
+            "Create one by copying config.example.toml, set NUDGE_CONFIG, or run with --config."
         )
     with open(path, "rb") as f:
         return tomllib.load(f)

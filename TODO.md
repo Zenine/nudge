@@ -72,11 +72,6 @@
   - 建议:在同一连接/事务内批量更新;与连接复用一起优化。
   - 状态:2026-07-05 已完成:睡眠 auto-skip 改为在同一 `_db()` 连接/事务内查询 completed action、查询区间 actions,并用 `executemany` 批量更新后续睡眠提醒;新增回归测试确认只进入一次状态连接且行为不变。
 
-- **[低] `get_habit_streaks` 用相关子查询取每习惯最新日期**
-  - 位置:`nudge/state.py:315-332`。
-  - 影响:`habit_logs(habit_name,date)` 有 UNIQUE 索引可支撑,数据量小一般无碍;习惯/历史变大后 `(col,col) IN (SELECT MAX...)` 仍可能不够优。
-  - 建议:必要时改写为窗口函数或按 habit 分组取 max 的 join;低优先。
-
 ### 功能缺陷与提升
 
 - ~~**[中] LLM 输出 JSON 解析对 markdown fence 处理过于脆弱**~~
@@ -269,11 +264,6 @@
 - **[中] trainer 双 legacy 路径长期技术债(与本文件 2026-07-04 trainer 统一条的"剩余项"同源)**
   - 位置:`trainer.py` `_legacy_llm_plan`(`--legacy-llm`)、`_legacy_workout_status`(status 回退查旧 `weekly_workout`)、`trainer log` 命中 Skill 实例即提示改用 `nudge log done`(半废弃)。
   - 建议:定移除里程碑——确认 legacy `weekly_workout` 无存量数据后,删 `_legacy_*` 与其对 `brain.generate_workout_plan`/`parse_workout_log` 的依赖,trainer 收敛为 Skill runtime 薄壳。
-- **[低] `errors.py` `render()` 带写日志副作用**
-  - 位置:`errors.py:22`,`ErrorReport.render()` 内部调 `log_error_report(...)`;"结构体渲染成字符串"这个纯操作产生落盘副作用,每 render 一次落一条 error 日志,测试/预览难以无副作用格式化。建议把日志移到实际"发生错误并上报"的调用点。
-- **[低] `requirements.txt` 混入测试依赖 `pytest`**
-  - 建议:运行时/测试依赖分离,`pytest` 移到 `pyproject.toml` 的 `[project.optional-dependencies].test`,保持"纯运行时依赖"清爽。
-
 ### 商业闭环缺口(按漏斗排序,补充 2026-06-20 D3)
 
 1. **第一优先:可发现、可试用**——PyPI/Homebrew 分发、截图/演示、非 Mac 的 dry-run 评估路径(与 D4 P1 重叠;提级理由:用户基数为零时其余环节全部空转)。
@@ -289,18 +279,6 @@
   - 位置:`nudge/commands/agent.py:405` `hmac.compare_digest(provided, expected)` 两侧为 `str`,`provided` 来自请求 JSON 完全可控;Python `compare_digest` 对含非 ASCII 的 `str` 抛 `TypeError`。`nudge/commands/mcp.py:57` 的 `for raw_line in sys.stdin` 主循环无 try/except(`_handle_line` 的 try 只包 `json.loads`),异常冒泡打死进程。
   - 触发:`[security.local_auth].enabled=true` 时,一条 `{"auth_token":"café",...}` 的 tools/call(无需正确 token)即崩服务,后续全部请求失效——安全特性自身引入 DoS。
   - 状态:2026-07-05 已完成:`check_local_auth` 改按 bytes `compare_digest`(仍恒定时间);`_handle_line` 对 `_handle_message` 加每请求异常隔离,返回 JSON-RPC internal error(-32603)不中断服务。新增 `tests/test_local_auth.py` 两个回归(非 ASCII token 拒绝不崩、单请求异常不打死循环),完整 `scripts/verify.sh`(3.12)通过。
-- **[低] 确认密钥文件崩溃残留空文件 → 空 HMAC 密钥**
-  - 位置:`agent.py` `_confirmation_secret`(`O_CREAT|O_EXCL`,0o600)。创建成功、`write` 之前进程被杀会残留空文件;后续读到空串直接以 `b""` 当 HMAC 密钥,dry-run→apply 确认 token 可离线复算。
-  - 定级:本地信任模型下能读该文件者本有等价能力,故低;仍建议修。
-  - 修:读取后校验非空,为空视同缺失并重建;或先写临时文件再 `os.rename` 原子替换。
-- ~~**[低] Health JSON 导入路径 weight/body_fat 无范围校验,与 XML 路径不一致**~~
-  - 位置:`health.py` JSON 体重 277-279、体脂 290-292 无 `_valid_range`;XML 路径体重 427(1.0–500.0)、体脂 434(0.0–100.0)有。
-  - 影响:异常值(0/99999/体脂>100)经 JSON 导入原样写入 `health_daily_summary`,同值经 XML 会被丢弃;数据质量不一致,不崩溃。
-  - 状态:2026-07-05 已完成:JSON 路径复用 XML 同阈值 `_valid_range`(体重 1.0–500.0、体脂 `_percent_value` 后 0.0–100.0),越界值丢弃;新增回归 `tests/test_health_validation.py::test_parse_health_json_skips_out_of_range_weight_and_body_fat`。
-- **[低] dryrun `preferred_days` 数量 < `sessions_per_week` 时生成同日同时段重叠动作**
-  - 位置:`skills/dryrun.py:97` `preferred_days[slot % len(preferred_days)]` + 99-102 统一 `preferred_time`。
-  - 触发:显式配置 `preferred_days=["monday"]` 且 `sessions_per_week=3` → 3 个 session 全落周一同一时刻,materialize 出 3 个起止相同的事件/提醒;默认回退分支不触发。
-  - 修:`sessions_per_week > len(preferred_days)` 时同日多 session 错开时段,或校验层拒绝该组合。
 - **[信息·行为变化,非 bug] `complete_reminder` 改精确 `due_date` 匹配,漂移时合规完成可能失败**
   - 位置:`commands/reminders.py:610` 传 `due_date=scheduled_at`;`apple/reminders.py:489` `if due date of r = targetDueDate` 精确等值。
   - 说明:本次"拒绝仅按标题模糊批量匹配"安全收紧的预期副作用——用户在 Apple 端改过到期时间、或 `scheduled_at` 与实际 due date 分钟级不一致时,两条路径都可能匹配不到而报错。列此仅供回归观察 check-in 完成成功率,非缺陷。

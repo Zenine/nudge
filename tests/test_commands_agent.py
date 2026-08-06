@@ -70,6 +70,20 @@ def test_confirmation_secret_reads_existing_when_concurrent_create_wins(monkeypa
     assert agent.CONFIRMATION_SECRET_PATH.read_text(encoding="utf-8") == "winner-secret\n"
 
 
+
+def test_confirmation_secret_replaces_empty_crash_residue():
+    from nudge.commands.agent import CONFIRMATION_SECRET_PATH, _confirmation_secret
+
+    CONFIRMATION_SECRET_PATH.write_text("", encoding="utf-8")
+    CONFIRMATION_SECRET_PATH.chmod(0o600)
+
+    secret = _confirmation_secret()
+
+    assert secret
+    assert secret != b""
+    assert secret == CONFIRMATION_SECRET_PATH.read_text(encoding="utf-8").strip().encode("utf-8")
+    assert (CONFIRMATION_SECRET_PATH.stat().st_mode & 0o777) == 0o600
+
 def test_confirmation_secret_creates_parent_directory(monkeypatch):
     from nudge.commands.agent import CONFIRMATION_SECRET_PATH, _confirmation_secret
     import nudge.commands.agent as agent

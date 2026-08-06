@@ -934,7 +934,30 @@ def _confirmation_secret() -> bytes:
             with os.fdopen(fd, "wb") as handle:
                 handle.write(data)
             CONFIRMATION_SECRET_PATH.chmod(0o600)
+    if not value:
+        value = _replace_confirmation_secret()
     return value.encode("utf-8")
+
+
+def _replace_confirmation_secret() -> str:
+    """Atomically replace an invalid empty confirmation secret file."""
+    CONFIRMATION_SECRET_PATH.parent.mkdir(parents=True, exist_ok=True)
+    value = secrets.token_hex(32)
+    temp_path = CONFIRMATION_SECRET_PATH.with_name(
+        f".{CONFIRMATION_SECRET_PATH.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+    )
+    fd = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write((value + "\n").encode("utf-8"))
+        os.replace(temp_path, CONFIRMATION_SECRET_PATH)
+        CONFIRMATION_SECRET_PATH.chmod(0o600)
+    finally:
+        try:
+            temp_path.unlink()
+        except FileNotFoundError:
+            pass
+    return value
 
 
 def _optional_string(value: object) -> str | None:

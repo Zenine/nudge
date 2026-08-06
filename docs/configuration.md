@@ -1,6 +1,6 @@
 # 配置参考
 
-Nudge 默认优先读取仓库根目录的 `config.toml`；源码树没有该文件时,回退到 `$XDG_CONFIG_HOME/nudge/config.toml`(默认 `~/.config/nudge/config.toml`),方便 pip/pipx 安装的用户。首次使用可复制公开安全的示例文件:
+Nudge 默认优先读取 `NUDGE_CONFIG` 指向的配置文件；未设置时读取仓库根目录的 `config.toml`；源码树没有该文件时,回退到 `$XDG_CONFIG_HOME/nudge/config.toml`(默认 `~/.config/nudge/config.toml`),方便 pip/pipx 安装的用户。首次使用可复制公开安全的示例文件:
 
 ```bash
 cp config.example.toml config.toml
@@ -8,6 +8,14 @@ nudge doctor
 ```
 
 `config.toml` 是本机文件，通常不应提交。公开仓库文档和示例只使用占位符；API key、OAuth token、真实家庭成员姓名、真实日历/提醒事项列表名、个人健康资料和本机私有路径都应留在本机私有配置或环境变量中。
+
+如果日常使用私有配置，建议在 shell 启动脚本或本机 wrapper 中设置：
+
+```bash
+export NUDGE_CONFIG="$HOME/.config/nudge/config.toml"
+```
+
+显式子命令参数 `--config/-c` 仍优先于 `NUDGE_CONFIG`；但不是所有命令都提供 `--config`，例如 `nudge review weekly --adapt` 会在根命令阶段初始化 LLM，所以应通过 `NUDGE_CONFIG` 确保 `[llm]`、`secrets_path` 和 `[state].dir` 指向同一个私有配置。
 
 ## 哪些配置会影响真实 Apple 写入
 
@@ -49,7 +57,7 @@ dir = "~/.local/share/nudge"
 
 - `dir`：状态目录。可以使用 `~`，也可以用相对路径；相对路径会按项目根目录解析。
 - 环境变量 `NUDGE_STATE_DIR` 优先级高于 `[state].dir`。
-- 未设置 `NUDGE_STATE_DIR` 且未配置 `[state].dir` 时，Nudge 会直接报错，不再静默回退到源码树 `.nudge/`、XDG 或其它默认目录。这样可以避免 stale / 空 SQLite 被误读成权威状态；请复制 `config.example.toml` 并显式配置 `[state].dir`，或运行命令时传入 `--config` 指向正确配置。
+- 未设置 `NUDGE_STATE_DIR` 且未配置 `[state].dir` 时，Nudge 会直接报错，不再静默回退到源码树 `.nudge/`、XDG 或其它默认目录。这样可以避免 stale / 空 SQLite 被误读成权威状态；请复制 `config.example.toml` 并显式配置 `[state].dir`，或通过 `NUDGE_CONFIG` / `--config` 指向正确配置。
 - 状态目录可能包含个人计划、执行历史和 Apple 外部 ID，不应提交。
 
 ## `[llm]` 与 `[llm.models]`
