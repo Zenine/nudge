@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 import nudge.config as config
 from nudge.config import get_defaults, get_family_aliases, load_config, resolve_state_dir
 
@@ -51,9 +53,9 @@ def test_get_family_aliases_handles_empty_public_config():
     assert alias_map == {}
 
 
-def test_resolve_state_dir_defaults_to_xdg_not_package_dir(monkeypatch, tmp_path):
-    # A pip/pipx install roots PROJECT_ROOT at site-packages; the default state
-    # dir must never fall inside the installed package. It must use XDG instead.
+def test_resolve_state_dir_requires_explicit_state_dir_without_env(monkeypatch, tmp_path):
+    # Fail closed: an unconfigured command must not silently create or read a
+    # fallback SQLite, whether under the package, XDG, or a source checkout.
     pkg = tmp_path / "site-packages"
     pkg.mkdir()
     xdg = tmp_path / "xdg-data"
@@ -61,19 +63,26 @@ def test_resolve_state_dir_defaults_to_xdg_not_package_dir(monkeypatch, tmp_path
     monkeypatch.setenv("XDG_DATA_HOME", str(xdg))
     monkeypatch.delenv("NUDGE_STATE_DIR", raising=False)
 
-    resolved = resolve_state_dir({})
+    with pytest.raises(RuntimeError) as excinfo:
+        resolve_state_dir({})
 
-    assert resolved == xdg / "nudge"
-    assert pkg not in resolved.parents
+    message = str(excinfo.value)
+    assert "NUDGE_STATE_DIR" in message
+    assert "[state].dir" in message
+    assert "--config" in message
+    assert str(pkg / ".nudge") in message
 
 
-def test_resolve_state_dir_prefers_existing_legacy_project_dir(monkeypatch, tmp_path):
-    # Back-compat: a source checkout that already has PROJECT_ROOT/.nudge keeps
-    # using it so existing local data is never orphaned by the XDG change.
+def test_resolve_state_dir_rejects_existing_legacy_project_dir(monkeypatch, tmp_path):
+    # A pre-existing source-tree .nudge is more dangerous than no data: stale or
+    # empty results can look authoritative. Require explicit config instead.
     root = tmp_path / "checkout"
     (root / ".nudge").mkdir(parents=True)
     monkeypatch.setattr(config, "PROJECT_ROOT", root)
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
     monkeypatch.delenv("NUDGE_STATE_DIR", raising=False)
 
-    assert resolve_state_dir({}) == root / ".nudge"
+    with pytest.raises(RuntimeError) as excinfo:
+        resolve_state_dir({})
+
+    assert str(root / ".nudge") in str(excinfo.value)

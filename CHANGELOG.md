@@ -15,6 +15,7 @@
 
 ### Fixed
 
+- `resolve_state_dir()` 在缺少 `NUDGE_STATE_DIR` 和 `[state].dir` 时改为 fail-closed 报错，不再静默回退到源码树 `.nudge/` 或 XDG 默认目录，避免 stale / 空 SQLite 被误当作权威状态库。
 - `all-due` EventKit 读取改用严格、无损的结构化 JSON；标题和列表名中的前后空格、tab 与换行不再被传输层改写，任何畸形输出或字段都会使整次查询失败，避免丢弃异常行后把重复 Reminder 误判为唯一候选。其它 EventKit 读取模式继续兼容原 TSV 输出。
 - Reminder 列表回填的 immutable 只读快照和未初始化备份现在也拒绝非空 SQLite rollback journal，并在关键读取/备份边界复核数据库、WAL、SHM 与 journal 身份；未初始化备份以 `mode=ro&immutable=1` 打开源库，避免隐式 recovery。
 - 修复结构化反馈访谈的复核问题：家庭列表及常见付款/出行标题现在保守进入高风险组；10 秒调用显式关闭 provider SDK 内建重试；最终确认页展示完整 GPT 答案与风险/Reminder/睡眠派生上下文；选择题拒绝 0、负数及越界编号；非法最终 payload 使用稳定 schema 错误且整批零写入。

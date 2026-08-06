@@ -257,7 +257,7 @@
 - ~~**[高·发布阻塞] pip 安装后默认 config/state 路径落进包安装目录(`site-packages`)**~~
   - 位置:`config.py:25` `PROJECT_ROOT = parents[1]` 为锚;`load_config` 默认找 `PROJECT_ROOT/config.toml`,`resolve_state_dir` 无 env/config 时回退 `PROJECT_ROOT/.nudge`;`state.py` 在 import 时即据此设 `DB_PATH`。
   - 影响:wheel 安装后、用户尚无 `config.toml` 时,SQLite 会写进 `site-packages/nudge/../.nudge`;`config.example.toml` 里的 `~/.local/share/nudge` 只在用户手建 config 后生效,默认值本身不符合可发布 runtime。与正在推进的 PyPI 发布(见"商业闭环缺口 1"/D4 P1)直接冲突,应作为发布前置。
-  - 状态:2026-07-05 已完成:`resolve_state_dir` 无 env/config 时,存在源码树 `.nudge` 则沿用(向后兼容),否则默认 `$XDG_DATA_HOME/nudge`(回退 `~/.local/share/nudge`);`load_config` 默认搜索源码树 `config.toml` 后回退 `$XDG_CONFIG_HOME/nudge/config.toml`。新增 `tests/test_config.py` 两个回归(XDG 默认、存量 `.nudge` 兼容),完整 `scripts/verify.sh`(3.12)通过。
+  - 状态:2026-07-05 已完成首轮发布阻塞修复；2026-08-06 进一步收紧为 fail-closed：`resolve_state_dir` 无 env/config 时直接报错，不再沿用源码树 `.nudge` 或 XDG 默认目录，防止 stale / 空 SQLite 被误读成权威状态。
 - **[中] 命令层私有函数互相 import,形成隐式耦合网(扩大 2026-07-04"agent 复用 do"一条)**
   - 位置:除已记的 `agent.py → do._action_schema_problems/execute_action` 外,`mcp.py:22`、`daemon.py:24`、`skills.py:14`(`do.execute_action`)、`trainer.py:11`(import 私有 `skills._materialize_actions`)均从兄弟命令模块取函数;`review.py:31`、`chat.py:86` 用函数体内延迟 import 规避 `briefing`/`do` 的循环依赖(import cycle 信号)。
   - 影响:`execute_action`/`_action_schema_problems`/`_materialize_actions`/`_rewrite_family_group_actions` 这些真正的执行/校验核心逻辑住在 Click 命令模块内;任何 `do.py`/`agent.py` 重构会波及 mcp/daemon/trainer/skills,单测难隔离。

@@ -110,7 +110,7 @@ SQLite 是 Nudge runtime 的事实状态源，包含：
 - `command_queue`、`daemon_runs`：daemon 队列（`request_id` 幂等主键）与执行记录。
 - `state_migrations`：legacy JSON state 迁移状态。
 
-状态目录由 `NUDGE_STATE_DIR` 或配置 `[state].dir` 决定。公开仓库不应包含本机 SQLite、legacy state、`config.toml`、API key/OAuth token、Apple Health 原始导出、真实日历/提醒/备忘录内容、个人计划或 app database snapshot。legacy JSON 迁移只在本机状态目录内进行，不应把旧状态文件纳入公开仓库。
+状态目录只由 `NUDGE_STATE_DIR` 或配置 `[state].dir` 决定；二者都缺失时直接报错，禁止静默回退到源码树 `.nudge/`、XDG 或其它默认目录。公开仓库不应包含本机 SQLite、legacy state、`config.toml`、API key/OAuth token、Apple Health 原始导出、真实日历/提醒/备忘录内容、个人计划或 app database snapshot。legacy JSON 迁移只在本机状态目录内进行，不应把旧状态文件纳入公开仓库。
 
 ## Apple adapter 边界
 

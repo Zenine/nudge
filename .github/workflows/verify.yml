@@ -42,4 +42,8 @@ jobs:
       - name: Guard repository-local runtime state
         run: |
           test ! -e .nudge/nudge.db
+          test ! -e .nudge/nudge.db-shm
+          test ! -e .nudge/nudge.db-wal
           test ! -e nudge.db
+          test ! -e nudge.db-shm
+          test ! -e nudge.db-wal

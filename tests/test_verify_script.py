@@ -34,7 +34,23 @@ def test_ci_workflow_guards_repository_local_runtime_state():
 
     assert "scripts/verify.sh" in content
     assert "test ! -e .nudge/nudge.db" in content
+    assert "test ! -e .nudge/nudge.db-shm" in content
+    assert "test ! -e .nudge/nudge.db-wal" in content
     assert "test ! -e nudge.db" in content
+    assert "test ! -e nudge.db-shm" in content
+    assert "test ! -e nudge.db-wal" in content
+
+
+def test_verify_script_guards_repository_local_runtime_state():
+    content = VERIFY.read_text(encoding="utf-8")
+
+    assert "Repository-local runtime state guard" in content
+    assert ".nudge/nudge.db" in content
+    assert ".nudge/nudge.db-shm" in content
+    assert ".nudge/nudge.db-wal" in content
+    assert "nudge.db" in content
+    assert "nudge.db-shm" in content
+    assert "nudge.db-wal" in content
 
 
 def test_verify_script_reports_python_version_before_import_errors(tmp_path):

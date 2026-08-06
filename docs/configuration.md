@@ -49,7 +49,7 @@ dir = "~/.local/share/nudge"
 
 - `dir`：状态目录。可以使用 `~`，也可以用相对路径；相对路径会按项目根目录解析。
 - 环境变量 `NUDGE_STATE_DIR` 优先级高于 `[state].dir`。
-- 未设置 `NUDGE_STATE_DIR` 且未配置 `[state].dir` 时:若源码树已存在 `.nudge` 目录则沿用(向后兼容),否则默认 `$XDG_DATA_HOME/nudge`(回退 `~/.local/share/nudge`),确保 pip/pipx 安装不会把数据库写进包安装目录。
+- 未设置 `NUDGE_STATE_DIR` 且未配置 `[state].dir` 时，Nudge 会直接报错，不再静默回退到源码树 `.nudge/`、XDG 或其它默认目录。这样可以避免 stale / 空 SQLite 被误读成权威状态；请复制 `config.example.toml` 并显式配置 `[state].dir`，或运行命令时传入 `--config` 指向正确配置。
 - 状态目录可能包含个人计划、执行历史和 Apple 外部 ID，不应提交。
 
 ## `[llm]` 与 `[llm.models]`

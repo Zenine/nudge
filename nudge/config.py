@@ -70,14 +70,14 @@ def resolve_state_dir(config: dict | None = None) -> Path:
         path = Path(str(configured)).expanduser()
         return path if path.is_absolute() else PROJECT_ROOT / path
 
-    # No explicit state dir: keep an existing source-tree ``.nudge`` (back-compat,
-    # never orphan local data), otherwise default to XDG so pip/pipx installs never
-    # write databases into the installed package directory (site-packages).
     legacy = PROJECT_ROOT / ".nudge"
-    if legacy.exists():
-        return legacy
-    base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-    return Path(base).expanduser() / "nudge"
+    raise RuntimeError(
+        "Nudge state directory is not configured. Refusing to use an implicit "
+        f"fallback such as {legacy}; stale or empty fallback SQLite files can "
+        "look authoritative. Set NUDGE_STATE_DIR, add [state].dir to your "
+        "config.toml, or run with --config pointing at the config that defines "
+        "the real state directory."
+    )
 
 
 def get_family_aliases(config: dict) -> tuple[list[str], dict[str, dict]]:

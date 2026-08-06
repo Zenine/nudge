@@ -67,4 +67,17 @@ echo "== Packaging checks =="
 run scripts/check_package.sh
 
 echo
+echo "== Repository-local runtime state guard =="
+for forbidden in \
+  .nudge/nudge.db \
+  .nudge/nudge.db-shm \
+  .nudge/nudge.db-wal \
+  nudge.db \
+  nudge.db-shm \
+  nudge.db-wal
+do
+  test ! -e "$forbidden"
+done
+
+echo
 echo "Nudge public verification passed"
