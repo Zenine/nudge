@@ -42,13 +42,16 @@ def weekly_command(save: bool, note: str, json_output: bool, export_json: str | 
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
 
+    saved_path = None
+    if save:
+        saved_path = save_weekly_dogfood_report(report, base_dir=STATE_DIR)
+
     if json_output:
         click.echo(json.dumps(payload, ensure_ascii=False))
         return
 
     click.echo(render_weekly_dogfood_report(report), nl=False)
-    if save:
-        path = save_weekly_dogfood_report(report, base_dir=STATE_DIR)
-        click.echo(f"\n已保存: {path}")
+    if saved_path:
+        click.echo(f"\n已保存: {saved_path}")
     if export_json:
         click.echo(f"\n已导出 JSON: {export_json}")

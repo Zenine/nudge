@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增只读命令 `nudge reminders reconcile-missing`，可按日期范围、列表和标题关键词对账本地 `created` / `pending` reminder 与 Apple Reminders 当前状态，并输出 `still_open`、`completed`、`missing` 和 `query_errors`；该命令没有 `--apply`，不写 Apple Reminders，也不改 SQLite。
+- 新增 Reminder 对账安全回归测试，覆盖 Apple 缺失、Apple 已完成、Calendar Event 过滤和跨日期维护 action 去重。
+
 ### Changed
 
 - `get_habit_streaks()` 的最新习惯记录查询改为按习惯分组取最大日期后 join 回原表，不再使用 tuple `IN (SELECT MAX(...))` 形式；行为不变，降低后续 habit 历史增长后的查询计划风险。
@@ -17,6 +22,10 @@
 
 ### Fixed
 
+- 修复 Apple Reminder 已从未完成列表消失、但没有可匹配 `completionDate` 时被误判为已完成的问题；缺失项现在继续保留为未完成，只有明确匹配 Apple 完成记录的 action 才进入完成候选。
+- 修复失败可见性报告把已经过去的 Calendar Event 当成逾期待办的问题；Calendar Event 不再进入 `pending_overdue`。
+- 修复文档审计维护 action 只按目标日期去重的问题；已有未关闭维护 action 会跨日期复用，避免历史维护债重复生成。
+- 修复 `nudge dogfood weekly --save --json` 在 JSON 输出时提前返回、导致 Markdown 周报未保存的问题；现在 `--save` 和 `--export-json` 的副作用会先执行，再输出 JSON。
 - `load_config()` 现在尊重 `NUDGE_CONFIG` 环境变量；根命令阶段初始化 Brain/LLM 时会读取同一份私有配置，避免 `doctor --config` 已通过但 `review weekly --adapt` 仍落到默认配置或错误环境 key。
 - agent dry-run confirmation secret 读取时会拒绝空文件；若首次创建在写入前崩溃残留 0 字节文件，下次会以同目录临时文件 + `os.replace` 原子重建非空 secret，并保持 `0600` 权限，避免空 HMAC 密钥。
 - Skills dry-run 在 `preferred_days` 少于 `sessions_per_week` 时，会把同日多节 session 从首选时间起按前一节结束时间顺延，不再生成同日同一时刻重叠动作；Reminder 输出同步使用错开的 due date。

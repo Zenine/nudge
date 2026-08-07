@@ -182,6 +182,126 @@ def backfill_ids_command(
         raise click.exceptions.Exit(1)
 
 
+@reminders_command.command("reconcile-missing")
+@click.option("--from", "from_text", required=True, help="Inspect actions scheduled on/after YYYY-MM-DD")
+@click.option("--to", "to_text", required=True, help="Inspect actions scheduled before YYYY-MM-DD")
+@click.option("--list", "list_name", default=None, help="Reminder list name; defaults to config")
+@click.option("--match", "match_text", default=None, help="Only inspect actions whose summary contains this text")
+@click.option("--config", "-c", "config_path", default=None, help="Config file path")
+@click.option("--json", "json_output", is_flag=True, help="Print stable JSON for scripts")
+def reconcile_missing_command(from_text, to_text, list_name, match_text, config_path, json_output):
+    """Read-only compare Nudge pending reminders with Apple Reminders."""
+    try:
+        config = load_config(config_path)
+        if config_path:
+            configure_state(config)
+        defaults = get_defaults(config)
+        reminder_list = list_name or defaults.get("default_reminder_list", DEFAULT_REMINDER_LIST)
+        payload = reconcile_missing(
+            reminder_list=reminder_list,
+            from_date=date.fromisoformat(from_text),
+            to_date=date.fromisoformat(to_text),
+            match_text=match_text,
+        )
+        _emit_reconcile(payload, json_output)
+        if not payload.get("ok"):
+            raise click.exceptions.Exit(1)
+    except ValueError as exc:
+        payload = versioned_payload({
+            "ok": False,
+            "dry_run": True,
+            "list": list_name or "",
+            "from": from_text,
+            "to": to_text,
+            "match": match_text,
+            "checked": 0,
+            "summary": {"still_open": 0, "completed": 0, "missing": 0, "query_errors": 1},
+            "still_open": [],
+            "completed": [],
+            "missing": [],
+            "query_errors": [{"code": "REMINDERS_RECONCILE_FAILED", "message": str(exc)}],
+        })
+        _emit_reconcile(payload, json_output)
+        raise click.exceptions.Exit(1)
+
+
+def reconcile_missing(
+    *,
+    reminder_list: str,
+    from_date: date,
+    to_date: date,
+    match_text: str | None = None,
+) -> dict:
+    """Read-only classify pending local reminders by current Apple state."""
+    actions = _pending_reminder_actions_for_range(
+        from_date=from_date,
+        to_date=to_date,
+        match_text=match_text,
+    )
+    query_cache: dict[tuple[date, bool], list[dict] | str] = {}
+    still_open: list[dict] = []
+    completed: list[dict] = []
+    missing: list[dict] = []
+    query_errors: list[dict] = []
+
+    for action in actions:
+        target_date = _action_date(action)
+        item = _reconcile_action_payload(action)
+        if target_date is None:
+            missing.append({**item, "reason": "missing_or_invalid_scheduled_at"})
+            continue
+
+        ok, incomplete = _cached_due_reminders(query_cache, reminder_list, target_date)
+        if not ok:
+            query_errors.append({
+                "code": "REMINDERS_QUERY_FAILED",
+                "id": action.get("id"),
+                "date": target_date.isoformat(),
+                "message": str(incomplete),
+            })
+            continue
+        if _matches_any_incomplete(action, list(incomplete)):
+            still_open.append(item)
+            continue
+
+        completed_ok, completed_rows = _cached_completed_reminders(query_cache, reminder_list, target_date)
+        if not completed_ok:
+            query_errors.append({
+                "code": "REMINDERS_COMPLETED_QUERY_FAILED",
+                "id": action.get("id"),
+                "date": target_date.isoformat(),
+                "message": str(completed_rows),
+            })
+            continue
+        completed_match = _matching_completed(action, list(completed_rows))
+        if completed_match is not None:
+            if completed_match.get("completed_at"):
+                item["completed_at"] = completed_match["completed_at"]
+            completed.append(item)
+        else:
+            missing.append({**item, "reason": "missing_from_apple"})
+
+    return versioned_payload({
+        "ok": not query_errors,
+        "dry_run": True,
+        "list": reminder_list,
+        "from": from_date.isoformat(),
+        "to": to_date.isoformat(),
+        "match": match_text,
+        "checked": len(actions),
+        "summary": {
+            "still_open": len(still_open),
+            "completed": len(completed),
+            "missing": len(missing),
+            "query_errors": len(query_errors),
+        },
+        "still_open": still_open,
+        "completed": completed,
+        "missing": missing,
+        "query_errors": query_errors,
+    })
+
+
 def backfill_ids(
     *,
     reminder_list: str,
@@ -280,6 +400,41 @@ def backfill_ids(
         "skipped": skipped,
         "errors": errors,
     })
+
+
+def _pending_reminder_actions_for_range(
+    *,
+    from_date: date,
+    to_date: date,
+    match_text: str | None,
+) -> list[dict]:
+    actions = [
+        action
+        for action in get_actions(
+            since=f"{from_date.isoformat()} 00:00",
+            until=f"{to_date.isoformat()} 00:00",
+        )
+        if action.get("type") == "reminder"
+        and action.get("status") in ("created", "pending")
+        and action.get("summary")
+        and action.get("scheduled_at")
+    ]
+    if match_text:
+        needle = match_text.lower()
+        actions = [
+            action
+            for action in actions
+            if needle in str(action.get("summary") or "").lower()
+        ]
+    actions.sort(key=lambda item: (str(item.get("scheduled_at") or ""), str(item.get("summary") or "")))
+    return actions
+
+
+def _reconcile_action_payload(action: dict) -> dict:
+    item = _backfill_action_payload(action)
+    if action.get("external_id"):
+        item["external_id"] = action.get("external_id")
+    return item
 
 
 def _cached_due_reminders(
@@ -771,3 +926,23 @@ def _emit_backfill(payload: dict, json_output: bool) -> None:
         click.echo(f"  - {candidate['id']} {candidate['scheduled_at']} {candidate['summary']}")
     if payload.get("dry_run") and payload.get("candidates"):
         click.echo("  add --apply to write IDs to Apple Reminders and SQLite")
+
+
+def _emit_reconcile(payload: dict, json_output: bool) -> None:
+    if json_output:
+        click.echo(json.dumps(payload, ensure_ascii=False))
+        return
+
+    click.echo(f"READ-ONLY Reminders reconcile · {payload.get('list')}")
+    if not payload.get("ok"):
+        for error in payload.get("query_errors", []):
+            click.echo(f"  error: {error.get('message')}", err=True)
+    summary = payload.get("summary") or {}
+    click.echo(
+        "  checked: "
+        f"{payload.get('checked')} · open: {summary.get('still_open', 0)} · "
+        f"completed: {summary.get('completed', 0)} · missing: {summary.get('missing', 0)}"
+    )
+    for key in ("still_open", "completed", "missing"):
+        for item in payload.get(key, []):
+            click.echo(f"  - {key}: {item['id']} {item['scheduled_at']} {item['summary']}")

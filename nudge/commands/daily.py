@@ -299,7 +299,7 @@ def _sync_docs_audit(*, target_date: date, apply_changes: bool) -> dict:
     if not attention_required:
         return payload
 
-    existing = _existing_docs_maintenance_action(target_date)
+    existing = _existing_docs_maintenance_action()
     if existing:
         payload["existing_action_id"] = existing["id"]
         return payload
@@ -324,10 +324,8 @@ def _docs_attention_required(report: dict) -> bool:
     return int(summary.get("errors") or 0) > 0 or int(summary.get("warnings") or 0) > 0
 
 
-def _existing_docs_maintenance_action(target_date: date) -> dict | None:
-    start = datetime.combine(target_date, time.min).strftime("%Y-%m-%d %H:%M")
-    end = datetime.combine(target_date + timedelta(days=1), time.min).strftime("%Y-%m-%d %H:%M")
-    for action in get_actions(since=start, until=end):
+def _existing_docs_maintenance_action() -> dict | None:
+    for action in get_actions():
         if action.get("type") != "maintenance":
             continue
         if action.get("summary") != DOCS_MAINTENANCE_SUMMARY:

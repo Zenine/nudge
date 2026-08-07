@@ -34,7 +34,12 @@ def build_failure_visibility_report(
         status = str(action.get("status") or "")
         item = _item(action, now)
         scheduled = _parse_datetime(action.get("scheduled_at"))
-        if status in _PENDING_STATUSES and scheduled is not None and scheduled <= cutoff:
+        if (
+            action.get("type") != "calendar_event"
+            and status in _PENDING_STATUSES
+            and scheduled is not None
+            and scheduled <= cutoff
+        ):
             pending_overdue.append(item)
         if status == "blocked":
             blocked_open.append(item)

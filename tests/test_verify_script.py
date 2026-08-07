@@ -99,6 +99,12 @@ def test_verify_script_smokes_reminder_list_backfill_help():
     assert "bin/nudge reminders backfill-lists --help" in content
 
 
+def test_verify_script_smokes_reminder_reconcile_help():
+    content = VERIFY.read_text(encoding="utf-8")
+
+    assert "bin/nudge reminders reconcile-missing --help" in content
+
+
 def test_package_check_script_is_offline_and_checks_expected_artifacts():
     script = ROOT / "scripts" / "check_package.sh"
     content = script.read_text(encoding="utf-8")
