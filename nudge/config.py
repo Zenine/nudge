@@ -60,6 +60,15 @@ def load_config(path: str | Path | None = None) -> dict:
         return tomllib.load(f)
 
 
+class StateDirNotConfiguredError(RuntimeError):
+    """状态目录未显式配置时抛出。
+
+    仍然继承 ``RuntimeError`` 以兼容既有调用方；单独成类是为了让 CLI 能在不
+    削弱 fail-closed 语义的前提下，把它转成可读的 ``click.ClickException``，
+    而不是给用户抛一整段 traceback。
+    """
+
+
 def resolve_state_dir(config: dict | None = None) -> Path:
     """Resolve the local state directory for databases and runtime logs."""
     configured = os.environ.get("NUDGE_STATE_DIR")
@@ -74,7 +83,7 @@ def resolve_state_dir(config: dict | None = None) -> Path:
         return path if path.is_absolute() else PROJECT_ROOT / path
 
     legacy = PROJECT_ROOT / ".nudge"
-    raise RuntimeError(
+    raise StateDirNotConfiguredError(
         "Nudge state directory is not configured. Refusing to use an implicit "
         f"fallback such as {legacy}; stale or empty fallback SQLite files can "
         "look authoritative. Set NUDGE_STATE_DIR, add [state].dir to your "

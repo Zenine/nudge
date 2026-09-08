@@ -26,7 +26,7 @@ from nudge.commands.review import review_command
 from nudge.commands.schedule import schedule_command
 from nudge.commands.skills import skills_command
 from nudge.commands.trainer import trainer_command
-from nudge.config import load_config
+from nudge.config import StateDirNotConfiguredError, load_config
 
 
 class NudgeGroup(click.Group):
@@ -44,6 +44,16 @@ class NudgeGroup(click.Group):
             ):
                 args = ["do"] + args
         return super().parse_args(ctx, args)
+
+    def invoke(self, ctx):
+        """把状态目录未配置的 fail-closed 报错转成可读的 CLI 错误。
+
+        仍然拒绝执行需要状态库的命令(exit 1),只是不再向用户抛 traceback。
+        """
+        try:
+            return super().invoke(ctx)
+        except StateDirNotConfiguredError as exc:
+            raise click.ClickException(str(exc)) from exc
 
 
 @click.group(cls=NudgeGroup, invoke_without_command=True)

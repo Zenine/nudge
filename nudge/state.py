@@ -13,7 +13,7 @@ from nudge.sleep_reminders import (
     SLEEP_AUTO_SKIP_LOOKAHEAD_HOURS,
     later_sleep_reminders_after,
 )
-from nudge.config import load_config, resolve_state_dir
+from nudge.config import StateDirNotConfiguredError, load_config, resolve_state_dir
 
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,77 @@ def _default_state_dir(config: dict | None = None) -> Path:
     return resolve_state_dir(config)
 
 
-STATE_DIR = _default_state_dir()
+_UNCONFIGURED_STATE_DIR_ERROR: str | None = None
+_UNCONFIGURED_STATE_DIR_NAME = "<nudge-state-dir-not-configured>"
+_UNCONFIGURED_DENIED_METHODS = (
+    "chmod",
+    "exists",
+    "glob",
+    "hardlink_to",
+    "is_dir",
+    "is_file",
+    "is_symlink",
+    "iterdir",
+    "lstat",
+    "mkdir",
+    "open",
+    "read_bytes",
+    "read_text",
+    "rename",
+    "replace",
+    "resolve",
+    "rglob",
+    "rmdir",
+    "samefile",
+    "stat",
+    "symlink_to",
+    "touch",
+    "unlink",
+    "write_bytes",
+    "write_text",
+)
+
+
+def _raise_state_dir_not_configured(*_args, **_kwargs):
+    """任何真实文件访问都在这里 fail-closed。"""
+    raise StateDirNotConfiguredError(
+        _UNCONFIGURED_STATE_DIR_ERROR
+        or "Nudge state directory is not configured. Set NUDGE_STATE_DIR, add "
+        "[state].dir to your config.toml, or run with --config."
+    )
+
+
+class _UnconfiguredStateDir(Path):
+    """状态目录未配置时的占位路径。
+
+    import 期不再直接抛错(否则 ``nudge --help``、``nudge docs audit`` 这类
+    根本不碰状态库的命令也会崩),但任何文件系统访问仍然 fail-closed:
+    绝不会静默回退到源码树 ``.nudge/`` 或 XDG 默认目录。
+    ``__truediv__`` / ``with_name`` 会沿用本类型,所以 ``DB_PATH``、
+    ``LEGACY_JSON`` 及其 ``-wal`` / ``-shm`` 旁路文件同样受保护。
+    """
+
+    __fspath__ = _raise_state_dir_not_configured
+
+
+for _denied in _UNCONFIGURED_DENIED_METHODS:
+    setattr(_UnconfiguredStateDir, _denied, _raise_state_dir_not_configured)
+del _denied
+
+
+def _initial_state_dir() -> Path:
+    """import 期解析状态目录;缺配置时延迟报错而不是中断整个 CLI 的导入。"""
+    global _UNCONFIGURED_STATE_DIR_ERROR
+    try:
+        resolved = _default_state_dir()
+    except StateDirNotConfiguredError as exc:
+        _UNCONFIGURED_STATE_DIR_ERROR = str(exc)
+        return _UnconfiguredStateDir(_UNCONFIGURED_STATE_DIR_NAME)
+    _UNCONFIGURED_STATE_DIR_ERROR = None
+    return resolved
+
+
+STATE_DIR = _initial_state_dir()
 DB_PATH = STATE_DIR / "nudge.db"
 LEGACY_JSON = STATE_DIR / "state.json"
 _schema_initialized_for: Path | None = None
