@@ -38,5 +38,9 @@ def run_applescript(script: str, timeout: int = 30) -> tuple[bool, str]:
         if result.returncode == 0:
             return True, result.stdout.strip()
         return False, result.stderr.strip()
+    except FileNotFoundError:
+        return False, "osascript unavailable: executable not found (macOS required)"
     except subprocess.TimeoutExpired:
         return False, "AppleScript execution timed out"
+    except OSError as exc:
+        return False, f"osascript unavailable: {exc}"
