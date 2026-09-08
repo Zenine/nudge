@@ -14,6 +14,7 @@ from nudge.commands.daemon import build_daemon_health_report
 from nudge.config import get_configured_calendar_names, load_config
 from nudge.errors import classify_apple_error, format_llm_error
 from nudge.failures import build_failure_visibility_report, failure_followup_section
+from nudge.runtime_log import log_warning
 from nudge.state import get_actions, get_habit_streaks
 
 
@@ -35,11 +36,80 @@ def briefing_command(time_of_day, send_notification):
     click.echo(text)
 
     if send_notification:
-        title = "Nudge 早报" if time_of_day == "morning" else "Nudge 晚报"
-        main_text, daemon_alert = _split_daemon_alert_section(text)
-        notify(title, main_text[:200])
-        if daemon_alert:
-            notify("Nudge daemon 告警", daemon_alert[:240], subtitle="daemon health")
+        # 返回的逐通道投递结果目前没有 JSON 输出消费方，但保留返回值以便测试
+        # 断言，并给将来的机器可读输出留好接口。
+        _send_briefing_notifications(time_of_day, text)
+
+
+def _send_briefing_notifications(time_of_day: str, text: str) -> dict:
+    """投递早晚报通知,并把每条通道的投递结果显式回传(失败不再静默)。"""
+    title = "Nudge 早报" if time_of_day == "morning" else "Nudge 晚报"
+    main_text, daemon_alert = _split_daemon_alert_section(text)
+
+    channels = {
+        "briefing": _notify_channel(
+            "briefing",
+            title,
+            main_text[:200],
+        )
+    }
+    if daemon_alert:
+        channels["daemon_alert"] = _notify_channel(
+            "daemon_alert",
+            "Nudge daemon 告警",
+            daemon_alert[:240],
+            subtitle="daemon health",
+        )
+
+    failed = [name for name, result in channels.items() if not result["sent"]]
+    first_error = next(
+        (channels[name]["error"] for name in channels if not channels[name]["sent"]),
+        None,
+    )
+    return {
+        "sent": not failed,
+        "ok": not failed,
+        "error": first_error,
+        "failed_channels": failed,
+        "channels": channels,
+    }
+
+
+def _notify_channel(channel: str, title: str, message: str, subtitle: str | None = None) -> dict:
+    """发送一条通知;失败时写 runtime_log 并在 stderr 给出可见提示。"""
+    if subtitle:
+        ok, raw = notify(title, message, subtitle=subtitle)
+    else:
+        ok, raw = notify(title, message)
+    result = {
+        "channel": channel,
+        "sent": bool(ok),
+        "ok": bool(ok),
+        "error": None if ok else raw,
+    }
+    if not ok:
+        _record_notify_failure(channel, title, raw)
+    return result
+
+
+def _record_notify_failure(channel: str, title: str, raw_error: str) -> None:
+    """通知投递失败必须留痕:runtime_log 一条 WARN + stderr 一条提示。"""
+    click.echo(
+        f"通知发送失败（{channel}）：{raw_error}",
+        err=True,
+    )
+    click.echo(
+        "提示：检查 系统设置 → 通知 是否允许终端/osascript 发送通知，再运行 nudge doctor",
+        err=True,
+    )
+    try:
+        log_warning(
+            f"briefing.notify.{channel}",
+            f"通知投递失败（{title}）：{raw_error}",
+            hint="检查 系统设置 → 通知 的权限，或运行 nudge doctor",
+        )
+    except Exception:  # noqa: BLE001 - 日志不可写不应影响早晚报本身
+        click.echo("提示：runtime_log 不可写，未能记录本次通知失败", err=True)
 
 
 def _morning_briefing() -> str:
