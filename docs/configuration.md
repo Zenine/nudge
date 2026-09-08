@@ -57,7 +57,8 @@ dir = "~/.local/share/nudge"
 
 - `dir`：状态目录。可以使用 `~`，也可以用相对路径；相对路径会按项目根目录解析。
 - 环境变量 `NUDGE_STATE_DIR` 优先级高于 `[state].dir`。
-- 未设置 `NUDGE_STATE_DIR` 且未配置 `[state].dir` 时，Nudge 会直接报错，不再静默回退到源码树 `.nudge/`、XDG 或其它默认目录。这样可以避免 stale / 空 SQLite 被误读成权威状态；请复制 `config.example.toml` 并显式配置 `[state].dir`，或通过 `NUDGE_CONFIG` / `--config` 指向正确配置。
+- 未设置 `NUDGE_STATE_DIR` 且未配置 `[state].dir` 时，任何需要访问状态库的命令都会以可读错误退出（exit 1），不再静默回退到源码树 `.nudge/`、XDG 或其它默认目录。这样可以避免 stale / 空 SQLite 被误读成权威状态；请复制 `config.example.toml` 并显式配置 `[state].dir`，或通过 `NUDGE_CONFIG` / `--config` 指向正确配置。
+- 报错发生在真正访问状态库时，而不是 CLI 启动时。因此 `nudge --help`、`nudge docs audit` 这类不碰状态库的命令在尚未配置时也能正常运行，方便新用户和非 macOS 环境先行评估。
 - 状态目录可能包含个人计划、执行历史和 Apple 外部 ID，不应提交。
 
 ## `[llm]` 与 `[llm.models]`

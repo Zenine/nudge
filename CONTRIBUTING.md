@@ -10,7 +10,9 @@ cd nudge
 scripts/bootstrap_mac.sh
 ```
 
-`scripts/bootstrap_mac.sh` creates a project-local `.venv` and installs the CLI for local development. If you prefer to manage your own environment, use Python 3.12+ and install the project dependencies from `pyproject.toml` / `requirements.txt`.
+`scripts/bootstrap_mac.sh` creates a project-local `.venv` and installs the CLI for local development. If you prefer to manage your own environment, use Python 3.12+ and install the development dependencies from `requirements-dev.txt` — `scripts/verify.sh` runs `scripts/check_package.sh`, which needs the packaging tools that only `requirements-dev.txt` provides.
+
+`bin/nudge` and `scripts/verify.sh` resolve the interpreter through `scripts/lib/python_env.sh`: an explicit `NUDGE_PYTHON` wins, then a working `.venv/bin/python`, then a plain `python3` when there is no `.venv` at all. If a `.venv` exists but its interpreter is missing, dangling or not executable, both entrypoints fail with an explicit error instead of silently falling back to a system interpreter that lacks the project dependencies.
 
 ## Verification
 
