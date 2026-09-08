@@ -12,16 +12,10 @@ while [ -L "$SOURCE" ]; do
 done
 
 ROOT="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
-NUDGE_PYTHON="${NUDGE_PYTHON:-}"
-VENV_PY="$ROOT/.venv/bin/python"
-FALLBACK_PY="python3"
 
-if [[ -n "$NUDGE_PYTHON" ]]; then
-  exec "$NUDGE_PYTHON" "$ROOT/nudge.py" "$@"
-fi
+# shellcheck source=scripts/lib/python_env.sh
+source "$ROOT/scripts/lib/python_env.sh"
 
-if [[ -x "$VENV_PY" ]]; then
-  exec "$VENV_PY" "$ROOT/nudge.py" "$@"
-fi
+PYTHON_BIN="$(nudge_resolve_python "$ROOT")" || exit 1
 
-exec "$FALLBACK_PY" "$ROOT/nudge.py" "$@"
+exec "$PYTHON_BIN" "$ROOT/nudge.py" "$@"

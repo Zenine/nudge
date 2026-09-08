@@ -13,13 +13,10 @@ cleanup_verify_state() {
 trap cleanup_verify_state EXIT
 export NUDGE_STATE_DIR="$VERIFY_STATE_DIR"
 
-PYTHON_BIN="${NUDGE_PYTHON:-}"
-if [[ -z "$PYTHON_BIN" && -x "$ROOT/.venv/bin/python" ]]; then
-  PYTHON_BIN="$ROOT/.venv/bin/python"
-fi
-if [[ -z "$PYTHON_BIN" ]]; then
-  PYTHON_BIN="python3"
-fi
+# shellcheck source=lib/python_env.sh
+source "$ROOT/scripts/lib/python_env.sh"
+
+PYTHON_BIN="$(nudge_resolve_python "$ROOT")" || exit 1
 
 if ! "$PYTHON_BIN" - <<'PY'
 import sys
