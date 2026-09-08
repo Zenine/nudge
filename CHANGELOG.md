@@ -11,6 +11,9 @@
 
 ### Changed
 
+- Python 解释器解析从静默回落改为显式报错：新增可 source 的 `scripts/lib/python_env.sh`，由 `bin/nudge` 与 `scripts/verify.sh` 共用。`.venv` 目录存在但解释器缺失、悬空或不可执行时直接报错退出并打印软链接的最终目标路径与修复方式，不再静默回落到缺少项目依赖的系统 `python3`；完全没有 `.venv` 时仍按原有方式回落，显式设置 `NUDGE_PYTHON` 的行为不变。
+- 同步状态目录与解释器解析的文档口径：`docs/configuration.md` 与 `docs/architecture.md` 补充说明「报错发生在真正访问状态库时而非 CLI 启动时」，`CONTRIBUTING.md` 的依赖指引改为 `requirements-dev.txt`（`scripts/verify.sh` 会调用需要打包工具的 `scripts/check_package.sh`），并说明三级解释器解析规则。
+- 重构 `TODO.md`：合并 2026-09-04 / 09-05 两次独立只读审阅的发现并逐条复核去重，按 P0/P1/P2 重排，补入 2026-09-08 的复核证据表（353 测试通过、docs audit errors 0、未配置状态目录时 CLI import 期 traceback、`.venv` 解释器悬空）；2026-06-20 / 07-04 / 07-05 三批历史审查脉络迁至 `docs/archive/reviews-2026-06-20-to-2026-07-05.md`，`docs audit` 的 `DOCS_TODO_HISTORY` 告警随之消解（warnings 6 → 5）。
 - `get_habit_streaks()` 的最新习惯记录查询改为按习惯分组取最大日期后 join 回原表，不再使用 tuple `IN (SELECT MAX(...))` 形式；行为不变，降低后续 habit 历史增长后的查询计划风险。
 - 拆分运行时与开发依赖：`requirements.txt` 只保留运行时依赖，新增 `requirements-dev.txt` 组合运行时依赖、pytest 与 packaging 检查所需工具；GitHub Actions 和非 macOS 评估文档改用 dev requirements，避免 bootstrap/runtime 安装混入测试工具。
 - Reminder EventKit helper 新增按“列表 + 标题 + 到期分钟”唯一匹配的正文替换能力；更新时保留既有 `Nudge-ID`、URL、通知、到期时间和完成状态，拒绝 0 条或多条匹配，供已确认计划在不删除重建 Reminder 的情况下同步上下文。
@@ -22,6 +25,9 @@
 
 ### Fixed
 
+- 状态目录未显式配置时不再让整个 CLI 在 import 期抛未捕获 `RuntimeError`：`resolve_state_dir()` 改抛 `StateDirNotConfiguredError`（仍是 `RuntimeError` 子类，既有调用方兼容），`STATE_DIR` 在缺配置时退化为拒绝一切文件系统访问的占位路径，CLI 顶层将其转成可读的 `click.ClickException`。`--help`、`docs audit` 等不访问状态库的命令恢复正常（exit 0、无 traceback），访问状态库的命令仍然 fail-closed 并保留三条修复指引，绝不回退到源码树 `.nudge/` 或 XDG 默认目录。新增无状态目录场景的回归测试，补上此前被 `verify.sh` / CI 预置 `NUDGE_STATE_DIR` 遮蔽的盲区。
+- 早晚报通知投递失败不再被静默丢弃：`briefing --notify` 的正文通道与 daemon 健康告警通道均接住 `notify()` 的 `(ok, raw)` 返回值，失败时写一条 `runtime_log` WARN 并在 stderr 给出可见提示与权限排查指引，两条通道的失败可区分。此前通知权限被撤销或 osascript 报错时命令仍以 0 退出，且 daemon 健康告警本身正是经该路径推送，等于告警通道会静默失效。
+- `run_applescript` 补齐 `FileNotFoundError` 与 `OSError` 捕获，返回 `(False, "osascript unavailable: ...")` 而非抛出未包装异常，与同库 `apple/calendar.py`、`apple/clock.py` 的处理口径一致，符合 `docs/non-macos.md` 承诺的非 macOS 可安全评估。
 - 修复 Apple Reminder 已从未完成列表消失、但没有可匹配 `completionDate` 时被误判为已完成的问题；缺失项现在继续保留为未完成，只有明确匹配 Apple 完成记录的 action 才进入完成候选。
 - 修复失败可见性报告把已经过去的 Calendar Event 当成逾期待办的问题；Calendar Event 不再进入 `pending_overdue`。
 - 修复文档审计维护 action 只按目标日期去重的问题；已有未关闭维护 action 会跨日期复用，避免历史维护债重复生成。
