@@ -37,6 +37,12 @@ def test_mcp_serve_initialize_and_tools_list(monkeypatch):
 
     assert result.exit_code == 0, result.output
     assert responses[0]["result"]["serverInfo"]["name"] == "nudge"
+    assert len(responses) == 2
+    assert responses[0]["id"] == 1
+    assert responses[0]["result"]["protocolVersion"] == "2025-11-25"
+    assert responses[0]["result"]["serverInfo"] == {"name": "nudge", "version": "0.5.1"}
+    assert responses[0]["result"]["capabilities"] == {"tools": {"listChanged": False}}
+    assert responses[1]["id"] == 2
     tools = responses[1]["result"]["tools"]
     assert [tool["name"] for tool in tools] == [
         "apply_apple_actions",

@@ -5,7 +5,15 @@ from pathlib import Path
 import pytest
 
 import nudge.config as config
-from nudge.config import get_defaults, get_family_aliases, load_config, resolve_state_dir
+from nudge.config import (
+    get_configured_calendar_names,
+    get_defaults,
+    get_family_aliases,
+    get_family_routing,
+    get_user_profile,
+    load_config,
+    resolve_state_dir,
+)
 
 
 def test_load_config_reads_explicit_public_safe_file(tmp_path):
@@ -120,3 +128,126 @@ def test_resolve_state_dir_rejects_existing_legacy_project_dir(monkeypatch, tmp_
         resolve_state_dir({})
 
     assert str(root / ".nudge") in str(excinfo.value)
+
+
+def test_load_config_missing_file():
+    with pytest.raises(FileNotFoundError, match="Config file not found"):
+        load_config("/nonexistent/path/config.toml")
+
+
+def test_get_family_aliases_empty_config():
+    all_aliases, alias_map = get_family_aliases({})
+    assert all_aliases == []
+    assert alias_map == {}
+
+
+def test_get_family_members_includes_identity_fields():
+    config = {
+        "family": {
+            "mom": {
+                "display_name": "李梅",
+                "role": "mom",
+                "aliases": ["妈妈", "李梅", "梅梅"],
+                "calendar": "个人",
+                "reminder_list": "家庭",
+            }
+        }
+    }
+
+    from nudge.config import get_family_members, get_family_aliases
+
+    members = get_family_members(config)
+    assert members == [
+        {
+            "key": "mom",
+            "name": "李梅",
+            "display_name": "李梅",
+            "role": "mom",
+            "aliases": ["妈妈", "李梅", "梅梅"],
+            "calendar": "个人",
+            "reminder_list": "家庭",
+        }
+    ]
+
+    all_aliases, alias_map = get_family_aliases(config)
+    for alias in ["李梅", "梅梅", "妈妈"]:
+        assert alias in all_aliases
+        assert alias_map[alias]["member_key"] == "mom"
+        assert alias_map[alias]["display_name"] == "李梅"
+
+
+def test_get_family_members_falls_back_to_first_alias_for_name():
+    from nudge.config import get_family_members
+
+    config = {"family": {"dad": {"aliases": ["爸爸"], "reminder_list": "家庭"}}}
+
+    assert get_family_members(config)[0]["name"] == "爸爸"
+    assert get_family_members(config)[0]["display_name"] == "爸爸"
+
+
+def test_get_configured_calendar_names_deduplicates_in_stable_order():
+    config = {
+        "general": {"default_calendar": "Family"},
+        "calendars": {
+            "workout": "个人",
+            "work": "工作",
+            "duplicate": "Family",
+        },
+        "family": {
+            "dad": {"calendar": "Family"},
+            "mom": {"calendar": "家庭"},
+            "kid": {},
+        },
+    }
+
+    assert get_configured_calendar_names(config) == ["Family", "个人", "工作", "家庭"]
+
+
+def test_get_family_routing_defaults_when_missing():
+    assert get_family_routing({}) == {
+        "default": "all",
+        "llm_fallback": False,
+        "llm_confidence_threshold": 0.65,
+        "display": {
+            "title_prefix": True,
+            "body_assignee_note": False,
+        },
+        "rules": [],
+    }
+
+
+def test_get_family_routing_treats_malformed_routing_as_empty_config():
+    assert get_family_routing({"family": {"routing": "broken"}}) == {
+        "default": "all",
+        "llm_fallback": False,
+        "llm_confidence_threshold": 0.65,
+        "display": {
+            "title_prefix": True,
+            "body_assignee_note": False,
+        },
+        "rules": [],
+    }
+
+
+def test_get_family_routing_uses_default_threshold_when_invalid():
+    assert get_family_routing({"family": {"routing": {"llm_confidence_threshold": "bad"}}})[
+        "llm_confidence_threshold"
+    ] == 0.65
+
+
+def test_get_family_routing_reads_display_options():
+    assert get_family_routing(
+        {
+            "family": {
+                "routing": {
+                    "display": {
+                        "title_prefix": False,
+                        "body_assignee_note": True,
+                    }
+                }
+            }
+        }
+    )["display"] == {
+        "title_prefix": False,
+        "body_assignee_note": True,
+    }

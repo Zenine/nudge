@@ -108,6 +108,7 @@ class RemindersBackend(Protocol):
         body: str | None = None,
         priority: int = 0,
         remind_date: datetime | None = None,
+        notify: bool = True,
         external_id: str | None = None,
     ) -> WriteResult:
         """Create one reminder."""
@@ -196,8 +197,13 @@ class NativeRemindersBackend:
         body: str | None = None,
         priority: int = 0,
         remind_date: datetime | None = None,
+        notify: bool = True,
         external_id: str | None = None,
     ) -> WriteResult:
+        if notify and remind_date is None:
+            remind_date = due_date
+        if not notify:
+            remind_date = None
         external_id = external_id or make_reminder_external_id()
         ok, message = create_reminder(
             name=name,
@@ -206,6 +212,7 @@ class NativeRemindersBackend:
             body=body,
             priority=priority,
             remind_date=remind_date,
+            notify=notify,
             external_id=external_id,
         )
         return WriteResult(ok=ok, message=message, external_id=external_id if ok else None)

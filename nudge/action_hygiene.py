@@ -6,7 +6,7 @@ import re
 
 
 def normalize_reminder_action(action: dict) -> dict:
-    """Return a reminder action with duplicate due-date suffix removed from title."""
+    """Return a reminder with normalized title and explicit notification semantics."""
     if action.get("type") != "reminder":
         return action
     normalized = dict(action)
@@ -14,6 +14,12 @@ def normalize_reminder_action(action: dict) -> dict:
         action.get("name", ""),
         action.get("due_date"),
     )
+    notify = action.get("notify", True)
+    normalized["notify"] = notify
+    if notify is False:
+        normalized["remind_date"] = None
+    elif not action.get("remind_date") and action.get("due_date"):
+        normalized["remind_date"] = action["due_date"]
     return normalized
 
 

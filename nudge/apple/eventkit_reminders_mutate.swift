@@ -7,7 +7,7 @@ func fail(_ message: String, code: Int32 = 1) -> Never {
 }
 
 if CommandLine.arguments.count < 4 {
-    fail("Usage: eventkit_reminders_mutate.swift <create|complete|complete-id|delete|set-id|update-notes> <list-name> <title-or-external-id> [due-date YYYY-MM-DD HH:mm] [priority] [remind-date YYYY-MM-DD HH:mm] [external-id] [notes]")
+    fail("Usage: eventkit_reminders_mutate.swift <create|complete|complete-id|complete-batch|delete|set-id|update-notes> <list-name> <title-or-external-id> [due-date YYYY-MM-DD HH:mm] [priority] [remind-date YYYY-MM-DD HH:mm] [external-id] [notes]")
 }
 
 let operation = CommandLine.arguments[1]
@@ -19,7 +19,7 @@ let remindDateText = CommandLine.arguments.count >= 7 ? CommandLine.arguments[6]
 let externalIdText = CommandLine.arguments.count >= 8 ? CommandLine.arguments[7] : ""
 let notesText = CommandLine.arguments.count >= 9 ? CommandLine.arguments[8] : ""
 
-if operation != "create" && operation != "complete" && operation != "complete-id" && operation != "delete" && operation != "set-id" && operation != "update-notes" {
+if operation != "create" && operation != "complete" && operation != "complete-id" && operation != "complete-batch" && operation != "delete" && operation != "set-id" && operation != "update-notes" {
     fail("Unsupported operation: \(operation)")
 }
 
@@ -184,6 +184,86 @@ if operation == "set-id", let dueDate = dateFromLocalMinute(dueDateText) {
     }
 }
 
+
+struct BatchCompleteRequest: Decodable {
+    let id: String
+    let titles: [String]
+    let due_date: String?
+}
+
+func sanitizedLineField(_ value: String) -> String {
+    return value
+        .replacingOccurrences(of: "\t", with: " ")
+        .replacingOccurrences(of: "\n", with: " ")
+        .replacingOccurrences(of: "\r", with: " ")
+}
+
+func reminderMatchesDueComponents(_ reminder: EKReminder, _ target: DateComponents?) -> Bool {
+    guard let target else {
+        return true
+    }
+    guard let reminderDue = reminder.dueDateComponents else {
+        return false
+    }
+    if reminderDue.hour != target.hour || reminderDue.minute != target.minute {
+        return false
+    }
+    if let year = reminderDue.year, year != target.year {
+        return false
+    }
+    if let month = reminderDue.month, month != target.month {
+        return false
+    }
+    if let day = reminderDue.day, day != target.day {
+        return false
+    }
+    return true
+}
+
+if operation == "complete-batch" {
+    let payloadPath = title
+    let payloadURL = URL(fileURLWithPath: payloadPath)
+    let requests: [BatchCompleteRequest]
+    do {
+        let data = try Data(contentsOf: payloadURL)
+        requests = try JSONDecoder().decode([BatchCompleteRequest].self, from: data)
+    } catch {
+        fail("Invalid complete-batch payload: \(error)", code: 6)
+    }
+
+    let fetched = fetchReminders(
+        store.predicateForReminders(in: calendars),
+        timeoutMessage: "EventKit fetchReminders timed out"
+    )
+    var rows: [String] = []
+    for request in requests {
+        let due = parseLocalMinute(request.due_date ?? "")
+        let titleSet = Set(request.titles)
+        let matches = fetched.filter { reminder in
+            if reminder.isCompleted {
+                return false
+            }
+            if !titleSet.contains(reminder.title) {
+                return false
+            }
+            return reminderMatchesDueComponents(reminder, due)
+        }
+        if matches.count != 1 {
+            rows.append("\(sanitizedLineField(request.id))\tfalse\tPrecise reminder match expected 1, found \(matches.count)")
+            continue
+        }
+        do {
+            matches[0].isCompleted = true
+            try store.save(matches[0], commit: true)
+            rows.append("\(sanitizedLineField(request.id))\ttrue\tmatched=1 changed=1")
+        } catch {
+            rows.append("\(sanitizedLineField(request.id))\tfalse\tEventKit complete failed: \(sanitizedLineField(String(describing: error)))")
+        }
+    }
+    print(rows.joined(separator: "\n"))
+    exit(0)
+}
+
 func reminderMatchesDueDate(_ reminder: EKReminder) -> Bool {
     guard let dueComponents else {
         return true
@@ -234,7 +314,7 @@ let matches = fetched.filter { reminder in
     return true
 }
 
-if (dueComponents != nil || operation == "complete-id" || operation == "set-id") && matches.count != 1 {
+if (dueComponents != nil || operation == "complete" || operation == "delete" || operation == "complete-id" || operation == "set-id" || operation == "update-notes") && matches.count != 1 {
     fail("Precise reminder match expected 1, found \(matches.count)", code: 7)
 }
 

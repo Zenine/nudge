@@ -1,4 +1,4 @@
-"""Apple Mail integration via AppleScript (read-only + drafts)."""
+"""Apple Mail integration via AppleScript (read-only)."""
 
 from nudge.apple.common import run_applescript
 

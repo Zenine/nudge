@@ -47,6 +47,7 @@ from nudge.json_contract import (
     scheduled_at as _scheduled_at,
     versioned_payload,
 )
+from nudge.runtime_log import render_error_report
 from nudge.state import configure_state, log_action
 
 
@@ -141,6 +142,8 @@ def _action_value_problems(index: int, action: dict) -> list[str]:
         if start and end and end <= start:
             problems.append("end time must be after start time")
     elif action_type == "reminder":
+        if "notify" in action and not isinstance(action.get("notify"), bool):
+            problems.append("notify must be a boolean")
         _validate_action_datetime(action.get("due_date"), "due date", problems)
         if action.get("remind_date"):
             _validate_action_datetime(action.get("remind_date"), "remind date", problems)
@@ -256,10 +259,7 @@ def _family_group_event_reminders(
     display: dict,
 ) -> list[dict]:
     start = _parse_datetime(action["start"], "start time")
-    reminder_times = [
-        (start - timedelta(minutes=30), "30 分钟后开始"),
-        (start, "现在开始"),
-    ]
+    reminder_times = _family_group_event_reminder_times(routing_metadata, start)
     body = _family_event_body(action)
     reminders = []
     for member in family_members:
@@ -281,6 +281,21 @@ def _family_group_event_reminders(
                 "_family_routing": deepcopy(routing_metadata),
             })
     return reminders
+
+
+def _family_group_event_reminder_times(
+    routing_metadata: dict,
+    start: datetime,
+) -> list[tuple[datetime, str]]:
+    """Return reminder times for a routed family event.
+
+    Rules may opt into a pre-start-only policy. Other family events keep the
+    historical two-step reminder pattern.
+    """
+    preclass = (start - timedelta(minutes=30), "30 分钟后开始")
+    if routing_metadata.get("notification_policy") == "prestart_only":
+        return [preclass]
+    return [preclass, (start, "现在开始")]
 
 
 def _family_event_body(action: dict) -> str:
@@ -410,6 +425,10 @@ def _routing_to_json(metadata: object) -> dict | None:
         "assignees": _routing_string_list(metadata.get("assignees")),
         "reason": _routing_optional_string(metadata.get("reason")),
     }
+    if "notification_policy" in metadata:
+        routing["notification_policy"] = _routing_optional_string(
+            metadata.get("notification_policy")
+        )
 
     for key in ("invalid_assignees", "empty_assignees"):
         if key in metadata:
@@ -443,6 +462,9 @@ def _action_to_json(
     }
     if action.get("person") is not None:
         item["person"] = action.get("person")
+    if action.get("type") == "reminder":
+        item["notify"] = action.get("notify") is not False
+        item["remind_at"] = action.get("remind_date") if item["notify"] else None
     if action.get("_external_id"):
         item["external_id"] = action["_external_id"]
     routing = _routing_to_json(action.get("_family_routing"))
@@ -578,6 +600,7 @@ def execute_action(
             return result.ok
 
         elif t == "reminder":
+            action.update(normalize_reminder_action(action))
             due = _parse_datetime(action["due_date"], "due date")
             remind = None
             if action.get("remind_date"):
@@ -590,6 +613,7 @@ def execute_action(
                 body=action.get("body"),
                 priority=action.get("priority", 0),
                 remind_date=remind,
+                notify=action["notify"],
             )
             if not result.ok:
                 error = classify_apple_error("Reminders", "Reminder list", rlist, result.message)
@@ -690,7 +714,7 @@ def do_command(message, file_path, dry_run, config_path, json_output):
         if json_output:
             _emit_json_error(error, dry_run=dry_run)
             raise click.exceptions.Exit(1)
-        raise click.ClickException(error.render())
+        raise click.ClickException(render_error_report("do.apple_backend", error))
 
     if not json_output:
         click.echo(f"Parsing: {text[:80]}{'...' if len(text) > 80 else ''}\n")
@@ -717,6 +741,7 @@ def do_command(message, file_path, dry_run, config_path, json_output):
         routing,
         llm_router=llm_router,
     )
+    actions = [normalize_reminder_action(action) for action in actions]
 
     if not json_output:
         click.echo(f"Found {len(actions)} action(s):\n")

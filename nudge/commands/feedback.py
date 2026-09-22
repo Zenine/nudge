@@ -34,6 +34,7 @@ from nudge.state import (
     get_action,
     get_actions,
     partial_action,
+    save_evaluation,
     skip_action,
     update_action_status,
 )
@@ -85,6 +86,66 @@ def today_command(json_output: bool):
         click.echo(f"  done: {item['quick_commands']['done']}")
         click.echo(f"  partial: {item['quick_commands']['partial']}")
         click.echo(f"  skipped: {item['quick_commands']['skipped']}")
+
+
+@feedback_command.command("weekly-score")
+@click.option("--difficulty", type=int, required=True, help="本周执行难度，1=很轻松，10=很难")
+@click.option("--recovery", type=int, required=True, help="本周恢复状态，1=很差，10=很好")
+@click.option("--sleep", "sleep_score", type=int, required=True, help="本周主观睡眠，1=很差，10=很好")
+@click.option("--mood", type=int, required=True, help="本周情绪/抗压，1=很差，10=很好")
+@click.option("--note", default="", help="Optional short subjective note")
+@click.option("--json", "json_output", is_flag=True, help="Output machine-readable JSON")
+def weekly_score_command(
+    difficulty: int,
+    recovery: int,
+    sleep_score: int,
+    mood: int,
+    note: str,
+    json_output: bool,
+):
+    """Record a 30-second weekly subjective score for review/adapt."""
+    try:
+        metrics = _subjective_metrics(
+            difficulty=difficulty,
+            recovery=recovery,
+            sleep=sleep_score,
+            mood=mood,
+        )
+    except ValueError as exc:
+        _emit_subjective_error(str(exc), json_output=json_output)
+        return
+
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+    week_end = week_start + timedelta(days=7)
+    evaluation_id = save_evaluation(
+        period="weekly_subjective",
+        period_start=week_start.isoformat(),
+        period_end=week_end.isoformat(),
+        metrics=metrics,
+        insights=note.strip() or None,
+    )
+    payload = versioned_payload({
+        "ok": True,
+        "id": evaluation_id,
+        "period": {
+            "type": "weekly_subjective",
+            "start": week_start.isoformat(),
+            "end": week_end.isoformat(),
+        },
+        "metrics": metrics,
+        "note": note.strip() or None,
+        "errors": [],
+    })
+    if json_output:
+        click.echo(json.dumps(payload, ensure_ascii=False))
+        return
+    click.echo(
+        "已记录本周主观打分："
+        f"difficulty={difficulty} recovery={recovery} sleep={sleep_score} mood={mood}"
+    )
+    if note.strip():
+        click.echo(f"备注：{note.strip()}")
 
 
 @feedback_command.command("interview")
@@ -387,7 +448,6 @@ def _interview_now() -> datetime:
     return datetime.now()
 
 
-
 @feedback_command.command("apply")
 @click.option("--file", "file_path", type=click.Path(dir_okay=False), help="Read feedback update JSON from file")
 @click.option("--dry-run", is_flag=True, help="Validate and preview without updating SQLite")
@@ -442,6 +502,30 @@ def apply_command(file_path: str | None, dry_run: bool, json_output: bool):
     click.echo(f"{prefix}feedback updates: {len(results)}")
     for result in results:
         click.echo(f"- {result['status']}: {result['summary']}")
+
+
+def _subjective_metrics(*, difficulty: int, recovery: int, sleep: int, mood: int) -> dict[str, int]:
+    metrics = {
+        "difficulty": difficulty,
+        "recovery": recovery,
+        "sleep": sleep,
+        "mood": mood,
+    }
+    invalid = [name for name, value in metrics.items() if value < 1 or value > 10]
+    if invalid:
+        raise ValueError(f"scores must be integers from 1 to 10: {', '.join(invalid)}")
+    return metrics
+
+
+def _emit_subjective_error(message: str, *, json_output: bool) -> None:
+    payload = versioned_payload({
+        "ok": False,
+        "errors": [{"code": "SUBJECTIVE_SCORE_INVALID", "message": message}],
+    })
+    if json_output:
+        click.echo(json.dumps(payload, ensure_ascii=False))
+        raise click.exceptions.Exit(1)
+    raise click.ClickException(f"SUBJECTIVE_SCORE_INVALID: {message}")
 
 
 def _feedback_item(action: dict) -> dict[str, Any]:

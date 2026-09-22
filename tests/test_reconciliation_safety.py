@@ -18,7 +18,7 @@ def _reminder_action(**overrides):
 
 
 def test_missing_apple_reminder_does_not_become_done_candidate():
-    candidates, open_count = _completed_candidates(
+    candidates, _human_needed, open_count = _completed_candidates(
         [_reminder_action()],
         incomplete=[],
         completed=[],
@@ -36,7 +36,7 @@ def test_completed_apple_reminder_is_still_a_done_candidate():
         "completed_at": "2026-07-15 10:00",
     }]
 
-    candidates, open_count = _completed_candidates(
+    candidates, _human_needed, open_count = _completed_candidates(
         [_reminder_action()],
         incomplete=[],
         completed=completed,

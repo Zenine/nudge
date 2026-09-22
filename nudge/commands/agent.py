@@ -599,6 +599,9 @@ def _normalize_action(action: dict, defaults: dict) -> dict:
             "target": {"kind": "Calendar", "name": calendar_name},
         }
     if action_type == "reminder.create":
+        notify = action.get("notify", True)
+        if not isinstance(notify, bool):
+            raise ValueError("reminder.create notify must be a boolean")
         list_name = (
             action.get("list_name")
             or action.get("reminder_list")
@@ -615,7 +618,12 @@ def _normalize_action(action: dict, defaults: dict) -> dict:
                 "due_date": action["due_date"],
                 "body": action.get("body"),
                 "priority": action.get("priority", 0),
-                "remind_date": action.get("remind_date"),
+                "notify": notify,
+                "remind_date": (
+                    (action.get("remind_date") or action["due_date"])
+                    if notify
+                    else None
+                ),
             },
             "defaults": {"default_reminder_list": list_name},
             "target": {"kind": "Reminder list", "name": list_name},
@@ -811,6 +819,11 @@ def _action_to_json(item: dict, index: int, status: str) -> dict:
         "scheduled_at": _scheduled_at(executable),
         "target": _target_for_json(item),
     }
+    if executable.get("type") == "reminder":
+        data["notify"] = executable.get("notify") is not False
+        data["remind_at"] = (
+            executable.get("remind_date") if data["notify"] else None
+        )
     if executable.get("_external_id"):
         data["external_id"] = executable["_external_id"]
     if executable.get("_error"):

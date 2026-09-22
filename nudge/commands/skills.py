@@ -11,9 +11,19 @@ from pathlib import Path
 import click
 
 from nudge.apple.adapters import resolve_apple_backends
+from nudge.commands.agent import (
+    MAX_AGENT_ACTIONS,
+    _configure_agent_state,
+    apply_agent_request,
+)
 from nudge.commands.do import execute_action
 from nudge.config import get_defaults, get_family_aliases, load_config
 from nudge.json_contract import versioned_payload
+from nudge.skills.bridge import (
+    build_skill_agent_request,
+    chunk_actions,
+    skill_actions_to_agent_actions,
+)
 from nudge.state import configure_state, get_actions, log_action, update_plan_status
 from nudge.skills.builtins import (
     delete_custom_skill,
@@ -797,6 +807,138 @@ def adapt_command(plan_id, weeks, apply_changes, config_path, json_output):
     if failed:
         raise click.exceptions.Exit(1)
 
+
+@skills_command.command("schedule")
+@click.argument("skill_source")
+@click.option("--context", "context_file", type=click.Path(exists=True, dir_okay=False), required=True, help="Context JSON file")
+@click.option(
+    "--text-plan",
+    "text_plan_ref",
+    type=click.Path(exists=True, dir_okay=False),
+    required=True,
+    help="Path to the confirmed human-readable plan (required by plan-driven writes)",
+)
+@click.option("--weeks", default=1, type=click.IntRange(1, 12), help="Number of weeks to schedule")
+@click.option("--calendar", "calendar_name", default=None, help="Target calendar name (defaults to config)")
+@click.option("--config", "config_path", default=None, help="Config file path")
+@click.option("--yes", is_flag=True, help="Skip interactive confirmation and write directly")
+@click.option("--json", "json_output", is_flag=True, help="Output machine-readable JSON")
+def schedule_command(skill_source, context_file, text_plan_ref, weeks, calendar_name, config_path, yes, json_output):
+    """Schedule a Skill's dry-run plan into Apple Calendar via confirmed agent apply.
+
+    Runs the deterministic dry-run, converts its calendar_event previews into
+    plan-driven ``calendar_event.create`` agent actions, then drives the existing
+    ``apply_agent_request`` engine (dry-run confirmation token -> real write) so
+    Skill actions genuinely enter the execution loop. Batches larger than the
+    agent apply limit are written in confirmed chunks.
+    """
+    try:
+        skill = validate_skill(load_skill_source(skill_source))
+        context = _load_context(context_file)
+        result = dry_run_skill(skill, context, weeks=weeks)
+        agent_actions = skill_actions_to_agent_actions(result.actions, calendar=calendar_name)
+    except SkillValidationError as exc:
+        if json_output:
+            click.echo(json.dumps(versioned_payload({"ok": False, "issues": _issue_payload(exc)}), ensure_ascii=False))
+            raise click.exceptions.Exit(1)
+        raise click.ClickException(str(exc))
+    except Exception as exc:
+        if json_output:
+            click.echo(json.dumps(versioned_payload({"ok": False, "error": str(exc)}), ensure_ascii=False))
+            raise click.exceptions.Exit(1)
+        raise click.ClickException(str(exc))
+
+    skill_id = result.skill.get("metadata", {}).get("id", "skill")
+
+    if not agent_actions:
+        payload = {"ok": True, "dry_run": True, "total": 0, "succeeded": 0, "batches": 0, "text_plan_ref": text_plan_ref}
+        if json_output:
+            click.echo(json.dumps(versioned_payload(payload), ensure_ascii=False))
+        else:
+            click.echo(f"SKILL SCHEDULE: {_metadata_label(result.skill)} 无可写入动作。")
+        return
+
+    try:
+        config = load_config(config_path)
+    except Exception as exc:
+        raise click.ClickException(f"cannot load config: {exc}")
+    if config_path:
+        _configure_agent_state(config)
+
+    batches = chunk_actions(agent_actions, MAX_AGENT_ACTIONS)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    total = len(agent_actions)
+
+    # Step 1: dry-run each batch to validate and mint its confirmation token.
+    previews = []
+    for i, batch in enumerate(batches, 1):
+        request_id = f"skills-schedule-{skill_id}-b{i}-{stamp}"
+        dry_request = build_skill_agent_request(
+            batch, source="skills.schedule", text_plan_ref=text_plan_ref, request_id=request_id, dry_run=True
+        )
+        dry_payload, code = apply_agent_request(request=dry_request, config=config, dry_run_override=True)
+        if code != 0 or not dry_payload.get("ok"):
+            if json_output:
+                click.echo(json.dumps(versioned_payload({
+                    "ok": False, "dry_run": True, "batch": i, "error": "dry-run validation failed",
+                    "detail": dry_payload,
+                }), ensure_ascii=False))
+            else:
+                click.echo(f"SKILL SCHEDULE: 第 {i} 批 dry-run 校验失败，未写入任何内容。")
+            raise click.exceptions.Exit(1)
+        previews.append({"request_id": request_id, "batch": batch, "token": dry_payload.get("dry_run_token")})
+
+    # Decide whether to proceed to real writes.
+    proceed = yes
+    if not yes:
+        if json_output:
+            proceed = False  # machine mode without --yes stays a safe preview
+        else:
+            click.echo(f"SKILL SCHEDULE 预览: {_metadata_label(result.skill)}")
+            click.echo(f"计划文本(已确认): {text_plan_ref}")
+            click.echo(f"将写入 {total} 个 Calendar 事件，分 {len(batches)} 批：")
+            for action in agent_actions:
+                click.echo(f"  - {action['start']} → {action['end']}  {action['summary']}")
+            proceed = click.confirm("\n确认写入以上事件到 Calendar？", default=False)
+
+    if not proceed:
+        payload = {"ok": True, "dry_run": True, "total": total, "succeeded": 0, "batches": len(batches), "text_plan_ref": text_plan_ref}
+        if json_output:
+            click.echo(json.dumps(versioned_payload(payload), ensure_ascii=False))
+        else:
+            click.echo("（未写入：dry-run 预览。加 --yes 或确认后才写入。）")
+        return
+
+    # Step 2: real write each batch with its own confirmation token.
+    succeeded = 0
+    batch_errors = []
+    for preview in previews:
+        write_request = build_skill_agent_request(
+            preview["batch"], source="skills.schedule", text_plan_ref=text_plan_ref,
+            request_id=preview["request_id"], dry_run=False, dry_run_token=preview["token"],
+        )
+        write_payload, code = apply_agent_request(request=write_request, config=config, dry_run_override=False)
+        succeeded += int(write_payload.get("succeeded", 0))
+        if code != 0 or not write_payload.get("ok"):
+            batch_errors.append({"request_id": preview["request_id"], "errors": write_payload.get("errors", [])})
+
+    payload = {
+        "ok": not batch_errors,
+        "dry_run": False,
+        "total": total,
+        "succeeded": succeeded,
+        "batches": len(batches),
+        "text_plan_ref": text_plan_ref,
+        "errors": batch_errors,
+    }
+    if json_output:
+        click.echo(json.dumps(versioned_payload(payload), ensure_ascii=False))
+    else:
+        click.echo(f"SKILL SCHEDULE: 已写入 {succeeded}/{total} 个 Calendar 事件（{len(batches)} 批）。")
+        if batch_errors:
+            click.echo(f"  有 {len(batch_errors)} 批出现错误，请检查 JSON 输出或重试。")
+    if batch_errors:
+        raise click.exceptions.Exit(1)
 
 @skills_command.command("create")
 @click.argument("skill_source", type=click.Path(exists=True, dir_okay=False))

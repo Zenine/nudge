@@ -13,7 +13,9 @@ def escape(text: str | None) -> str:
             .replace('"', '\\"')
             .replace("\n", " ")
             .replace("\r", " ")
-            .replace("\t", " "))
+            .replace("\t", " ")
+            .replace("\u2028", " ")
+            .replace("\u2029", " "))
 
 
 def date_block(var_name: str, dt: datetime) -> str:

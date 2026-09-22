@@ -102,6 +102,11 @@ def _keyword_route(action: dict, routing: dict, member_by_key: dict, original_pe
                         "original_person": original_person,
                         "assignees": expansion.valid_keys,
                         "reason": f"命中关键词：{keyword_text}",
+                        **(
+                            {"notification_policy": rule["notification_policy"]}
+                            if rule.get("notification_policy")
+                            else {}
+                        ),
                     },
                 )
     return None

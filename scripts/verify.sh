@@ -55,6 +55,61 @@ run bin/nudge feedback interview --help >/dev/null
 run bin/nudge reminders backfill-lists --help >/dev/null
 run bin/nudge reminders reconcile-missing --help >/dev/null
 run bin/nudge mcp --help >/dev/null
+run bin/nudge do --json --help >/dev/null
+run bin/nudge agent --help >/dev/null
+run bin/nudge agent apply --help >/dev/null
+run bin/nudge mcp serve --help >/dev/null
+run bin/nudge daemon enqueue --help >/dev/null
+run bin/nudge daemon queue --help >/dev/null
+run bin/nudge daemon status --help >/dev/null
+run bin/nudge daemon run --help >/dev/null
+run bin/nudge daemon recover --help >/dev/null
+run bin/nudge daemon retry --help >/dev/null
+run bin/nudge daemon health --help >/dev/null
+run bin/nudge daemon launchd --help >/dev/null
+run bin/nudge daemon launchd install --help >/dev/null
+run bin/nudge daemon launchd status --help >/dev/null
+run bin/nudge daemon launchd start --help >/dev/null
+run bin/nudge daemon launchd stop --help >/dev/null
+run bin/nudge daemon launchd restart --help >/dev/null
+run bin/nudge daemon launchd uninstall --help >/dev/null
+run bin/nudge daemon app --help >/dev/null
+run bin/nudge daemon app install --help >/dev/null
+run bin/nudge daemon app status --help >/dev/null
+run bin/nudge daemon app open --help >/dev/null
+run bin/nudge daemon app uninstall --help >/dev/null
+run bin/nudge reminders --help >/dev/null
+run bin/nudge reminders sync-completed --help >/dev/null
+run bin/nudge reminders backfill-ids --help >/dev/null
+run bin/nudge daily --help >/dev/null
+run bin/nudge daily sync --help >/dev/null
+run bin/nudge db --help >/dev/null
+run bin/nudge db backup --help >/dev/null
+run bin/nudge db export --help >/dev/null
+run bin/nudge db restore --help >/dev/null
+run bin/nudge health --help >/dev/null
+run bin/nudge health import --help >/dev/null
+run bin/nudge health daily --help >/dev/null
+run bin/nudge doctor --json --help >/dev/null
+run bin/nudge dogfood --help >/dev/null
+run bin/nudge dogfood weekly --help >/dev/null
+run bin/nudge failures --help >/dev/null
+run bin/nudge briefing --help >/dev/null
+run bin/nudge review --help >/dev/null
+run bin/nudge schedule --help >/dev/null
+run bin/nudge habits --help >/dev/null
+run bin/nudge log --help >/dev/null
+run bin/nudge log parse --help >/dev/null
+run bin/nudge check-in --help >/dev/null
+run bin/nudge check-in parse --help >/dev/null
+run bin/nudge trainer --help >/dev/null
+run bin/nudge skills --help >/dev/null
+run bin/nudge skills list >/dev/null
+run bin/nudge skills show strength-basics-12w --json >/dev/null
+run bin/nudge skills dry-run --help >/dev/null
+run bin/nudge skills schedule --help >/dev/null
+run bin/nudge profile --help >/dev/null
+run bin/nudge feedback weekly-score --help >/dev/null
 
 echo
 echo "== Documentation audit =="

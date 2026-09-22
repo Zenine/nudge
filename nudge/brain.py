@@ -2,7 +2,9 @@
 
 import json
 import math
+import random
 import re
+import time
 from datetime import datetime
 
 from nudge.llm import LLMError, create_provider, get_model_for_task
@@ -38,8 +40,11 @@ Return a JSON array. Each item must be one of these types:
   "person": "family member name or null",
   "body": "details or null",
   "priority": 0,
+  "notify": true,
   "remind_date": "YYYY-MM-DD HH:MM or null"
 }}
+
+Set "notify" to false only when the user explicitly asks for a due date without a notification.
 
 3. Alarm:
 {{
@@ -117,6 +122,9 @@ Actions:
 Habit streaks:
 {habits}
 
+Objective / subjective context:
+{objective_context}
+
 Return a JSON array. Each suggestion must use this shape:
 {{
   "type": "move / reduce / split / delete / keep / increase",
@@ -138,7 +146,7 @@ Rules:
 - For move/reduce, always include both start and end in YYYY-MM-DD HH:MM and preserve the provided dates exactly.
 - Include action_id when referencing an existing action from the Actions list.
 - Be specific and actionable, not motivational filler.
-- Base every suggestion on the provided completion data.
+- Base every suggestion on the provided completion data and objective context; if subjective feedback is missing, avoid aggressive increases.
 - Keep a coach tone: honest, calm, and non-judgmental.
 - If completion is consistently high, suggest a small level-up or keeping the current plan.
 - If completion is low, reduce scope, move time slots, or simplify the habit.
@@ -228,25 +236,45 @@ def _call(
 
     for attempt in range(retries + 1):
         try:
-            kwargs = {"model": model}
+            call_kwargs = {"model": model}
             if timeout is not None:
-                kwargs["timeout"] = timeout
-                kwargs["max_retries"] = 0
-            return provider.call(system, user_message, **kwargs)
+                call_kwargs["timeout"] = timeout
+                call_kwargs["max_retries"] = 0
+            return provider.call(system, user_message, **call_kwargs)
         except LLMError:
             if attempt < retries:
-                import time
-                time.sleep(2 ** attempt)
+                base_delay = 2 ** attempt
+                jitter = random.uniform(0, min(0.5, base_delay * 0.25))
+                time.sleep(base_delay + jitter)
                 continue
             raise
 
 
-_JSON_FENCE_RE = re.compile(r"```[ \t]*(?:json)?[^\r\n`]*(?:\r?\n)?(.*?)```", re.IGNORECASE | re.DOTALL)
+_SECRET_PATTERNS = [
+    re.compile(
+        r"\b(?P<key>[A-Z0-9_]*(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD)[A-Z0-9_]*)"
+        r"\s*[:=]\s*(?P<value>[^\s,;]+)",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\b(?P<key>password)\s*[:=]\s*(?P<value>[^\s,;]+)", re.IGNORECASE),
+    re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]+", re.IGNORECASE),
+    re.compile(r"\bsk-[A-Za-z0-9_-]{8,}"),
+]
 
 
-def _parse_json(raw: str) -> list | dict:
-    """Parse the first JSON object/list from LLM output."""
-    last_error: json.JSONDecodeError | None = None
+def _safe_json_diagnostic(raw: str, limit: int = 200) -> str:
+    """Return a short, redacted excerpt suitable for JSON parse errors."""
+    snippet = raw.replace("\n", "\\n")[:limit]
+
+    def redact_assignment(match: re.Match) -> str:
+        return f"{match.group('key')}=<redacted>"
+
+    for pattern in _SECRET_PATTERNS:
+        if "key" in pattern.groupindex:
+            snippet = pattern.sub(redact_assignment, snippet)
+        else:
+            snippet = pattern.sub("<redacted>", snippet)
+    return snippet
 
     for match in _JSON_FENCE_RE.finditer(raw):
         try:
@@ -254,22 +282,55 @@ def _parse_json(raw: str) -> list | dict:
         except json.JSONDecodeError as exc:
             last_error = exc
 
+class JSONParseError(LLMError, json.JSONDecodeError):
+    """LLM output had no parseable JSON.
+
+    Subclasses both ``LLMError`` (so callers can catch every LLM failure with one
+    ``except``) and ``json.JSONDecodeError`` (so callers that only care about
+    decoding keep working). The message is already redacted; never attach the
+    raw provider output.
+    """
+
+    def __init__(self, message: str, doc: str = "", pos: int = 0):
+        json.JSONDecodeError.__init__(self, message, doc, pos)
+
+
+_JSON_FENCE_RE = re.compile(r"```[ \t]*(?:json)?[^\r\n`]*(?:\r?\n)?(.*?)```", re.IGNORECASE | re.DOTALL)
+
+
+def _parse_json(raw: str) -> list | dict:
+    """Parse the first JSON object/array from LLM output.
+
+    Fenced ```json blocks win over a bare scan so prose that happens to contain
+    braces cannot shadow the real payload.
+    """
     decoder = json.JSONDecoder()
+    last_error: json.JSONDecodeError | None = None
+
+    for match in _JSON_FENCE_RE.finditer(raw):
+        try:
+            parsed = json.loads(match.group(1).strip())
+        except json.JSONDecodeError as exc:
+            last_error = exc
+            continue
+        if isinstance(parsed, (dict, list)):
+            return parsed
+
     for index, char in enumerate(raw):
         if char not in "{[":
             continue
         try:
             parsed, _ = decoder.raw_decode(raw, index)
-            return parsed
         except json.JSONDecodeError as exc:
             last_error = exc
+            continue
+        if isinstance(parsed, (dict, list)):
+            return parsed
 
-    try:
-        return json.loads(raw.strip())
-    except json.JSONDecodeError as exc:
-        if last_error is not None:
-            raise last_error
-        raise exc
+    detail = _safe_json_diagnostic(raw)
+    if last_error is None:
+        raise JSONParseError(f"JSON 解析失败: 未找到 JSON object/array; 输出片段: {detail}")
+    raise JSONParseError(f"JSON 解析失败: {last_error.msg}; 输出片段: {detail}", "", last_error.pos)
 
 
 def call_llm(
@@ -294,11 +355,11 @@ def parse_check_in_feedback(text: str) -> dict:
     raw = _call(CHECK_IN_PARSE_SYSTEM, text, task="fast")
     try:
         parsed = _parse_json(raw)
-    except json.JSONDecodeError:
-        raise LLMError(f"Check-in JSON 解析失败: {raw[:200]}")
+    except LLMError as exc:
+        raise LLMError(f"Check-in JSON 解析失败: {exc}") from exc
 
     if not isinstance(parsed, dict):
-        raise LLMError(f"Check-in JSON 必须是对象: {raw[:200]}")
+        raise LLMError(f"Check-in JSON 必须是对象: {_safe_json_diagnostic(raw)}")
     return parsed
 
 
@@ -317,11 +378,11 @@ def suggest_family_routing(action: dict, members: list[dict], routing: dict | No
     raw = _call(FAMILY_ROUTING_SYSTEM, prompt, task="fast")
     try:
         parsed = _parse_json(raw)
-    except json.JSONDecodeError:
-        raise LLMError(f"家庭路由 JSON 解析失败: {raw[:200]}")
+    except LLMError as exc:
+        raise LLMError(f"家庭路由 JSON 解析失败: {exc}") from exc
 
     if not isinstance(parsed, dict):
-        raise LLMError(f"家庭路由 JSON 必须是对象: {raw[:200]}")
+        raise LLMError(f"家庭路由 JSON 必须是对象: {_safe_json_diagnostic(raw)}")
 
     assignees = parsed.get("assignees", [])
     if isinstance(assignees, str):
@@ -423,15 +484,15 @@ def parse_actions(
 
     try:
         actions = _parse_json(raw)
-    except json.JSONDecodeError:
+    except LLMError:
         try:
             raw = _call(
                 system + "\n\nIMPORTANT: Return ONLY a valid JSON array.",
                 text, task="fast",
             )
             actions = _parse_json(raw)
-        except json.JSONDecodeError:
-            raise LLMError(f"LLM returned invalid JSON after retry: {raw[:200]}")
+        except LLMError as exc:
+            raise LLMError(f"LLM returned invalid JSON after retry: {exc}") from exc
 
     if not isinstance(actions, list):
         actions = [actions]
@@ -518,6 +579,7 @@ def suggest_adaptation(
     actions: list[dict],
     habit_streaks: dict[str, dict],
     period: str = "weekly",
+    objective_context: str | None = None,
 ) -> list[dict]:
     """Suggest plan adaptations from recent execution data.
 
@@ -560,6 +622,7 @@ def suggest_adaptation(
         metrics=metrics,
         actions=actions_str,
         habits=habits_str,
+        objective_context=_adaptation_objective_context(objective_context),
     )
 
     user_message = "请根据本周执行数据给出调整建议" if period == "weekly" else "请根据执行数据给出调整建议"
@@ -567,15 +630,22 @@ def suggest_adaptation(
 
     try:
         suggestions = _parse_json(raw)
-    except json.JSONDecodeError:
-        raise LLMError(f"调整建议 JSON 解析失败: {raw[:200]}")
+    except LLMError as exc:
+        raise LLMError(f"调整建议 JSON 解析失败: {exc}") from exc
 
     if isinstance(suggestions, dict):
         suggestions = [suggestions]
     if not isinstance(suggestions, list):
-        raise LLMError(f"调整建议 JSON 必须是数组: {raw[:200]}")
+        raise LLMError(f"调整建议 JSON 必须是数组: {_safe_json_diagnostic(raw)}")
 
     return suggestions
+
+
+def _adaptation_objective_context(objective_context: str | None) -> str:
+    context = (objective_context or "").strip()
+    if not context:
+        return "  (no objective health context provided; subjective feedback is missing unless present in action feedback)"
+    return context
 
 
 def _format_action_for_adaptation(action: dict) -> str:
@@ -666,8 +736,8 @@ def generate_workout_plan(
 
     try:
         sessions = _parse_json(raw)
-    except json.JSONDecodeError:
-        raise LLMError(f"训练计划 JSON 解析失败: {raw[:200]}")
+    except LLMError as exc:
+        raise LLMError(f"训练计划 JSON 解析失败: {exc}") from exc
 
     if not isinstance(sessions, list):
         sessions = [sessions]
@@ -685,8 +755,8 @@ def parse_workout_log(text: str, session: dict) -> dict:
 
     try:
         return _parse_json(raw)
-    except json.JSONDecodeError:
-        raise LLMError(f"训练记录 JSON 解析失败: {raw[:200]}")
+    except LLMError as exc:
+        raise LLMError(f"训练记录 JSON 解析失败: {exc}") from exc
 
 
 def _flatten_profile(profile: dict) -> dict:

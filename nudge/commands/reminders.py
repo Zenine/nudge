@@ -10,6 +10,7 @@ import click
 from nudge.action_hygiene import normalize_reminder_title
 from nudge.apple.reminders import (
     complete_reminder,
+    complete_reminders_batch,
     make_reminder_external_id,
     query_completed_on_date,
     query_due_on_date,
@@ -117,6 +118,8 @@ def sync_completed_for_lists(
         "checked": sum(int(result.get("checked") or 0) for result in results),
         "open": sum(int(result.get("open") or 0) for result in results),
         "candidates": annotated_items("candidates"),
+        "human_needed": annotated_items("human_needed"),
+        "auto_apply_policy": "requires_apple_completion_date",
         "updated": sum(int(result.get("updated") or 0) for result in results),
         "auto_skipped_after_sleep": annotated_items("auto_skipped_after_sleep"),
         "warnings": annotated_items("warnings"),
@@ -273,13 +276,13 @@ def reconcile_missing(
                 "message": str(completed_rows),
             })
             continue
-        completed_match = _matching_completed(action, list(completed_rows))
+        completed_match, reason = _matching_completed_decision(action, list(completed_rows))
         if completed_match is not None:
             if completed_match.get("completed_at"):
                 item["completed_at"] = completed_match["completed_at"]
             completed.append(item)
         else:
-            missing.append({**item, "reason": "missing_from_apple"})
+            missing.append({**item, "reason": reason or "missing_from_apple"})
 
     return versioned_payload({
         "ok": not query_errors,
@@ -565,7 +568,12 @@ def sync_completed_for_date(
                 "message": str(next_completed),
             })
 
-    candidates, open_count = _completed_candidates(actions, incomplete, completed)
+    candidates, human_needed, open_count = _completed_candidates(
+        actions,
+        incomplete,
+        completed,
+        completed_query_ok=completed_ok,
+    )
     auto_skipped_after_sleep = []
     auto_skipped_ids = set()
     updated_count = 0
@@ -603,6 +611,7 @@ def sync_completed_for_date(
         checked=len(actions),
         open_count=open_count,
         candidates=candidates,
+        human_needed=human_needed,
         updated=updated_count if apply_changes else 0,
         dry_run=not apply_changes,
         auto_skipped_after_sleep=auto_skipped_after_sleep,
@@ -635,6 +644,8 @@ def _backfill_completed_sleep_cascade(
             or action.get("status") != "done"
             or not _belongs_to_reminder_list(action, reminder_list)
         ):
+            continue
+        if not action.get("completed_at"):
             continue
         skipped = skip_later_sleep_reminders_after_completion(action["id"]) or []
         new_skipped = [
@@ -686,7 +697,9 @@ def _completed_candidates(
     actions: list[dict],
     incomplete: list[dict],
     completed: list[dict] | None = None,
-) -> tuple[list[dict], int]:
+    *,
+    completed_query_ok: bool = True,
+) -> tuple[list[dict], list[dict], int]:
     completed = completed or []
     open_action_ids = {
         action["id"]
@@ -694,14 +707,19 @@ def _completed_candidates(
         if _matches_any_incomplete(action, incomplete)
     }
     candidates = []
+    human_needed = []
     for action in actions:
         if action.get("id") in open_action_ids:
             continue
-        completed_match = _matching_completed(action, completed)
-        if completed_match is None:
+        if not completed_query_ok:
+            human_needed.append(_human_needed_payload(action, "completed_query_failed"))
             continue
-        candidates.append(_candidate_payload(action, completed_match))
-    return candidates, len(open_action_ids)
+        completed_match, reason = _matching_completed_decision(action, completed)
+        if completed_match is not None:
+            candidates.append(_candidate_payload(action, completed_match))
+        else:
+            human_needed.append(_human_needed_payload(action, reason or "missing_from_incomplete_without_completion_date"))
+    return candidates, human_needed, len(open_action_ids)
 
 
 def _matches_any_incomplete(action: dict, incomplete: list[dict]) -> bool:
@@ -724,11 +742,18 @@ def _matches_any_incomplete(action: dict, incomplete: list[dict]) -> bool:
 
 
 def _matching_completed(action: dict, completed: list[dict]) -> dict | None:
+    match, _reason = _matching_completed_decision(action, completed)
+    return match
+
+
+def _matching_completed_decision(action: dict, completed: list[dict]) -> tuple[dict | None, str | None]:
     scheduled_at = str(action.get("scheduled_at") or "")
     action_time = _time_part(scheduled_at)
     summary = str(action.get("summary") or "")
     normalized_summary = normalize_reminder_title(summary, scheduled_at)
     matches: list[tuple[timedelta, dict]] = []
+    missing_completed_at = 0
+    missing_due_at = 0
     for reminder in completed:
         due_at = str(reminder.get("due_at") or "")
         if due_at and due_at[:16] != scheduled_at[:16]:
@@ -737,24 +762,36 @@ def _matching_completed(action: dict, completed: list[dict]) -> dict | None:
             continue
         reminder_name = str(reminder.get("name") or "")
         if reminder_name == summary or normalize_reminder_title(reminder_name, scheduled_at) == normalized_summary:
+            if not due_at:
+                missing_due_at += 1
+                continue
+            if not str(reminder.get("completed_at") or "").strip():
+                missing_completed_at += 1
+                continue
             score = _completed_at_match_score(action, reminder)
             if score is not None:
                 matches.append((score, reminder))
-    if not matches:
-        return None
-    return min(matches, key=lambda item: item[0])[1]
+    if len(matches) > 1:
+        return None, "ambiguous_completed_match"
+    if len(matches) == 1:
+        return matches[0][1], None
+    if missing_due_at:
+        return None, "missing_due_at"
+    if missing_completed_at:
+        return None, "missing_completed_at"
+    return None, "missing_from_incomplete_without_completion_date"
 
 
 def _completed_at_match_score(action: dict, reminder: dict) -> timedelta | None:
     completed_at = str(reminder.get("completed_at") or "").strip()
     if not completed_at:
-        return timedelta.max
+        return None
     scheduled_at = str(action.get("scheduled_at") or "")
     try:
         scheduled_time = datetime.strptime(scheduled_at[:16], "%Y-%m-%d %H:%M")
         completed_time = datetime.strptime(completed_at[:16], "%Y-%m-%d %H:%M")
     except ValueError:
-        return timedelta.max
+        return None
     delta = completed_time - scheduled_time
     if is_sleep_terminal_action(action):
         early = timedelta(hours=SLEEP_COMPLETED_MATCH_EARLY_HOURS)
@@ -785,6 +822,20 @@ def _candidate_payload(action: dict, completed_match: dict | None = None) -> dic
     return item
 
 
+
+
+def _human_needed_payload(action: dict, reason: str) -> dict:
+    item = _candidate_payload(action)
+    item["reason"] = reason
+    action_id = item.get("id")
+    if action_id:
+        item["followup_commands"] = [
+            f"nudge log done --id {action_id}",
+            f"nudge log skipped --id {action_id}",
+            f"nudge log partial --id {action_id}",
+        ]
+    return item
+
 def _completion_feedback(action: dict, candidate: dict, reminder_list: str, target_date: date) -> dict:
     completed_at = candidate.get("completed_at")
     if completed_at:
@@ -811,12 +862,38 @@ def _completion_feedback(action: dict, candidate: dict, reminder_list: str, targ
 
 
 def _complete_auto_skipped_sleep_reminders(actions: list[dict], reminder_list: str) -> list[dict]:
+    """Complete auto-skipped sleep reminders in Apple with one helper process per target list.
+
+    Actions that already know their owning list keep it; legacy actions without a
+    list fall back to the list currently being synced.
+    """
+    batch_by_list: dict[str, list[dict]] = {}
+    results_by_id: dict[str, tuple[bool, str]] = {}
+    target_lists: dict[str, str] = {}
+    for action in actions:
+        action_id = str(action.get("id") or "")
+        target_list = str(action.get("reminder_list") or reminder_list)
+        target_lists[action_id] = target_list
+        titles = _possible_reminder_titles(
+            str(action.get("summary") or ""),
+            str(action.get("scheduled_at") or ""),
+        )
+        if not action_id or not titles:
+            results_by_id[action_id] = (False, "missing reminder title")
+            continue
+        batch_by_list.setdefault(target_list, []).append({
+            "id": action_id,
+            "titles": titles,
+            "due_date": str(action.get("scheduled_at") or ""),
+        })
+    for target_list, batch_requests in batch_by_list.items():
+        results_by_id.update(complete_reminders_batch(batch_requests, target_list))
+
     results = []
     for action in actions:
-        summary = str(action.get("summary") or "")
-        scheduled_at = str(action.get("scheduled_at") or "")
-        target_list = str(action.get("reminder_list") or reminder_list)
-        ok, message = _complete_reminder_by_possible_titles(summary, scheduled_at, target_list)
+        action_id = str(action.get("id") or "")
+        target_list = target_lists.get(action_id, reminder_list)
+        ok, message = results_by_id.get(action_id, (False, "missing batch result"))
         item = _candidate_payload(action)
         item["list"] = target_list
         item["apple_completed"] = ok
@@ -825,11 +902,16 @@ def _complete_auto_skipped_sleep_reminders(actions: list[dict], reminder_list: s
     return results
 
 
-def _complete_reminder_by_possible_titles(summary: str, scheduled_at: str, reminder_list: str) -> tuple[bool, str]:
+def _possible_reminder_titles(summary: str, scheduled_at: str) -> list[str]:
     titles = []
     for title in (summary, normalize_reminder_title(summary, scheduled_at)):
         if title and title not in titles:
             titles.append(title)
+    return titles
+
+
+def _complete_reminder_by_possible_titles(summary: str, scheduled_at: str, reminder_list: str) -> tuple[bool, str]:
+    titles = _possible_reminder_titles(summary, scheduled_at)
     if not titles:
         return False, "missing reminder title"
 
@@ -849,7 +931,8 @@ def _payload(
     checked: int,
     open_count: int,
     candidates: list[dict],
-    updated: int,
+    human_needed: list[dict] | None = None,
+    updated: int = 0,
     dry_run: bool,
     auto_skipped_after_sleep: list[dict] | None = None,
     warnings: list[dict] | None = None,
@@ -862,6 +945,8 @@ def _payload(
         "checked": checked,
         "open": open_count,
         "candidates": candidates,
+        "human_needed": human_needed or [],
+        "auto_apply_policy": "requires_apple_completion_date",
         "updated": updated,
         "auto_skipped_after_sleep": auto_skipped_after_sleep or [],
         "warnings": warnings or [],
@@ -878,6 +963,8 @@ def _error_payload(target_date: date, reminder_list: str, error: str, dry_run: b
         "checked": 0,
         "open": 0,
         "candidates": [],
+        "human_needed": [],
+        "auto_apply_policy": "requires_apple_completion_date",
         "updated": 0,
         "auto_skipped_after_sleep": [],
         "errors": [{"code": "REMINDERS_SYNC_FAILED", "message": error}],
@@ -894,9 +981,14 @@ def _emit(payload: dict, json_output: bool) -> None:
     if not payload.get("ok"):
         click.echo(f"  error: {payload['errors'][0]['message']}", err=True)
         return
-    click.echo(f"  checked: {payload.get('checked')} · still open: {payload.get('open')} · candidates: {len(payload.get('candidates', []))}")
+    click.echo(
+        f"  checked: {payload.get('checked')} · still open: {payload.get('open')} · "
+        f"candidates: {len(payload.get('candidates', []))} · human_needed: {len(payload.get('human_needed', []))}"
+    )
     for candidate in payload.get("candidates", []):
         click.echo(f"  - {candidate['id']} {candidate['scheduled_at']} {candidate['summary']}")
+    for item in payload.get("human_needed", []):
+        click.echo(f"  ? {item['id']} {item['scheduled_at']} {item['summary']} · {item.get('reason')}")
     for item in payload.get("auto_skipped_after_sleep", []):
         apple = "Apple completed" if item.get("apple_completed") else "Apple complete failed"
         click.echo(f"  ☾ auto-skipped after sleep: {item['id']} {item['scheduled_at']} {item['summary']} · {apple}")

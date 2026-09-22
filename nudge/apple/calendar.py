@@ -313,6 +313,8 @@ def get_events(
     Returns list of {summary, start, end, calendar} dicts.
     """
     requested_names = _unique_names(calendar_names)
+    if calendar_names is not None and not requested_names and not calendar_name:
+        return []
     if not requested_names and calendar_name:
         requested_names = [calendar_name]
 
@@ -434,13 +436,15 @@ def get_week_events(
 
 
 def delete_event(summary: str, calendar_name: str) -> tuple[bool, str]:
-    """Delete event(s) by summary from a specific calendar."""
+    """Delete one legacy Calendar event by summary from a specific calendar."""
     script = f"""tell application "Calendar"
     tell calendar "{escape(calendar_name)}"
         set matchingEvents to every event whose summary is "{escape(summary)}"
-        repeat with e in matchingEvents
-            delete e
-        end repeat
+        set matchCount to count of matchingEvents
+        if matchCount is 0 then error "Calendar event summary not found: {escape(summary)}"
+        if matchCount is not 1 then error "Calendar event summary is ambiguous: {escape(summary)} (" & matchCount & " matches)"
+        set e to item 1 of matchingEvents
+        delete e
     end tell
 end tell
 "deleted"

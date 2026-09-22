@@ -125,6 +125,11 @@ def sync_command(
             apply_changes=apply_changes,
         )
         remaining_report = _remaining_failures(target_date, overdue_hours)
+        reminder_human_needed = _reminder_human_needed(reminder_results, limit=10)
+        failure_human_needed = _priority_items(
+            remaining_report,
+            limit=max(0, 10 - len(reminder_human_needed)),
+        )
         payload = versioned_payload({
             "ok": _all_ok(reminder_results, health_payload),
             "dry_run": not apply_changes,
@@ -138,7 +143,7 @@ def sync_command(
             "health": health_payload,
             "docs": docs_payload,
             "remaining_failures": remaining_report,
-            "human_needed": _priority_items(remaining_report, limit=10),
+            "human_needed": reminder_human_needed + failure_human_needed,
             "errors": _collect_errors(reminder_results, health_payload),
         })
     except (OSError, ValueError) as exc:
@@ -352,6 +357,31 @@ def _report_now(target_date: date) -> datetime:
     return datetime.combine(target_date + timedelta(days=1), time.min)
 
 
+def _reminder_human_needed(reminder_results: list[dict], *, limit: int) -> list[dict]:
+    result: list[dict] = []
+    if limit <= 0:
+        return result
+    for sync_result in reminder_results:
+        sync_date = sync_result.get("date")
+        for item in sync_result.get("human_needed") or []:
+            followup_commands = list(item.get("followup_commands") or [])
+            normalized = {
+                "source": "reminders.sync_completed",
+                "date": sync_date,
+                "id": item.get("id"),
+                "summary": item.get("summary"),
+                "scheduled_at": item.get("scheduled_at"),
+                "reason": item.get("reason"),
+                "followup_commands": followup_commands,
+            }
+            if followup_commands:
+                normalized["followup_command"] = followup_commands[0]
+            result.append(normalized)
+            if len(result) >= limit:
+                return result
+    return result
+
+
 def _priority_items(report: dict, *, limit: int) -> list[dict]:
     seen: set[str] = set()
     result: list[dict] = []
@@ -418,4 +448,8 @@ def _emit(payload: dict, json_output: bool) -> None:
         f"missing_next_action={failure_summary.get('missing_next_action', 0)}"
     )
     for item in payload.get("human_needed") or []:
-        click.echo(f"  - {item.get('followup_command')}")
+        command = item.get("followup_command")
+        if not command and item.get("followup_commands"):
+            command = item["followup_commands"][0]
+        suffix = f" · {item.get('reason')}" if item.get("reason") else ""
+        click.echo(f"  - {command}{suffix}")

@@ -23,3 +23,27 @@ def _cleanup_test_state() -> None:
 
 
 atexit.register(_cleanup_test_state)
+
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _restore_state_module_globals():
+    """Undo `configure_state()` side effects between tests.
+
+    Commands that take ``--config`` call ``nudge.state.configure_state`` which
+    rebinds module globals outside any monkeypatch. Without restoring them,
+    a later test that expects a missing state directory can silently hit the
+    previous test's temporary database.
+    """
+    import nudge.state as state
+
+    saved = {
+        name: getattr(state, name)
+        for name in ("STATE_DIR", "DB_PATH", "LEGACY_JSON", "_schema_initialized_for", "_migrated")
+        if hasattr(state, name)
+    }
+    yield
+    for name, value in saved.items():
+        setattr(state, name, value)

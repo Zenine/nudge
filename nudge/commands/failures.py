@@ -28,15 +28,23 @@ from nudge.state import get_actions
     type=click.IntRange(1, 100),
     help="Maximum follow-up items to show in text output.",
 )
+@click.option(
+    "--due-soon-minutes",
+    "due_soon_minutes",
+    default=None,
+    type=click.IntRange(1, 24 * 60),
+    help="Also surface pending actions due within this many minutes (proactive follow-up).",
+)
 @click.option("--notify", "send_notification", is_flag=True, help="Send a macOS notification when issues exist")
 @click.option("--json", "json_output", is_flag=True, help="Output machine-readable JSON")
-def failures_command(overdue_hours: int, limit: int, send_notification: bool, json_output: bool):
+def failures_command(overdue_hours: int, limit: int, due_soon_minutes: int | None, send_notification: bool, json_output: bool):
     """Show overdue, blocked, and unexplained actions without mutating state."""
     actions = get_actions()
     report = build_failure_visibility_report(
         actions,
         now=datetime.now(),
         overdue_hours=overdue_hours,
+        due_soon_minutes=due_soon_minutes,
     )
     payload = {"ok": True, "report": report}
     if send_notification:
@@ -67,17 +75,21 @@ def _send_failure_visibility_notification(report: dict) -> dict[str, object]:
         "deferred_open",
         "missing_reason",
         "missing_next_action",
+        "due_soon",
     )):
         return {"sent": False, "reason": "no_issues"}
 
     message = _notification_message(report)
+    subtitle = (
+        f"overdue={summary.get('pending_overdue', 0)} "
+        f"blocked={summary.get('blocked_open', 0)}"
+    )
+    if "due_soon" in summary:
+        subtitle += f" due_soon={summary.get('due_soon', 0)}"
     ok, raw = notify(
         "Nudge 失败/阻塞待跟进",
         message[:240],
-        subtitle=(
-            f"overdue={summary.get('pending_overdue', 0)} "
-            f"blocked={summary.get('blocked_open', 0)}"
-        ),
+        subtitle=subtitle,
     )
     return {
         "sent": bool(ok),
@@ -104,7 +116,7 @@ def _notification_message(report: dict) -> str:
 
 
 def _first_issue(report: dict) -> dict | None:
-    for key in ("pending_overdue", "blocked_open", "missing_reason", "missing_next_action", "deferred_open"):
+    for key in ("due_soon", "pending_overdue", "blocked_open", "missing_reason", "missing_next_action", "deferred_open"):
         items = report.get(key) or []
         if items:
             return items[0]

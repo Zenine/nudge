@@ -7,8 +7,17 @@ from nudge.adapt import apply_adaptation_plan, build_adaptation_plan
 from nudge.brain import NudgeBrainError, suggest_adaptation
 from nudge.errors import classify_apple_error
 from nudge.feedback import feedback_source_summary, format_feedback_source_summary, normalize_feedback
+from nudge.health_insights import health_context_section
+from nudge.commands.profile import latest_profile_context
 from nudge.sleep_reminders import SLEEP_AFTER_SKIP_STATUS, is_neutral_sleep_skip
-from nudge.state import get_actions, get_habit_streaks
+from nudge.state import (
+    get_actions,
+    get_habit_streaks,
+    get_health_daily_summaries,
+    get_health_workouts,
+    get_latest_evaluation,
+    save_evaluation,
+)
 
 
 @click.command("review")
@@ -37,6 +46,7 @@ def _weekly_review(adapt: bool = False, adapt_dry_run: bool = False, adapt_apply
     today = date.today()
     week_start = today - timedelta(days=today.weekday())  # Monday
     week_start_str = week_start.isoformat()
+    week_end_str = (week_start + timedelta(days=7)).isoformat()
     period_end = (today + timedelta(days=1)).isoformat()
 
     actions = get_actions(since=week_start_str, until=period_end)
@@ -54,8 +64,8 @@ def _weekly_review(adapt: bool = False, adapt_dry_run: bool = False, adapt_apply
 
     if total == 0:
         click.echo("  本周暂无执行记录。\n")
-        click.echo("  用 `nudge.py trainer plan` 创建训练计划，")
-        click.echo("  或 `nudge.py \"消息\"` 创建日历事件来开始追踪。")
+        click.echo("  用 `nudge trainer plan` 创建训练计划，")
+        click.echo("  或 `nudge do \"消息\"` 创建日历事件来开始追踪。")
         return
 
     done_score = sum(_action_credit(action) for action in scored_actions)
@@ -91,6 +101,18 @@ def _weekly_review(adapt: bool = False, adapt_dry_run: bool = False, adapt_apply
         click.echo("\n  反馈来源:")
         click.echo(f"    - {format_feedback_source_summary(feedback_sources)}")
 
+    health_context = health_context_section(
+        days=7,
+        fetch_daily=get_health_daily_summaries,
+        fetch_workouts=get_health_workouts,
+    )
+    if health_context:
+        click.echo("\n  " + health_context.replace("\n", "\n  "))
+
+    subjective_context = _weekly_subjective_context(week_start_str, week_end_str)
+    if subjective_context:
+        click.echo("\n  " + subjective_context.replace("\n", "\n  "))
+
     # Per-day breakdown
     click.echo(f"\n  按天分布:")
     day_names = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
@@ -110,23 +132,111 @@ def _weekly_review(adapt: bool = False, adapt_dry_run: bool = False, adapt_apply
         for name, info in streaks.items():
             click.echo(f"    {name}: {info['streak']} 天")
 
+    profile_context = latest_profile_context()
+
     if adapt:
-        _print_adaptation_suggestions(scored_actions, streaks, adapt_dry_run=adapt_dry_run, adapt_apply=adapt_apply)
+        degradation = _adapt_degradation(
+            subjective_missing=not bool(subjective_context),
+            objective_missing=not bool(health_context),
+            subjective_feedback_count=feedback_sources.get("by_type", {}).get("subjective", 0),
+        )
+        _print_adaptation_suggestions(
+            scored_actions,
+            streaks,
+            objective_context=_combined_adapt_context(health_context, subjective_context, profile_context),
+            adapt_dry_run=adapt_dry_run,
+            adapt_apply=adapt_apply,
+            degradation=degradation,
+            period_start=week_start_str,
+            period_end=week_end_str,
+        )
 
     click.echo()
+
+
+def _adapt_degradation(
+    *,
+    subjective_missing: bool,
+    objective_missing: bool,
+    subjective_feedback_count: int,
+) -> dict:
+    """Machine-readable record of whether/why adapt fell back to conservative.
+
+    The prompt already tells the model to avoid aggressive increases when
+    subjective feedback is missing (see ``brain.py``); this captures that same
+    decision as a stable field so dogfood can track when and why it happened.
+    """
+    mode = "conservative" if subjective_missing else "normal"
+    if subjective_missing:
+        reason = "缺少每周主观打分，已回退到保守建议、不激进加量"
+    else:
+        reason = "有每周主观打分，按正常口径给出调整建议"
+    return {
+        "mode": mode,
+        "subjective_missing": subjective_missing,
+        "objective_missing": objective_missing,
+        "subjective_feedback_count": subjective_feedback_count,
+        "reason": reason,
+    }
+
+
+def _weekly_subjective_context(period_start: str, period_end: str) -> str:
+    evaluation = get_latest_evaluation(
+        period="weekly_subjective",
+        period_start=period_start,
+        period_end=period_end,
+    )
+    if not evaluation:
+        return ""
+    metrics = evaluation.get("metrics") or {}
+    ordered = [
+        f"difficulty={metrics.get('difficulty')}" if metrics.get("difficulty") is not None else "",
+        f"recovery={metrics.get('recovery')}" if metrics.get("recovery") is not None else "",
+        f"sleep={metrics.get('sleep')}" if metrics.get("sleep") is not None else "",
+        f"mood={metrics.get('mood')}" if metrics.get("mood") is not None else "",
+    ]
+    lines = ["主观打分:", f"- {' '.join(part for part in ordered if part)}"]
+    note = str(evaluation.get("insights") or "").strip()
+    if note:
+        lines.append(f"- 备注：{note}")
+    return "\n".join(lines)
+
+
+def _combined_adapt_context(*sections: str | None) -> str | None:
+    combined = "\n\n".join(section.strip() for section in sections if section and section.strip())
+    return combined or None
 
 
 def _print_adaptation_suggestions(
     actions: list[dict],
     habit_streaks: dict[str, dict],
+    objective_context: str | None = None,
     adapt_dry_run: bool = False,
     adapt_apply: bool = False,
+    degradation: dict | None = None,
+    period_start: str | None = None,
+    period_end: str | None = None,
 ):
     """Generate and print AI adaptation suggestions."""
     try:
-        suggestions = suggest_adaptation(actions, habit_streaks)
+        suggestions = suggest_adaptation(actions, habit_streaks, objective_context=objective_context)
     except NudgeBrainError as e:
         raise click.ClickException(str(e))
+
+    # Persist a machine-readable record of this adapt run before any apply
+    # confirmation, so the degradation mode/reason is tracked regardless of
+    # whether the user goes on to apply the plan.
+    if degradation is not None and period_start and period_end:
+        save_evaluation(
+            period="weekly_adapt",
+            period_start=period_start,
+            period_end=period_end,
+            metrics=degradation,
+            insights=degradation.get("reason"),
+            adaptations=suggestions or [],
+        )
+        if degradation.get("mode") == "conservative":
+            click.echo("\n  ⚠️ 降级模式：保守（缺主观打分，不激进加量）")
 
     click.echo(f"\n  🧭 调整建议:")
     if not suggestions:
