@@ -10,6 +10,7 @@ from nudge.apple.reminders import complete_reminder, complete_reminder_by_extern
 from nudge.brain import NudgeBrainError, parse_check_in_feedback
 from nudge.config import DEFAULT_REMINDER_LIST, get_defaults, load_config
 from nudge.errors import ErrorReport, classify_llm_error
+from nudge.runtime_log import render_error_report
 from nudge.feedback import STATUS_ALLOWED as _ALLOWED_STATUSES
 from nudge.feedback import STATUS_NEXT_ACTIONS as _NEXT_ACTIONS
 from nudge.feedback import STATUS_REASONS as _REASONS
@@ -543,5 +544,5 @@ def _fail(error: ErrorReport, json_output: bool, dry_run: bool = False) -> None:
     if json_output:
         _emit_json(_error_payload(error, dry_run=dry_run))
     else:
-        click.echo(error.render(), err=True)
+        click.echo(render_error_report("log", error), err=True)
     raise click.exceptions.Exit(1)

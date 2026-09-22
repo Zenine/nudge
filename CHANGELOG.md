@@ -4,6 +4,33 @@
 
 ## [Unreleased]
 
+### 2026-09-22 公私两库合流
+
+代码真源自本日起**只在本公开仓库**；承载个人数据的私有 fork 不再保留平行代码副本，改为以可编辑安装方式依赖本库。合流按逐文件归属清单执行，只并入去个人语境后对任何使用者都成立的内容。
+
+合流范围：
+
+- 并入提醒通知语义 `notify` 全链路（自然语言解析、`do`、`chat`、`agent apply`、MCP、Apple adapter、action hygiene）：`notify=false` 只登记事项不产生到点通知，否则缺省在到期时间提醒。
+- 并入家庭路由 `notification_policy = "prestart_only"`：命中该策略的家庭组事项只保留开始前提醒；配置解析对未知取值显式报错。
+- 并入 `nudge feedback weekly-score`（难度 / 恢复 / 睡眠 / 情绪 1–10 主观打分）与其依赖的 `evaluations` 读写函数。
+- 并入 `nudge profile build/show`：从本地 action 反馈推导偏好时段与阻塞模式，形成长期画像上下文供 `review --adapt` 使用。
+- 并入 `nudge/health_insights.py`：从本地已导入的健康汇总渲染「近 N 天健康数据」段落，接入 `briefing` 与 `review`。
+- 并入 `nudge failures --due-soon-minutes`：把临近到期但未完成的 action 纳入主动跟进，不再只报已逾期。
+- 并入 `nudge skills schedule`：把 Skill dry-run 结果转成 agent 动作请求，经确认 token 分批写入；与既有 `skills start/status/adapt` 运行时并存，`skills/bridge.py` 补齐公开 dry-run 已支持的 `reminder` 动作类型。
+- 并入 LLM 密钥诊断 `SecretsDiagnostic` 与 `doctor` 对明文 `[llm].api_key` 的告警；并入 `apple/common.escape` 对 U+2028 / U+2029 的转义、`apple/calendar.delete_event` 的单条匹配守卫、EventKit `complete-batch` 批量完成。
+- 并入 `reminders sync-completed` 的 `human_needed` 分桶与判定原因（`ambiguous` / `missing_due_at` / `missing_completed_at`），并保持既有多列表归属过滤不被跨列表串写。
+- 并入测试：私有侧回归用例按被测模块合并进公开 `tests/`，与公开既有用例去重；新增公开依赖清单约束测试。
+- 文档回流：架构、命令参考、交互设计、源码模块地图、Skill 契约、Prompt 维护、daemon 回放手册、MCP 安全策略、Apple adapter 调研、部署检查清单回流公开 `docs/`，与既有精简版按主题合并去重；新增中文 `README_CN.md`。
+
+裁决要点：
+
+- `ErrorReport.render()` 保持纯函数，运行日志写入挪到 CLI 输出层。
+- Skill 两条落地路线并存（运行时实例化 与 dry-run → agent 确认写入），不二选一。
+- EventKit `complete` / `delete` 的 title-only 匹配统一采用「必须恰好 1 条」的严格口径，多匹配拒绝而不是循环修改。
+- `reminders sync-completed` 以保守策略为公开默认：没有明确 Apple 完成时间的候选一律进 `human_needed`，不自动写回。
+- 公开运行依赖不含 `playwright`（它只服务于私有 fork 的静态站点测试）；`defusedxml` 等合流后实际用到的第三方包已在公开依赖中，并补了一致性测试。
+- 「私有 → 公开」导出机制整体作废，改写为 [`docs/PRIVATE_FORK_UPGRADE.md`](docs/PRIVATE_FORK_UPGRADE.md)：私有 fork 以 `pip install -e <公开库路径>` 依赖本库，升级前先 `nudge db backup` 再跑 schema 迁移；已失效的 `.nudge-public-export` 标记文件随之删除。
+
 ### Added
 
 - 新增只读命令 `nudge reminders reconcile-missing`，可按日期范围、列表和标题关键词对账本地 `created` / `pending` reminder 与 Apple Reminders 当前状态，并输出 `still_open`、`completed`、`missing` 和 `query_errors`；该命令没有 `--apply`，不写 Apple Reminders，也不改 SQLite。

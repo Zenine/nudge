@@ -117,3 +117,76 @@ def test_package_check_script_is_offline_and_checks_expected_artifacts():
     assert "nudge/skills/builtins/strength-basics-12w.yaml" in content
     assert "tests/" in content
     assert "Health export" in content
+
+
+def test_verify_script_exists_and_is_executable():
+    assert VERIFY.exists()
+    assert os.access(VERIFY, os.X_OK)
+
+
+def test_verify_script_runs_tests_and_cli_smoke_checks():
+    content = VERIFY.read_text()
+
+    required_snippets = [
+        '"$PYTHON_BIN" -m pytest tests/ -q',
+        "bin/nudge --help",
+        "bin/nudge do --help",
+        "bin/nudge do --json --help",
+        "bin/nudge agent --help",
+        "bin/nudge agent apply --help",
+        "bin/nudge mcp --help",
+        "bin/nudge mcp serve --help",
+        "bin/nudge daemon --help",
+        "bin/nudge daemon enqueue --help",
+        "bin/nudge daemon queue --help",
+        "bin/nudge daemon status --help",
+        "bin/nudge daemon run --help",
+        "bin/nudge daemon recover --help",
+        "bin/nudge daemon retry --help",
+        "bin/nudge daemon health --help",
+        "bin/nudge daemon launchd --help",
+        "bin/nudge daemon launchd install --help",
+        "bin/nudge daemon launchd status --help",
+        "bin/nudge daemon launchd start --help",
+        "bin/nudge daemon launchd stop --help",
+        "bin/nudge daemon launchd restart --help",
+        "bin/nudge daemon launchd uninstall --help",
+        "bin/nudge daemon app --help",
+        "bin/nudge daemon app install --help",
+        "bin/nudge daemon app status --help",
+        "bin/nudge daemon app open --help",
+        "bin/nudge daemon app uninstall --help",
+        "bin/nudge daily --help",
+        "bin/nudge daily sync --help",
+        "bin/nudge db --help",
+        "bin/nudge db backup --help",
+        "bin/nudge db export --help",
+        "bin/nudge db restore --help",
+        "bin/nudge docs --help",
+        "bin/nudge docs audit --help",
+        "bin/nudge docs audit --json",
+        "bin/nudge health --help",
+        "bin/nudge health import --help",
+        "bin/nudge health daily --help",
+        "bin/nudge doctor --help",
+        "bin/nudge doctor --json --help",
+        "bin/nudge dogfood --help",
+        "bin/nudge dogfood weekly --help",
+        "bin/nudge failures --help",
+        "bin/nudge feedback interview --help",
+        "bin/nudge briefing --help",
+        "bin/nudge review --help",
+        "bin/nudge schedule --help",
+        "bin/nudge habits --help",
+        "bin/nudge log --help",
+        "bin/nudge log parse --help",
+        "bin/nudge check-in --help",
+        "bin/nudge check-in parse --help",
+        "bin/nudge trainer --help",
+        "bin/nudge skills --help",
+        "bin/nudge skills list",
+        "bin/nudge skills show strength-basics-12w --json",
+        "bin/nudge skills dry-run --help",
+    ]
+    for snippet in required_snippets:
+        assert snippet in content

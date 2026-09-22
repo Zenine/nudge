@@ -1,11 +1,26 @@
 """LLM provider abstraction — supports Anthropic, OpenAI, and OpenAI-compatible APIs."""
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 from nudge.config import DEFAULT_LLM_CONFIG, DEFAULT_SECRETS_PATH
 
 _PROVIDERS = {}  # provider_name -> class
+
+
+@dataclass(frozen=True)
+class SecretsDiagnostic:
+    """Safe diagnostics for the optional local secrets.yaml file.
+
+    ``status`` is one of: ``missing``, ``loaded``, ``unreadable``,
+    ``decode_error``. Values are never exposed.
+    """
+
+    status: str
+    path: Path
+    message: str
+    hint: str = ""
 
 
 class LLMError(Exception):
@@ -258,18 +273,8 @@ def _get_secrets_path(config: dict | None = None) -> Path:
     return DEFAULT_SECRETS_PATH
 
 
-def _load_backup_secrets(config: dict | None = None) -> dict[str, str]:
-    """Load simple key/value secrets from the shared local backup file.
-
-    Missing, unreadable, or complex files produce an empty dict. Secret values
-    must never be logged or surfaced to CLI output.
-    """
-    path = _get_secrets_path(config)
-    try:
-        content = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return {}
-
+def _parse_backup_secrets_content(content: str) -> dict[str, str]:
+    """Parse supported simple key/value secrets without exposing values."""
     secrets = {}
     for raw_line in content.splitlines():
         line = raw_line.strip()
@@ -283,6 +288,56 @@ def _load_backup_secrets(config: dict | None = None) -> dict[str, str]:
         if value:
             secrets[key.lower()] = value
     return secrets
+
+
+def diagnose_backup_secrets(config: dict | None = None) -> SecretsDiagnostic:
+    """Diagnose the optional local secrets.yaml file without revealing values."""
+    path = _get_secrets_path(config)
+    try:
+        content = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return SecretsDiagnostic(
+            "missing",
+            path,
+            "secrets.yaml not found at configured path",
+            "如需用 secrets.yaml 提供 LLM key，请创建该文件并只写本机私密配置；也可使用环境变量。",
+        )
+    except UnicodeDecodeError:
+        return SecretsDiagnostic(
+            "decode_error",
+            path,
+            "secrets.yaml at configured path is not valid UTF-8",
+            "请确认文件使用 UTF-8 文本编码；doctor 不会显示文件内容或密钥值。",
+        )
+    except OSError as e:
+        return SecretsDiagnostic(
+            "unreadable",
+            path,
+            f"secrets.yaml at configured path cannot be read: {e.__class__.__name__}",
+            "请检查文件是否存在、权限是否允许当前终端/IDE/Python 读取；doctor 不会显示文件内容或密钥值。",
+        )
+
+    secret_count = len(_parse_backup_secrets_content(content))
+    return SecretsDiagnostic(
+        "loaded",
+        path,
+        f"secrets.yaml loaded from configured path; parsed {secret_count} key(s)",
+    )
+
+
+def _load_backup_secrets(config: dict | None = None) -> dict[str, str]:
+    """Load simple key/value secrets from the shared local backup file.
+
+    Missing, unreadable, or complex files produce an empty dict. Secret values
+    must never be logged or surfaced to CLI output.
+    """
+    path = _get_secrets_path(config)
+    try:
+        content = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return {}
+
+    return _parse_backup_secrets_content(content)
 
 
 def _resolve_api_key(provider_name: str, config: dict) -> str:

@@ -4,6 +4,7 @@ import sys
 
 import click
 
+from nudge.action_hygiene import normalize_reminder_action
 from nudge.brain import NudgeBrainError, call_llm, suggest_family_routing
 from nudge.apple.calendar import get_today_events
 from nudge.apple.reminders import get_due_today
@@ -83,7 +84,11 @@ def chat_command():
 
         if actions:
             from nudge.apple.adapters import resolve_apple_backends
-            from nudge.commands.do import _rewrite_family_group_actions, execute_action
+            from nudge.commands.do import (
+                _rewrite_family_group_actions,
+                _validate_actions,
+                execute_action,
+            )
             from nudge.config import get_defaults, get_family_aliases, get_family_members, get_family_routing, load_config
             from nudge.state import log_action
 
@@ -101,6 +106,13 @@ def chat_command():
                 routing,
                 llm_router=llm_router,
             )
+
+            actions = [normalize_reminder_action(action) for action in actions]
+            try:
+                _validate_actions(actions)
+            except click.ClickException as exc:
+                click.echo(f"  无法创建：{exc.message}\n")
+                continue
 
             click.echo(f"  检测到 {len(actions)} 个待创建项:")
             for i, a in enumerate(actions, 1):

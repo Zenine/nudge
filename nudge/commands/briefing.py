@@ -14,8 +14,9 @@ from nudge.commands.daemon import build_daemon_health_report
 from nudge.config import get_configured_calendar_names, load_config
 from nudge.errors import classify_apple_error, format_llm_error
 from nudge.failures import build_failure_visibility_report, failure_followup_section
-from nudge.runtime_log import log_warning
-from nudge.state import get_actions, get_habit_streaks
+from nudge.health_insights import health_context_section
+from nudge.runtime_log import log_warning, render_error_report
+from nudge.state import get_actions, get_habit_streaks, get_health_daily_summaries, get_health_workouts
 
 
 @click.command("briefing")
@@ -174,14 +175,18 @@ def _evening_briefing() -> str:
         build_failure_visibility_report(all_actions),
         limit=5,
     )
+    health_context = health_context_section(
+        fetch_daily=get_health_daily_summaries,
+        fetch_workouts=get_health_workouts,
+    )
     daemon_alerts = _daemon_health_alerts()
-    sections = [section for section in [text, pullback, failure_followup, daemon_alerts] if section]
+    sections = [section for section in [text, pullback, failure_followup, health_context, daemon_alerts] if section]
     return "\n\n".join(sections)
 
 
 def _apple_read_error(service: str, target: str, exc: Exception) -> str:
     target_kind = "Calendar" if service == "Calendar" else service
-    return classify_apple_error(service, target_kind, target, str(exc)).render()
+    return render_error_report(f"briefing.{service}", classify_apple_error(service, target_kind, target, str(exc)))
 
 
 def _feedback_pullback(actions: list[dict]) -> str:

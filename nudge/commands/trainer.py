@@ -17,6 +17,7 @@ from nudge.config import (
     load_config,
 )
 from nudge.errors import classify_apple_error
+from nudge.runtime_log import render_error_report
 from nudge.json_contract import versioned_payload
 from nudge.sleep_reminders import SLEEP_AFTER_SKIP_STATUS, is_neutral_sleep_skip
 from nudge.skills.builtins import load_skill_source
@@ -130,7 +131,7 @@ def _legacy_llm_plan(dry_run: bool, config_path: str | None) -> None:
     except Exception as exc:
         target = ", ".join(calendar_names) if calendar_names else "configured calendars"
         raise click.ClickException(
-            classify_apple_error("Calendar", "Calendar", target, str(exc)).render()
+            render_error_report("trainer.Calendar", classify_apple_error("Calendar", "Calendar", target, str(exc)))
         )
 
     click.echo("生成训练计划...\n")
@@ -458,7 +459,7 @@ def _legacy_workout_status() -> None:
     workout_plans = [p for p in plans if p["goal"] == "weekly_workout"]
 
     if not workout_plans:
-        click.echo("没有活跃的训练计划。用 `nudge.py trainer plan` 创建一个。")
+        click.echo("没有活跃的训练计划。用 `nudge trainer plan` 创建一个。")
         return
 
     current_plan = workout_plans[0]

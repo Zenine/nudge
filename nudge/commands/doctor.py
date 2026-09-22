@@ -22,7 +22,7 @@ from nudge.config import (
     load_config,
 )
 from nudge.json_contract import versioned_payload
-from nudge.llm import LLMError, create_provider
+from nudge.llm import LLMError, create_provider, diagnose_backup_secrets
 from nudge.runtime_log import log_doctor_checks
 
 
@@ -85,6 +85,15 @@ def _check_llm(config: dict) -> CheckResult:
         or DEFAULT_LLM_CONFIG["models"]["default"]
     )
 
+    secrets_diag = diagnose_backup_secrets(llm_config)
+    if secrets_diag.status in {"unreadable", "decode_error"}:
+        return CheckResult(
+            FAIL,
+            "LLM",
+            f"{secrets_diag.message}; provider={provider_name}, model={default_model}",
+            secrets_diag.hint,
+        )
+
     try:
         provider = create_provider(llm_config)
     except LLMError as e:
@@ -95,6 +104,19 @@ def _check_llm(config: dict) -> CheckResult:
             PASS,
             "LLM",
             f"provider={provider_name}, model={default_model}, base_url={provider.base_url}",
+        )
+
+    if llm_config.get("api_key"):
+        base_url = getattr(provider, "base_url", None)
+        suffix = f", base_url={base_url}" if base_url else ""
+        return CheckResult(
+            WARN,
+            "LLM",
+            (
+                f"provider={provider_name}, model={default_model}, API key found in "
+                f"config.toml [llm].api_key{suffix}"
+            ),
+            "建议改用 provider 专用环境变量或本机 secrets.yaml；doctor 不会显示 api_key 内容。",
         )
 
     if not getattr(provider, "api_key", ""):
@@ -108,7 +130,8 @@ def _check_llm(config: dict) -> CheckResult:
 
     base_url = getattr(provider, "base_url", None)
     suffix = f", base_url={base_url}" if base_url else ""
-    return CheckResult(PASS, "LLM", f"provider={provider_name}, model={default_model}, API key found{suffix}")
+    secrets_suffix = "; secrets loaded" if secrets_diag.status == "loaded" else ""
+    return CheckResult(PASS, "LLM", f"provider={provider_name}, model={default_model}, API key found{suffix}{secrets_suffix}")
 
 
 def _check_calendar(config: dict) -> CheckResult:

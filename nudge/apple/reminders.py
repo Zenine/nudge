@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import tempfile
 from datetime import date, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -331,6 +332,51 @@ def _run_eventkit_mutation(
     return True, result.stdout.strip() or "changed"
 
 
+
+
+def complete_reminders_batch(
+    requests: list[dict],
+    list_name: str,
+    timeout: int = 30,
+) -> dict[str, tuple[bool, str]]:
+    """Complete multiple reminders with one EventKit helper process.
+
+    Each request must include ``id``, ``titles`` and optional ``due_date``.
+    Matching remains conservative: each request must match exactly one
+    incomplete reminder in the target list.
+    """
+    if not requests:
+        return {}
+    payload = [
+        {
+            "id": str(item.get("id") or ""),
+            "titles": [str(title) for title in item.get("titles") or [] if str(title)],
+            "due_date": str(item.get("due_date") or ""),
+        }
+        for item in requests
+    ]
+    results: dict[str, tuple[bool, str]] = {}
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=True) as handle:
+        json.dump(payload, handle, ensure_ascii=False)
+        handle.flush()
+        ok, raw = _run_eventkit_mutation(
+            "complete-batch",
+            handle.name,
+            list_name,
+            timeout=timeout,
+        )
+    if not ok:
+        return {str(item["id"]): (False, raw) for item in payload}
+    for line in raw.splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) != 3:
+            continue
+        action_id, ok_text, message = parts
+        results[action_id] = (ok_text == "true", message)
+    for item in payload:
+        results.setdefault(str(item["id"]), (False, "missing batch result"))
+    return results
+
 def create_reminder(
     name: str,
     due_date: datetime,
@@ -340,8 +386,18 @@ def create_reminder(
     remind_date: datetime | None = None,
     timeout: int = 30,
     external_id: str | None = None,
+    notify: bool = True,
 ) -> tuple[bool, str]:
-    """Create a Reminder. Returns (success, id/error)."""
+    """Create a Reminder. Returns (success, id/error).
+
+    Apple Reminders can have a due date without a notification alarm. Nudge
+    writes reminders as actionable pings, so default the alarm time to the due
+    date unless the caller explicitly disables notifications.
+    """
+    if notify and remind_date is None:
+        remind_date = due_date
+    if not notify:
+        remind_date = None
     if external_id:
         remind_text = remind_date.strftime("%Y-%m-%d %H:%M") if remind_date else ""
         ok, result = _run_eventkit_mutation(
@@ -602,6 +658,11 @@ end tell
 """
     return script, None
 
+def _is_precise_match_failure(message: str) -> bool:
+    """Return True when EventKit refused an ambiguous or missing exact mutation target."""
+    return "Precise reminder match expected 1, found" in message
+
+
 def complete_reminder(
     name: str,
     list_name: str,
@@ -621,6 +682,8 @@ def complete_reminder(
         if ok:
             return True, result
         eventkit_error = result
+        if _is_precise_match_failure(eventkit_error):
+            return False, f"EventKit failed for precise reminder completion: {eventkit_error}"
     else:
         eventkit_error = ""
 
@@ -717,6 +780,8 @@ def delete_reminder(
         if ok:
             return True, result
         eventkit_error = result
+        if _is_precise_match_failure(eventkit_error):
+            return False, f"EventKit failed for precise reminder deletion: {eventkit_error}"
     else:
         eventkit_error = ""
 

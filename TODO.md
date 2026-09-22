@@ -1,6 +1,6 @@
 # Nudge TODO
 
-> 最后更新：2026-09-08。本文件只登记未落地的增量待办；已交付事实记在 `CHANGELOG.md`，2026-06-20 / 07-04 / 07-05 三批历史审查脉络已迁至 `docs/archive/reviews-2026-06-20-to-2026-07-05.md`。
+> 最后更新：2026-09-22。本文件只登记未落地的增量待办；已交付事实记在 `CHANGELOG.md`，2026-06-20 / 07-04 / 07-05 三批历史审查脉络已迁至 `docs/archive/reviews-2026-06-20-to-2026-07-05.md`。
 >
 > 本轮来源：2026-09-04 与 2026-09-05 两次独立只读审阅的发现，经 2026-09-08 复核逐条去重与再验证后合并至此。写法约定：待办统一用 `- [ ]`，不在本文件写完成态标记（`docs audit` 的 `DOCS_TODO_HISTORY` 规则会据此告警）。
 
@@ -19,10 +19,11 @@
 
 代码本身状态良好，结论是「接近稳定但发布线与验证入口停摆」，不是代码腐坏。
 
+> 2026-09-22 合流后，上表的测试数量、文档审计 warning 数与版本状态需要重新采样；判断后续条目是否成立时以本轮实际运行输出为准，不要直接引用 09-08 的数字。
+
 ## P0 阻塞
 
-- [ ] **公私两库关系裁决（先于一切代码改动）**：本库与私有上游已双向漂移——本库独有 `nudge/reminder_lists.py`、`nudge/commands/reminder_list_backfill.py`，私有库独有 `profile.py` / `health_insights.py` / `skills/bridge.py`；同名文件亦有大幅内容漂移；私有库的一次性导出脚本已因本库是 git 工作树而拒绝执行，自动同步通道事实上断开。二选一并写进 `README.md`：(A) 恢复「私有为唯一真源、公开为导出物」，先把本库独有能力合回私有库；(B) 承认本库已独立演进，停止双向改动。裁决前不要再跑导出脚本；裁决后清理已失效的 `.nudge-public-export` 标记。
-  - 验证方式：两边各自 `scripts/verify.sh` 全绿；对 `nudge/` 做一次 `diff -rq` 复核只剩预期内差异。
+当前无 P0 阻塞。公私两库关系已于 2026-09-22 裁决并合流：代码真源只在本公开仓库，承载个人数据的私有 fork 改为以可编辑安装依赖本库，导出机制作废。合流范围与裁决要点记在 `CHANGELOG.md`，长期规则见 `docs/PRIVATE_FORK_UPGRADE.md`。
 
 ## P1 重要
 
@@ -33,7 +34,7 @@
 - [ ] **发布线停摆，版本号与 CHANGELOG 脱节**：`pyproject.toml` 仍是 `0.5.1`（2026-07-05），而 `CHANGELOG.md` 的 `[Unreleased]` 已积压 Added 2 / Changed 8 / Fixed 15 条，时间跨度到 2026-08-08。外部用户无法通过版本号判断拿到哪一批修复，README 里 pipx 安装的承诺已挂两个月。
   - 建议动作：决定是否切 `0.6.0`（有 `reminders reconcile-missing`、`backfill-lists`、`feedback interview` 等新命令，属 minor），切版时同步版本号与 CHANGELOG 段落标题日期，按 `docs/releasing.md` 走；若明确暂不发布，在本文件写清阻塞原因与触发条件，不要悬着。
 
-- [ ] **依赖无版本约束、无锁文件，`click<8.2` 约定与现实矛盾**：`requirements.txt` / `pyproject.toml` 的 5 个依赖全部无上下界，仓库无锁文件。工程侧曾有 `click<8.2` 的约定，但本仓库任何文件都没有这条记录，而当前环境实际是 click 8.4.2 且 365 个测试全绿。
+- [ ] **依赖无版本约束、无锁文件**：`requirements.txt` / `pyproject.toml` 的 5 个依赖全部无上下界，仓库无锁文件。工程侧曾有 `click<8.2` 的约定，但本仓库任何文件都没有这条记录，而当前环境实际是 click 8.4.2 且测试全绿；合流时并入的 `_runner()` 兼容函数已让测试同时适配 click 8.1 / 8.2+ 的 `mix_stderr` 差异，该约定可视为不再成立。依赖清单一致性现已有 `tests/test_requirements.py` 约束（运行依赖覆盖实际 import、不含 `playwright`、dev 依赖覆盖打包检查、pyproject 与 requirements 同集合），但仍缺版本区间与锁文件。
   - 建议动作：二选一并写进仓库。(a) 约定仍成立 → 在 `requirements.txt` 与 `pyproject.toml` 写死上界，并补一条断言上界存在的测试；(b) 约定已作废（本轮证据倾向于此）→ 显式作废并引入 `requirements.lock` 固定 CI 环境。无论哪条，都在 `CONTRIBUTING.md` 或 `docs/` 留一句环境口径。
 
 ## P2 可选
@@ -49,7 +50,7 @@
 
 - [ ] **命令层承载核心执行逻辑，模块持续变大**：`nudge/state.py` 1680 行、`commands/daemon.py` 1067、`agent.py` 966、`reminders.py` 948、`skills.py` 904；`agent.py` 仍从 `do.py` import 私有 `_action_schema_problems` 与 `execute_action`。真正的执行核心住在 Click 模块内，任何 `do.py` / `agent.py` 重构都会波及 mcp/daemon/trainer/skills，单测难隔离。
   - 建议动作：抽出 `nudge/actions_core.py` 承载 `execute_action`、schema 校验、family 改写、materialize，命令模块只做参数解析与输出。重构后 `verify.sh` 全绿且无行为变更。
-  - 依赖：等公私库裁决落地后再动，避免加剧漂移。
+  - 依赖：公私库裁决已于 2026-09-22 落地（真源只在公开库），漂移风险解除，可以开始；但建议排在发布线恢复之后。
 
 - [ ] **README 无截图或演示**：无任何可视化材料，降低外部「发现→试用」转化。建议在切版发布时一并补 asciinema 或终端录屏 GIF；发布线未通时收益有限，排在发布之后。
 

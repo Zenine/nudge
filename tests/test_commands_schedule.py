@@ -9,7 +9,7 @@ from click.testing import CliRunner
 import nudge.state as state
 from nudge.apple.adapters import WriteResult
 from nudge.cli import cli
-from nudge.commands.schedule import find_free_slots, parse_duration_minutes
+from nudge.commands.schedule import find_free_slots, parse_duration_minutes, schedule_command
 
 
 PUBLIC_CONFIG = {
@@ -184,3 +184,36 @@ class FixedDate(date):
     @classmethod
     def today(cls):
         return cls(2026, 7, 6)
+
+
+def test_schedule_no_events(monkeypatch):
+    """With no calendar events, all work hours are free."""
+    captured = {}
+    monkeypatch.setattr(
+        "nudge.commands.schedule.get_week_events",
+        lambda calendar_names=None: captured.update({"calendar_names": calendar_names}) or [],
+    )
+    monkeypatch.setattr("nudge.commands.schedule.load_config", lambda p=None: {
+        "general": {"default_calendar": "Family"},
+        "calendars": {"work": "工作"},
+        "family": {"dad": {"calendar": "Family"}},
+        "user": {"schedule": {"work_hours": ["09:00", "18:00"]}},
+    })
+
+    runner = CliRunner()
+    result = runner.invoke(schedule_command, [])
+    assert result.exit_code == 0
+    assert "空闲时段" in result.output
+    assert "09:00-18:00" in result.output
+    assert captured["calendar_names"] == ["Family", "工作"]
+
+
+def test_schedule_renders_actionable_calendar_error(monkeypatch):
+    monkeypatch.setattr("nudge.commands.schedule.get_week_events", lambda calendar_names=None: (_ for _ in ()).throw(RuntimeError("timed out")))
+    monkeypatch.setattr("nudge.commands.schedule.load_config", lambda p=None: {"general": {"default_calendar": "Family"}})
+
+    result = CliRunner().invoke(schedule_command, [])
+
+    assert result.exit_code == 1
+    assert "APPLE_TIMEOUT" in result.output
+    assert "nudge doctor" in result.output

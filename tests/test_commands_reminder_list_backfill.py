@@ -1323,7 +1323,10 @@ def test_real_toml_with_invalid_section_shapes_is_config_invalid(
     assert "private bad" not in result.output
 
 
-def test_missing_readonly_database_cli_does_not_create_or_migrate_state(tmp_path) -> None:
+def test_missing_readonly_database_cli_does_not_create_or_migrate_state(tmp_path, monkeypatch) -> None:
+    # NUDGE_STATE_DIR (set session-wide by conftest) wins over [state].dir; clear it
+    # so this test really targets the missing directory from its own config.
+    monkeypatch.delenv("NUDGE_STATE_DIR", raising=False)
     state_dir = tmp_path / "missing-state"
     config_path = tmp_path / "config.toml"
     config_path.write_text(

@@ -387,7 +387,7 @@ def test_sync_completed_never_infers_completion_from_list_absence() -> None:
         },
     ]
 
-    candidates, open_count = reminder_commands._completed_candidates(
+    candidates, _human_needed, open_count = reminder_commands._completed_candidates(
         actions,
         incomplete=[],
         completed=[],
@@ -431,7 +431,7 @@ def test_sync_completed_accepts_positive_match_for_moved_or_legacy_reminder() ->
         },
     ]
 
-    candidates, open_count = reminder_commands._completed_candidates(
+    candidates, _human_needed, open_count = reminder_commands._completed_candidates(
         actions,
         incomplete=[],
         completed=completed,

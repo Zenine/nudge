@@ -92,3 +92,16 @@ def _sanitize_entry(entry: dict) -> dict:
         else:
             sanitized[key] = str(value)[:2000]
     return sanitized
+
+
+def render_error_report(source: str, error, *, config: dict | None = None) -> str:
+    """Render an ErrorReport for terminal output and record it in the runtime log.
+
+    ``ErrorReport.render()`` itself stays a pure formatter; CLI entry points call
+    this helper so that every user-facing error also lands in the runtime log.
+    """
+    try:
+        log_error_report(source, error, config=config)
+    except Exception:  # noqa: BLE001 - logging must never mask the real error
+        pass
+    return error.render()

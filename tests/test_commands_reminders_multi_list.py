@@ -293,11 +293,12 @@ def test_legacy_backfill_skips_actions_owned_by_another_list(monkeypatch) -> Non
 def test_sleep_auto_skip_uses_each_actions_persisted_list(monkeypatch) -> None:
     calls: list[tuple[str, str]] = []
 
-    def fake_complete(summary, scheduled_at, reminder_list):
-        calls.append((summary, reminder_list))
-        return True, "completed"
+    def fake_batch(requests, list_name, timeout=30):
+        for request in requests:
+            calls.append((request["titles"][0], list_name))
+        return {request["id"]: (True, "completed") for request in requests}
 
-    monkeypatch.setattr(reminders, "_complete_reminder_by_possible_titles", fake_complete)
+    monkeypatch.setattr(reminders, "complete_reminders_batch", fake_batch)
 
     results = reminders._complete_auto_skipped_sleep_reminders(
         [

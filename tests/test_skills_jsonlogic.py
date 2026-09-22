@@ -68,3 +68,60 @@ def test_validate_rule_rejects_dangerous_paths_in_all_path_operators(rule):
 def test_validate_rule_rejects_invalid_missing_arguments(rule):
     with pytest.raises(JsonLogicError):
         validate_rule(rule)
+
+
+def test_evaluate_comparison_and_var_lookup():
+    data = {"assessment": {"current_frequency": "never"}}
+
+    assert evaluate({"==": [{"var": "assessment.current_frequency"}, "never"]}, data) is True
+    assert evaluate({"!=": [{"var": "assessment.current_frequency"}, "never"]}, data) is False
+
+
+def test_evaluate_logical_and_collection_operators():
+    data = {
+        "assessment": {"injuries": ["lower_back"], "daily_minutes": 60},
+        "history": {"completion_rate_14d": 0.85},
+    }
+
+    rule = {
+        "and": [
+            {"in": ["lower_back", {"var": "assessment.injuries"}]},
+            {">=": [{"var": "assessment.daily_minutes"}, 45]},
+            {"<": [{"var": "history.completion_rate_14d"}, 0.9]},
+        ]
+    }
+
+    assert evaluate(rule, data) is True
+
+
+def test_evaluate_missing_and_missing_some():
+    data = {"assessment": {"baseline": "zero"}}
+
+    assert evaluate({"missing": ["assessment.baseline", "assessment.goal"]}, data) == [
+        "assessment.goal"
+    ]
+    assert evaluate({"missing_some": [2, ["assessment.baseline", "assessment.goal"]]}, data) == [
+        "assessment.goal"
+    ]
+    assert evaluate({"missing_some": [1, ["assessment.baseline", "assessment.goal"]]}, data) == []
+
+
+def test_evaluate_rejects_unknown_operator():
+    with pytest.raises(JsonLogicError) as exc_info:
+        evaluate({"eval": "assessment.baseline == 'zero'"}, {"assessment": {"baseline": "zero"}})
+
+    assert "eval" in str(exc_info.value)
+
+
+def test_evaluate_rejects_dangerous_var_path():
+    with pytest.raises(JsonLogicError) as exc_info:
+        evaluate({"var": "__class__.__mro__"}, {})
+
+    assert "__class__" in str(exc_info.value)
+
+
+def test_evaluate_missing_some_rejects_bool_minimum():
+    # ``isinstance(True, int)`` is True, so a bare int check let a boolean pass
+    # as minimum_required. It must be rejected as a bad argument shape.
+    with pytest.raises(JsonLogicError):
+        evaluate({"missing_some": [True, ["assessment.baseline"]]}, {"assessment": {}})

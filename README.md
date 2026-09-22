@@ -1,5 +1,7 @@
 # Nudge
 
+[English](README.md) · [简体中文](README_CN.md)
+
 Nudge is a local-first macOS CLI base for turning structured or natural-language plans into Apple Calendar, Reminders, Notes, and Clock actions.
 
 This public repository contains the reusable runtime, CLI, Apple adapters, daemon, MCP wrapper, and installation scripts. Personal plans, local configuration, private state, API keys, Health exports, and user-specific documents are intentionally not included.
@@ -37,6 +39,10 @@ LLM provider 选择见 [`docs/llm.md`](docs/llm.md)。
 公开示例库见 [`examples/README.md`](examples/README.md)。
 发布记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
+Deeper references: [`docs/design.md`](docs/design.md) (interaction design), [`docs/module-map.md`](docs/module-map.md) (source map), [`docs/skill-spec.md`](docs/skill-spec.md) (Skill contract), [`docs/prompt-playbook.md`](docs/prompt-playbook.md) (prompt maintenance), [`docs/daemon-runbook.md`](docs/daemon-runbook.md) (daemon recovery), [`docs/mcp-security.md`](docs/mcp-security.md) (MCP boundaries), [`docs/apple-adapter-survey.md`](docs/apple-adapter-survey.md) (Apple backend survey), [`docs/deployment-checklist.md`](docs/deployment-checklist.md) (local deployment), [`docs/releasing.md`](docs/releasing.md) (release checklist).
+
+If you maintain a private fork that holds your own config, state, personal plans, or site content, keep code out of it and depend on this repository instead: see [`docs/PRIVATE_FORK_UPGRADE.md`](docs/PRIVATE_FORK_UPGRADE.md).
+
 ## Recommended Flow
 
 1. `nudge doctor` checks config, LLM keys, and Apple permissions.
@@ -58,12 +64,17 @@ Nudge exposes both a human-friendly CLI and machine-friendly agent/MCP entrypoin
 | --- | --- | --- | --- |
 | Natural-language actions | `nudge "..."`, `nudge do`, `nudge chat`, `nudge schedule` | Turn a request into Calendar / Reminders / Notes / Clock actions; find and optionally book calendar slots. | Apple apps when not using `--dry-run`; SQLite action log for executed writes |
 | Reminders and completion tracking | `nudge reminders sync-completed`, `nudge reminders reconcile-missing`, `nudge reminders backfill-ids`, `nudge reminders backfill-lists`, `nudge log`, `nudge check-in`, `nudge feedback interview` | Reconcile one or more Reminders lists, read-only classify missing/completed Apple Reminders, backfill external IDs or legacy list ownership, and record outcomes. `backfill-lists` reads `[reminders].sync_lists` by default; repeated `--list` overrides that scope. | SQLite; `backfill-ids --apply` writes Reminders; sleep-termination cascades from `sync-completed --apply` may best-effort complete later Apple sleep reminders; `reconcile-missing` and `backfill-lists` never mutate Apple data |
-| Health, habits, daily review | `nudge health import/daily`, `nudge habits`, `nudge daily sync`, `nudge review`, `nudge failures`, `nudge dogfood`, `nudge briefing` | Import Apple Health exports, inspect habits/streaks, generate daily/weekly review context, and surface stale or failed actions. | SQLite; notifications only when explicitly requested |
-| Skills and trainer | `nudge skills list/show/validate/dry-run/start/status/adapt/create/update/delete`, `nudge trainer plan/log/status` | Run deterministic skill templates such as `strength-basics-12w`, adapt future weeks from logged metrics, and keep trainer compatibility. | SQLite and Apple apps for `start`/`adapt --apply` / trainer writes; dry-run paths are read-only |
+| Health, habits, daily review | `nudge health import/daily`, `nudge habits`, `nudge daily sync`, `nudge review`, `nudge failures`, `nudge dogfood`, `nudge briefing` | Import Apple Health exports, inspect habits/streaks, generate daily/weekly review context, and surface stale or failed actions. Briefings and reviews can include a recent-health summary rendered by `nudge/health_insights.py` from locally imported data; `nudge failures --due-soon-minutes N` also surfaces items that are close to due, not only overdue ones. | SQLite; notifications only when explicitly requested |
+| Coaching context | `nudge feedback weekly-score`, `nudge feedback today/apply/interview`, `nudge profile build/show` | Record a 1-10 subjective weekly score (difficulty / recovery / sleep / mood) and derive a longer-term profile (preferred time slots, recurring blockers) from your own local action feedback. Both feed `nudge review --adapt` as extra context. | SQLite `evaluations` only; never writes to Apple apps |
+| Skills and trainer | `nudge skills list/show/validate/dry-run/start/status/adapt/schedule/create/update/delete`, `nudge trainer plan/log/status` | Run deterministic skill templates such as `strength-basics-12w`, adapt future weeks from logged metrics, and keep trainer compatibility. Two landing routes coexist: `skills start/status/adapt` materializes a tracked plan instance directly, while `nudge skills schedule` turns a dry-run into an agent-apply request so the batch goes through the same confirmation-token path as external automation. | SQLite and Apple apps for `start`/`adapt --apply` / `schedule --yes` / trainer writes; dry-run paths are read-only |
 | Agent / MCP automation | `nudge agent apply/status`, `nudge mcp serve` | Let trusted local automation submit structured action JSON or expose MCP tools. | Apple apps and SQLite after optional local-auth checks; dry-run paths are safe previews |
 | Daemon, database, docs, diagnostics | `nudge daemon ...`, `nudge db backup/export/restore`, `nudge docs audit`, `nudge doctor` | Queue/retry background work, manage launchd/app helpers, back up local state, audit docs, and diagnose config/permissions. | SQLite/db files; launchd/app helper commands alter local automation only when explicitly run |
 
 `nudge <text>` is intentionally equivalent to `nudge do <text>` when the first argument is not a known subcommand. Use `--dry-run` or command-specific preview flags before any real Apple write.
+
+### Reminder notification control
+
+Reminder actions carry an optional `notify` field across the whole chain (natural language parsing, `do`, `chat`, `agent apply`, MCP, and the Apple adapters). `notify=false` records the item without an alert time, so it shows up in Reminders without firing a notification; otherwise the reminder defaults to alerting on its due date. Family routing rules can additionally set `notification_policy = "prestart_only"` to keep only the pre-start alert for routed group events. See [`docs/configuration.md`](docs/configuration.md) and [`docs/commands.md`](docs/commands.md).
 
 ## Skills Lifecycle
 

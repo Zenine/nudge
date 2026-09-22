@@ -12,12 +12,12 @@ def habits_command(action, habit_name):
     """View habit streaks or log a habit.
 
     Examples:
-        nudge.py habits              # show all streaks
-        nudge.py habits log reading  # mark 'reading' as done today
+        nudge habits              # show all streaks
+        nudge habits log reading  # mark 'reading' as done today
     """
     if action == "log":
         if not habit_name:
-            click.echo("请指定习惯名称: nudge.py habits log <name>")
+            click.echo("请指定习惯名称: nudge habits log <name>")
             return
         update_habit(habit_name)
         streaks = get_habit_streaks()
@@ -29,7 +29,7 @@ def habits_command(action, habit_name):
     if not streaks:
         click.echo("暂无习惯记录。\n")
         click.echo("在 config.toml [user.habits] 中配置要追踪的习惯，")
-        click.echo("然后用 `nudge.py habits log <habit>` 打卡。")
+        click.echo("然后用 `nudge habits log <habit>` 打卡。")
         return
 
     click.echo("🔥 习惯打卡\n")

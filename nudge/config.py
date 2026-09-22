@@ -161,6 +161,8 @@ def get_family_routing(config: dict) -> dict:
         display = {}
     threshold = _float_or_default(routing.get("llm_confidence_threshold", 0.65), 0.65)
     rules = routing.get("rules", [])
+    normalized_rules = list(rules) if isinstance(rules, list) else []
+    _validate_family_notification_policies(normalized_rules)
     return {
         "default": routing.get("default", "all"),
         "llm_fallback": bool(routing.get("llm_fallback", False)),
@@ -169,8 +171,23 @@ def get_family_routing(config: dict) -> dict:
             "title_prefix": bool(display.get("title_prefix", True)),
             "body_assignee_note": bool(display.get("body_assignee_note", False)),
         },
-        "rules": list(rules) if isinstance(rules, list) else [],
+        "rules": normalized_rules,
     }
+
+
+def _validate_family_notification_policies(rules: list) -> None:
+    """Reject unknown notification policies instead of silently adding alerts."""
+    allowed = {"prestart_only"}
+    for index, rule in enumerate(rules, 1):
+        if not isinstance(rule, dict) or "notification_policy" not in rule:
+            continue
+        policy = rule.get("notification_policy")
+        if policy not in allowed:
+            rule_id = rule.get("id") or f"rule {index}"
+            raise ValueError(
+                f"family routing rule {rule_id} has unsupported "
+                f"notification_policy: {policy}"
+            )
 
 
 def _float_or_default(value: object, default: float) -> float:

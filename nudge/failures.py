@@ -18,13 +18,23 @@ def build_failure_visibility_report(
     *,
     now: datetime | None = None,
     overdue_hours: int = 24,
+    due_soon_minutes: int | None = None,
 ) -> dict[str, Any]:
-    """Build a read-only report for overdue, blocked, and unexplained actions."""
+    """Build a read-only report for overdue, blocked, and unexplained actions.
+
+    When ``due_soon_minutes`` is set, also collect a ``due_soon`` bucket of
+    pending actions scheduled within the next ``due_soon_minutes`` (proactive
+    "该提醒了" follow-up). It is opt-in and never counted as a failure in
+    ``total_open_issues``, so default reports and their consumers are unchanged.
+    """
     now = now or datetime.now()
     overdue_hours = max(1, int(overdue_hours or 24))
     cutoff = now - timedelta(hours=overdue_hours)
+    due_soon_enabled = due_soon_minutes is not None and int(due_soon_minutes) > 0
+    due_soon_cutoff = now + timedelta(minutes=int(due_soon_minutes)) if due_soon_enabled else None
 
     pending_overdue: list[dict] = []
+    due_soon: list[dict] = []
     blocked_open: list[dict] = []
     deferred_open: list[dict] = []
     missing_reason: list[dict] = []
@@ -41,6 +51,13 @@ def build_failure_visibility_report(
             and scheduled <= cutoff
         ):
             pending_overdue.append(item)
+        if (
+            due_soon_enabled
+            and status in _PENDING_STATUSES
+            and scheduled is not None
+            and now <= scheduled <= due_soon_cutoff
+        ):
+            due_soon.append(item)
         if status == "blocked":
             blocked_open.append(item)
         if status == "deferred":
@@ -59,33 +76,39 @@ def build_failure_visibility_report(
         "missing_reason": len(missing_reason),
         "missing_next_action": len(missing_next_action),
     }
-    return {
+    total_open_issues = sum(summary.values())
+    report = {
         "ok": True,
         "overdue_hours": overdue_hours,
         "summary": summary,
-        "total_open_issues": sum(summary.values()),
+        "total_open_issues": total_open_issues,
         "pending_overdue": pending_overdue,
         "blocked_open": blocked_open,
         "deferred_open": deferred_open,
         "missing_reason": missing_reason,
         "missing_next_action": missing_next_action,
     }
+    if due_soon_enabled:
+        summary["due_soon"] = len(due_soon)
+        report["due_soon"] = due_soon
+        report["due_soon_minutes"] = int(due_soon_minutes)
+    return report
 
 
 def render_failure_visibility_report(report: dict, *, limit: int = 10) -> str:
     """Render a compact Chinese failure visibility report."""
     summary = report.get("summary") or {}
-    lines = [
-        "失败/阻塞可见性",
-        (
-            "summary: "
-            f"overdue={summary.get('pending_overdue', 0)} "
-            f"blocked={summary.get('blocked_open', 0)} "
-            f"deferred={summary.get('deferred_open', 0)} "
-            f"missing_reason={summary.get('missing_reason', 0)} "
-            f"missing_next_action={summary.get('missing_next_action', 0)}"
-        ),
-    ]
+    summary_line = (
+        "summary: "
+        f"overdue={summary.get('pending_overdue', 0)} "
+        f"blocked={summary.get('blocked_open', 0)} "
+        f"deferred={summary.get('deferred_open', 0)} "
+        f"missing_reason={summary.get('missing_reason', 0)} "
+        f"missing_next_action={summary.get('missing_next_action', 0)}"
+    )
+    if "due_soon" in summary:
+        summary_line += f" due_soon={summary.get('due_soon', 0)}"
+    lines = ["失败/阻塞可见性", summary_line]
     items = _priority_items(report)[: max(1, limit)]
     if not items:
         lines.append("暂无失败/阻塞待跟进。")
@@ -126,7 +149,7 @@ def failure_followup_section(report: dict, *, limit: int = 5) -> str:
 def _priority_items(report: dict) -> list[dict]:
     seen: set[str] = set()
     result: list[dict] = []
-    for key in ("pending_overdue", "blocked_open", "missing_reason", "missing_next_action", "deferred_open"):
+    for key in ("due_soon", "pending_overdue", "blocked_open", "missing_reason", "missing_next_action", "deferred_open"):
         for item in report.get(key) or []:
             item_id = str(item.get("id") or "")
             marker = item_id or json.dumps(item, ensure_ascii=False, sort_keys=True)

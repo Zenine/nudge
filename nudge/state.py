@@ -1072,6 +1072,68 @@ def get_action(action_id: str) -> dict | None:
     return dict(row) if row else None
 
 
+# ── Evaluations / subjective reviews ───────────────────────────
+
+def save_evaluation(
+    *,
+    period: str,
+    period_start: str,
+    period_end: str,
+    metrics: dict | None = None,
+    insights: str | None = None,
+    adaptations: list | dict | None = None,
+    plan_id: str | None = None,
+) -> int:
+    """Persist one evaluation row and return its SQLite id."""
+    metrics_json = json.dumps(metrics or {}, ensure_ascii=False, sort_keys=True)
+    adaptations_json = json.dumps(adaptations, ensure_ascii=False, sort_keys=True) if adaptations is not None else None
+    with _db() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO evaluations
+                (plan_id, period, period_start, period_end, metrics, insights, adaptations)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (plan_id, period, period_start, period_end, metrics_json, insights, adaptations_json),
+        )
+        return int(cursor.lastrowid)
+
+
+def get_latest_evaluation(
+    *,
+    period: str,
+    period_start: str | None = None,
+    period_end: str | None = None,
+) -> dict | None:
+    """Return latest evaluation matching period and optional window."""
+    with _db() as conn:
+        query = "SELECT * FROM evaluations WHERE period = ?"
+        params: list[object] = [period]
+        if period_start:
+            query += " AND period_start = ?"
+            params.append(period_start)
+        if period_end:
+            query += " AND period_end = ?"
+            params.append(period_end)
+        query += " ORDER BY created_at DESC, id DESC LIMIT 1"
+        row = conn.execute(query, params).fetchone()
+    return _evaluation_row(row) if row else None
+
+
+def _evaluation_row(row: sqlite3.Row) -> dict:
+    item = dict(row)
+    for key, fallback in (("metrics", {}), ("adaptations", None)):
+        value = item.get(key)
+        if value is None:
+            item[key] = fallback
+            continue
+        try:
+            item[key] = json.loads(value)
+        except (TypeError, json.JSONDecodeError):
+            item[key] = fallback
+    return item
+
+
 # ── Plan management ─────────────────────────────────────────────
 
 

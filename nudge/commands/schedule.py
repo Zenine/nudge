@@ -12,6 +12,7 @@ from nudge.apple.adapters import resolve_apple_backends
 from nudge.apple.calendar import get_week_events
 from nudge.config import get_configured_calendar_names, get_defaults, get_user_profile, load_config
 from nudge.errors import classify_apple_error
+from nudge.runtime_log import render_error_report
 from nudge.json_contract import versioned_payload
 from nudge.state import log_action
 
@@ -56,7 +57,7 @@ def schedule_command(request, config_path, duration, json_output, dry_run, book,
     except Exception as exc:
         target = ", ".join(calendar_names) if calendar_names else "configured calendars"
         raise click.ClickException(
-            classify_apple_error("Calendar", "Calendar", target, str(exc)).render()
+            render_error_report("schedule.Calendar", classify_apple_error("Calendar", "Calendar", target, str(exc)))
         )
 
     today = date.today()

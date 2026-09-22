@@ -14,10 +14,21 @@ DAEMON_ALERT_TEXT = "\n".join([
 ])
 
 
+def _runner() -> CliRunner:
+    """click 8.2 起 stderr 默认独立捕获并移除了 mix_stderr；8.1 必须显式关掉混流。
+
+    本库当前是 click 8.1.8，公开库是 8.4.2，两边都要能跑，故做版本兼容。
+    """
+    try:
+        return CliRunner(mix_stderr=False)
+    except TypeError:
+        return CliRunner()
+
+
 def _run(monkeypatch, *, text, notify_impl, args=("--notify",)):
     monkeypatch.setattr(briefing_module, "_morning_briefing", lambda: text)
     monkeypatch.setattr(briefing_module, "notify", notify_impl)
-    return CliRunner().invoke(
+    return _runner().invoke(
         briefing_module.briefing_command,
         ["morning", *args],
         prog_name="nudge",
