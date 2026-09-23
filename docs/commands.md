@@ -923,7 +923,7 @@ Nudge 本地状态目录由三层决定：`NUDGE_STATE_DIR` 环境变量优先�
 dir = ".nudge"
 ```
 
-- `db backup` 使用 SQLite online backup API 创建一致的 `.db` 备份；不传 `--output` 时写入状态目录的 `backups/nudge-YYYYmmdd-HHMMSS.db`。
+- `db backup` 使用 SQLite online backup API 创建一致的 `.db` 备份，**不会在备份前初始化或迁移源库**；源库不存在时失败，不创建空库。源库存在非空 WAL / rollback journal 或备份期间发生变化时安全失败，不会静默遗漏未检查点数据。先确认没有其它进程持有状态库，再通过合适的状态命令处理日志并重试；不要手工删除 sidecar 文件。不传 `--output` 时写入状态目录的 `backups/nudge-YYYYmmdd-HHMMSS-<随机值>.db`。
 - `db export` 输出 portable SQL dump；不传 `--output` 时写入状态目录的 `exports/nudge-YYYYmmdd-HHMMSS.sql`。
 - `db restore` 支持从 `.db` 或 `.sql` 恢复，必须显式带 `--yes`，否则返回 `RESTORE_CONFIRMATION_REQUIRED`；真实替换前会先创建 `backups/nudge-before-restore-YYYYmmdd-HHMMSS.db`，并对来源和恢复后的库做 `PRAGMA integrity_check`。这是本地状态的高风险写操作。
 

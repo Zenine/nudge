@@ -26,7 +26,7 @@ def db_command():
 def backup_command(output: str | None, json_output: bool):
     """Create a consistent SQLite .db backup."""
     try:
-        path = backup_database(Path(output).expanduser() if output else None)
+        path = backup_database(Path(output).expanduser() if output else None, initialize=False)
         payload = versioned_payload({
             "ok": True,
             "path": str(path),
@@ -80,8 +80,8 @@ def restore_command(source: str, yes: bool, json_output: bool):
     _emit(payload, json_output)
 
 
-def backup_database(output: Path | None = None, *, initialize: bool = True) -> Path:
-    """Create a consistent .db copy using SQLite's online backup API."""
+def backup_database(output: Path | None = None, *, initialize: bool = False) -> Path:
+    """Create a consistent .db copy; do not initialize the source by default."""
     source_identity = None
     if initialize:
         _ensure_db_exists()
@@ -172,7 +172,10 @@ def restore_database(source: Path) -> dict:
         raise FileNotFoundError(source)
 
     _ensure_db_exists()
-    pre_restore_backup = backup_database(state.STATE_DIR / "backups" / f"nudge-before-restore-{_timestamp()}.db")
+    pre_restore_backup = backup_database(
+        state.STATE_DIR / "backups" / f"nudge-before-restore-{_timestamp()}.db",
+        initialize=True,
+    )
     staging = state.STATE_DIR / f".restore-{_timestamp()}.db"
     staging.parent.mkdir(parents=True, exist_ok=True)
 
