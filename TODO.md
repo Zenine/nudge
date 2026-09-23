@@ -39,6 +39,12 @@
 
 ## P2 可选
 
+- [ ] **裁定 `config.local.toml` 覆盖层：实现，还是宣告不存在**（2026-09-23 由私有库带出）。私有库 `nudge-private/.gitignore:12` 忽略 `config.local.toml` 并注释为「本机覆盖层」，读起来像本仓存在一套「基础配置 + 本机覆盖」机制；实测本仓 `nudge/config.py` 中 `config.local` / `local.toml` / overlay **零命中**，`load_config()` 只有「显式路径 → `NUDGE_CONFIG` → 源码树 `config.toml` → XDG」四级查找，**无任何合并逻辑**。
+  - 背景：私有库 2026-09-23 裁决 `config.toml` 继续跟踪，而 Mac 与 Linux 两台机器共用该文件，机器差异当前靠 `NUDGE_STATE_DIR` 环境变量解决（`resolve_state_dir()` 第一优先读它，已验证可用、无需改代码）。
+  - 选项 A（本仓实现）：`load_config()` 读到 `config.toml` 后，若同目录存在 `config.local.toml` 则浅合并，并补测试与文档。
+  - 选项 B（不实现）：本仓明确该文件名无效，由私有库改 `.gitignore` 注释；机器差异一律走环境变量。
+  - 在裁定前，**不得让文档或 agent 依赖 `config.local.toml` 生效**。对应条目见 `nudge-private/TODO.md` §3。
+
 - [ ] **文档审计常年 5 条 warning，会持续生成维护 action**：当前 4 条 `DOCS_STALE_PLAN`（`docs/superpowers/plans/` 下 2026-07-04 ×2、07-05、07-19 四份计划）、1 条 `DOCS_ARCHIVE_CANDIDATE`（`docs/superpowers/specs/2026-07-19-reminder-list-backfill-design.md`），errors 0。`nudge/commands/daily.py` 约 324 行的触发条件是 `errors > 0 or warnings > 0`，于是 `daily sync --apply` 会一直维持一条关不掉的 docs 维护 action，属典型告警疲劳源。
   - 建议动作：把已落地的 4 份计划与 1 份 spec 归档到 `docs/superpowers/archive/`（审计对 `docs/**/archive/**` 免检），并考虑把维护 action 触发条件收紧到 `errors > 0`，warning 只在报告里展示。
 
