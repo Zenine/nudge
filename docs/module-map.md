@@ -10,7 +10,7 @@
 2. `nudge/commands/do.py`：自然语言到 Apple action 的主路径，串起配置、LLM、dry-run、写入和状态记录。
 3. `nudge/commands/agent.py`：结构化 action 中转入口，不调用 LLM，是其他本机 agent 和 MCP wrapper 的稳定底座。
 4. `nudge/apple/`：Apple Calendar / Reminders / Notes / Clock 的真实适配层。
-5. `nudge/state.py`：SQLite 本地状态，包括 action、habit、evaluation / profile memory、chat history 和健康汇总。
+5. `nudge/state.py`：SQLite 本地状态，包括 action、habit、evaluation / profile memory、chat history 和健康汇总。已存在的未结束提醒可通过 `reschedule_reminder_actions()` 按旧日期和外部ID快照原位改期；该接口只改本地日期，调用方先备份、协调Apple改期并回读，不新建或迁移数据库。
 6. `nudge/brain.py` 与 `nudge/llm.py`：自然语言解析、briefing、review、adapt 等 LLM 编排。
 7. `nudge/skills/`：Skill Spec 验证和确定性规则执行，不碰 LLM、shell、网络或 Apple 应用。
 

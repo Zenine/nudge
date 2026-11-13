@@ -137,6 +137,63 @@ def test_log_action():
     assert actions[0]["summary"] == "Team meeting"
     assert actions[0]["status"] == "created"
 
+def test_reschedule_reminder_actions_preserves_identity_and_other_fields():
+    from nudge import state
+
+    action_a = state.log_action("reminder", "任务 A", "2026-08-03 09:00", external_id="nudge://reminder/test-a", reminder_list="Tasks")
+    action_b = state.log_action("reminder", "任务 B", "2026-08-04 09:00", external_id="nudge://reminder/test-b", reminder_list="Tasks")
+    before = {key: state.get_action(key) for key in (action_a, action_b)}
+    updates = [
+        {"action_id": action_a, "expected_scheduled_at": "2026-08-03 09:00", "expected_external_id": "nudge://reminder/test-a", "scheduled_at": "2026-08-03 10:00"},
+        {"action_id": action_b, "expected_scheduled_at": "2026-08-04 09:00", "expected_external_id": "nudge://reminder/test-b", "scheduled_at": "2026-08-09 09:00"},
+    ]
+
+    assert state.reschedule_reminder_actions(updates) == [action_a, action_b]
+    for update in updates:
+        assert state.get_action(update["action_id"]) == before[update["action_id"]] | {"scheduled_at": update["scheduled_at"]}
+    assert len(state.get_actions()) == 2
+
+
+@pytest.mark.parametrize("changed_field", ["expected_scheduled_at", "expected_external_id"])
+def test_reschedule_reminder_actions_rejects_stale_batch_atomically(changed_field):
+    from nudge import state
+
+    action_a = state.log_action("reminder", "任务 A", "2026-08-03 09:00", external_id="nudge://reminder/test-a")
+    action_b = state.log_action("reminder", "任务 B", "2026-08-04 09:00", external_id="nudge://reminder/test-b")
+    before = {key: state.get_action(key) for key in (action_a, action_b)}
+    updates = [
+        {"action_id": action_a, "expected_scheduled_at": "2026-08-03 09:00", "expected_external_id": "nudge://reminder/test-a", "scheduled_at": "2026-08-03 10:00"},
+        {"action_id": action_b, "expected_scheduled_at": "2026-08-04 09:00", "expected_external_id": "nudge://reminder/test-b", "scheduled_at": "2026-08-09 09:00"},
+    ]
+    updates[1][changed_field] = "2026-08-05 09:00" if changed_field == "expected_scheduled_at" else "nudge://reminder/changed"
+
+    with pytest.raises(ValueError, match="changed"):
+        state.reschedule_reminder_actions(updates)
+    assert {key: state.get_action(key) for key in before} == before
+
+
+@pytest.mark.parametrize("action_type,status", [("calendar_event", "created"), ("reminder", "done"), ("reminder", "skipped")])
+def test_reschedule_reminder_actions_refuses_non_pending_reminders(action_type, status):
+    from nudge import state
+
+    action_id = state.log_action(action_type, "任务", "2026-08-03 09:00", external_id="nudge://reminder/test", status=status)
+    before = state.get_action(action_id)
+    with pytest.raises(ValueError, match="pending reminder"):
+        state.reschedule_reminder_actions([{"action_id": action_id, "expected_scheduled_at": "2026-08-03 09:00", "expected_external_id": "nudge://reminder/test", "scheduled_at": "2026-08-03 10:00"}])
+    assert state.get_action(action_id) == before
+
+
+@pytest.mark.parametrize("new_time", ["2026-08-03", "2026-02-30 10:00", "2026-8-3 9:00"])
+def test_reschedule_reminder_actions_rejects_invalid_dates(new_time):
+    from nudge import state
+
+    action_id = state.log_action("reminder", "任务", "2026-08-03 09:00", external_id="nudge://reminder/test")
+    before = state.get_action(action_id)
+    with pytest.raises(ValueError):
+        state.reschedule_reminder_actions([{"action_id": action_id, "expected_scheduled_at": "2026-08-03 09:00", "expected_external_id": "nudge://reminder/test", "scheduled_at": new_time}])
+    assert state.get_action(action_id) == before
+
+
 def test_complete_action():
     from nudge.state import complete_action, get_actions, log_action
 

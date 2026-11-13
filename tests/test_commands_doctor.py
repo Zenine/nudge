@@ -34,6 +34,10 @@ BASE_CONFIG = {
 def _patch_common(monkeypatch, config=None, provider=None):
     monkeypatch.setattr("nudge.commands.doctor.load_config", lambda p=None: config or BASE_CONFIG)
     monkeypatch.setattr(
+        "nudge.commands.doctor.diagnose_backup_secrets",
+        lambda llm_config: SimpleNamespace(status="not_configured", message="", hint=""),
+    )
+    monkeypatch.setattr(
         "nudge.commands.doctor.create_provider",
         lambda llm_config: provider or SimpleNamespace(api_key="secret", base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"),
     )

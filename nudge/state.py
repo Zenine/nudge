@@ -601,6 +601,60 @@ def log_action(
     return action_id
 
 
+def reschedule_reminder_actions(updates: list[dict]) -> list[str]:
+    """Atomically change pending reminder dates after matching their snapshots.
+
+    This only updates the local ledger. Callers must back up state and coordinate
+    the corresponding Apple changes; IDs, feedback and other fields are retained.
+    An existing database is required and is never initialized or migrated here.
+    """
+    if not isinstance(updates, list) or not updates:
+        raise ValueError("reschedule updates must be a non-empty list")
+    prepared = []
+    seen = set()
+    for update in updates:
+        fields = ("action_id", "expected_scheduled_at", "expected_external_id", "scheduled_at")
+        if not isinstance(update, dict) or any(
+            not isinstance(update.get(key), str) or not update[key].strip() for key in fields
+        ):
+            raise ValueError("reschedule fields must be non-empty strings")
+        if update["action_id"] in seen:
+            raise ValueError("reschedule action IDs must be unique")
+        for key in ("expected_scheduled_at", "scheduled_at"):
+            parsed = datetime.strptime(update[key], "%Y-%m-%d %H:%M")
+            if parsed.strftime("%Y-%m-%d %H:%M") != update[key]:
+                raise ValueError("reschedule dates must use YYYY-MM-DD HH:MM")
+        seen.add(update["action_id"])
+        prepared.append({key: update[key] for key in fields})
+
+    conn = _get_existing_write_conn()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        for update in prepared:
+            current = conn.execute("SELECT * FROM actions WHERE id = ?", (update["action_id"],)).fetchone()
+            if current is None:
+                raise ValueError("reschedule action is missing or changed")
+            if current["type"] != "reminder" or current["status"] not in {"created", "pending"}:
+                raise ValueError("reschedule requires a pending reminder")
+            if (
+                current["scheduled_at"] != update["expected_scheduled_at"]
+                or current["external_id"] != update["expected_external_id"]
+            ):
+                raise ValueError("reschedule action snapshot changed")
+        for update in prepared:
+            conn.execute(
+                "UPDATE actions SET scheduled_at = ? WHERE id = ?",
+                (update["scheduled_at"], update["action_id"]),
+            )
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return [update["action_id"] for update in prepared]
+
+
 def complete_action(
     action_id: str,
     feedback: dict | None = None,
