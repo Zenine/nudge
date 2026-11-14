@@ -321,7 +321,7 @@ if (dueComponents != nil || operation == "complete" || operation == "delete" || 
 var changed = 0
 for reminder in matches {
     do {
-        if operation == "complete" {
+        if operation == "complete" || operation == "complete-id" {
             reminder.isCompleted = true
             try store.save(reminder, commit: true)
         } else if operation == "set-id" {

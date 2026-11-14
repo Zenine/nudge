@@ -27,6 +27,8 @@
 
 ## P1 重要
 
+- [ ] **`log done` 的 Apple 镜像完成应使用 action 所属列表**：`nudge/commands/log.py` 的 `_sync_apple_reminder_completion()` 当前取全局默认列表，未优先使用 action 的 `reminder_list`；非默认列表的已知外部 ID 会因此查错列表。下一步在 `tests/test_commands_log.py` 补跨列表回归测试，再修正列表选择，使用隔离状态目录验证；验证前不要用该命令代替明确指定列表的 Apple 完成操作。
+
 - [ ] **Apple 适配层与若干模块无直接测试**：`tests/` 对 `apple/calendar.py`、`clock.py`、`mail.py`、`notifications.py` 零引用（`notes`/`reminders`/`common` 各 1、`adapters` 4）；`llm.py`、`family_routing.py`、`adapt.py`、`runtime_log.py`、`daemon_control_app.py`、`patch.py`、`skills/engine.py`、`skills/schema.py` 同样无直接测试。Apple 写入是本项目唯一不可逆的副作用面，恰好是覆盖最薄的一层，AppleScript 拼接的注入防线只有 `common.escape` 有测试。
   - 建议动作：先给 `notifications.py`、`family_routing.py`、`adapt.py` 补纯逻辑离线单测；再给 `calendar.py`、`notes.py`、`clock.py` 的脚本生成路径补「生成的 AppleScript 文本」快照测试。把 `coverage` 加入 `requirements-dev.txt` 以便量化（当前无法量化，缺口是按静态 import 统计，可能低估 CliRunner 间接覆盖）。
   - 测试盘子本身健康：35 个测试文件 / 270 个 `def test_`（参数化后 353 用例），零 skip、零 xfail、零无断言测试——这部分不要动。
